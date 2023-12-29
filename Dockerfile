@@ -147,6 +147,7 @@ RUN apt-get update && apt-get install -y unzip wget curl
 WORKDIR /workspace/machines
 # Download WAVM machines
 COPY ./scripts/download-machine.sh .
+COPY --from=module-root-calc /workspace/target/machines/latest/replay.wasm ./0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17/replay.wasm
 #RUN ./download-machine.sh consensus-v1-rc1 0xbb9d58e9527566138b682f3a207c0976d5359837f6e330f4017434cca983ff41
 #RUN ./download-machine.sh consensus-v2.1 0x9d68e40c47e3b87a8a7e6368cc52915720a6484bb2f47ceabad7e573e3a11232
 #RUN ./download-machine.sh consensus-v3 0x53c288a0ca7100c0f2db8ab19508763a51c7fd1be125d376d940a65378acaee7
@@ -161,7 +162,7 @@ COPY ./scripts/download-machine.sh .
 #RUN ./download-machine.sh consensus-v10 0x6b94a7fc388fd8ef3def759297828dc311761e88d8179c7ee8d3887dc554f3c3
 #RUN ./download-machine.sh consensus-v10.1 0xda4e3ad5e7feacb817c21c8d0220da7650fe9051ece68a3f0b1c5d38bbb27b21
 #RUN ./download-machine.sh consensus-v10.2 0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17
-COPY ./target/machines/latest ./0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17/
+# COPY ./target/machines/latest ./0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17/
 RUN ln -sfT 0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17 latest
 
 FROM golang:1.20-bullseye as node-builder

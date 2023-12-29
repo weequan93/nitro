@@ -12,8 +12,6 @@ Build docker
 
 ```
 cd nitro
-make
-make build
 docker build . -t nitro-node
 ```
 

@@ -14,11 +14,10 @@ import (
 var (
 	// web3.eth.abi.encodeFunctionSignature('handleOp((address,bytes,uint256,uint256,uint256,uint256,bytes))'
 	ENTRYPOINT_HANDLE_OP_SIG, _ = hex.DecodeString("b4e9984f")
-	ENTRYPOINT_CONTRACT         = common.HexToAddress("0x88111ed88FbF57fe4F7AA25cc53663FF15b817bf")
+	ENTRYPOINT_CONTRACT         = common.HexToAddress("0x60c03C6cA6eB207BD2Cb9d8499C4fE95Ad29D4E1")
 )
 
 func IsGaslessTx(tx *types.Transaction) bool {
 	return tx != nil && tx.To() != nil && *tx.To() == ENTRYPOINT_CONTRACT &&
-		tx.Data() != nil && len(tx.Data()) > 4 && bytes.Equal(tx.Data()[:4], ENTRYPOINT_HANDLE_OP_SIG) &&
-		tx.GasPrice() != nil && tx.GasPrice().Cmp(common.Big0) == 0
+		tx.Data() != nil && len(tx.Data()) > 4 && bytes.Equal(tx.Data()[:4], ENTRYPOINT_HANDLE_OP_SIG)
 }
