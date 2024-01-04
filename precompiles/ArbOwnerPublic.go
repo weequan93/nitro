@@ -47,3 +47,19 @@ func (con ArbOwnerPublic) GetInfraFeeAccount(c ctx, evm mech) (addr, error) {
 	}
 	return c.State.InfraFeeAccount()
 }
+
+func (con ArbOwnerPublic) GetPricerTxFromAddrs(c ctx, evm mech) ([]common.Address, error) {
+	return c.State.Pricer().TxFromAddrs().AllMembers(65536)
+}
+
+func (con ArbOwnerPublic) GetPricerTxToAddrs(c ctx, evm mech) ([]common.Address, error) {
+	return c.State.Pricer().TxToAddrs().AllMembers(65536)
+}
+
+func (con ArbOwnerPublic) IsPricerTxFrom(c ctx, evm mech, addr common.Address) (bool, error) {
+	return c.State.Pricer().TxFromAddrs().IsMember(addr)
+}
+
+func (con ArbOwnerPublic) IsPricerTxTo(c ctx, evm mech, addr common.Address) (bool, error) {
+	return c.State.Pricer().TxToAddrs().IsMember(addr)
+}

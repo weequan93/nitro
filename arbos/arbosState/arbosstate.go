@@ -24,6 +24,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/merkleAccumulator"
+	"github.com/offchainlabs/nitro/arbos/pricer"
 	"github.com/offchainlabs/nitro/arbos/retryables"
 	"github.com/offchainlabs/nitro/arbos/storage"
 	"github.com/offchainlabs/nitro/arbos/util"
@@ -52,6 +53,7 @@ type ArbosState struct {
 	infraFeeAccount   storage.StorageBackedAddress
 	backingStorage    *storage.Storage
 	Burner            burn.Burner
+	pricer            *pricer.Pricer
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -84,6 +86,7 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		backingStorage.OpenStorageBackedAddress(uint64(infraFeeAccountOffset)),
 		backingStorage,
 		burner,
+		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
 	}, nil
 }
 
@@ -152,6 +155,7 @@ var (
 	sendMerkleSubspace   SubspaceID = []byte{5}
 	blockhashesSubspace  SubspaceID = []byte{6}
 	chainConfigSubspace  SubspaceID = []byte{7}
+	pricerSubspace       SubspaceID = []byte{8}
 )
 
 // Returns a list of precompiles that only appear in Arbitrum chains (i.e. ArbOS precompiles) at the genesis block
@@ -230,6 +234,8 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	ownersStorage := sto.OpenSubStorage(chainOwnerSubspace)
 	_ = addressSet.Initialize(ownersStorage)
 	_ = addressSet.OpenAddressSet(ownersStorage).Add(initialChainOwner)
+
+	_ = pricer.InitializePricer(sto.OpenSubStorage(pricerSubspace))
 
 	aState, err := OpenArbosState(stateDB, burner)
 	if err != nil {
@@ -389,6 +395,10 @@ func (state *ArbosState) L1PricingState() *l1pricing.L1PricingState {
 
 func (state *ArbosState) L2PricingState() *l2pricing.L2PricingState {
 	return state.l2PricingState
+}
+
+func (state *ArbosState) Pricer() *pricer.Pricer {
+	return state.pricer
 }
 
 func (state *ArbosState) AddressTable() *addressTable.AddressTable {
