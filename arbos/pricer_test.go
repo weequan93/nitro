@@ -1,12 +1,15 @@
 package arbos
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/burn"
+	"github.com/offchainlabs/nitro/arbos/pricer"
 )
 
 func TestArbPricerTxFrom(t *testing.T) {
@@ -59,5 +62,29 @@ func TestArbPricerTxTo(t *testing.T) {
 	Require(t, err)
 	if member {
 		Fail(t)
+	}
+}
+
+func TestIsCustomTx(t *testing.T) {
+	addr := common.HexToAddress("0x60c03C6cA6eB207BD2Cb9d8499C4fE95Ad29D4E1")
+
+	inner := types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(0),
+		Gas:      1000000,
+		To:       &addr,
+		Value:    big.NewInt(1),
+	}
+
+	tx := types.NewTx(&inner)
+
+	evm := newMockEVMForTesting()
+	burner := burn.NewSystemBurner(nil, false)
+	price := arbosState.OpenArbosPricer(evm.StateDB, burner, false)
+	err := price.TxToAddrs().Add(addr)
+	Require(t, err)
+
+	if !pricer.IsCustomPriceTx(price, tx) {
+		t.Fail()
 	}
 }

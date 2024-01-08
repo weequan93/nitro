@@ -90,6 +90,11 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 	}, nil
 }
 
+func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pricer.Pricer {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace))
+}
+
 func OpenSystemArbosState(stateDB vm.StateDB, tracingInfo *util.TracingInfo, readOnly bool) (*ArbosState, error) {
 	burner := burn.NewSystemBurner(tracingInfo, readOnly)
 	newState, err := OpenArbosState(stateDB, burner)

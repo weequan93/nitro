@@ -1,6 +1,7 @@
 package pricer
 
 import (
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/offchainlabs/nitro/arbos/addressSet"
 	"github.com/offchainlabs/nitro/arbos/storage"
 )
@@ -31,10 +32,18 @@ func OpenPricer(sto *storage.Storage) *Pricer {
 	}
 }
 
-func (state *Pricer) TxFromAddrs() *addressSet.AddressSet {
-	return state.txFromAddrs
+func (pricer *Pricer) TxFromAddrs() *addressSet.AddressSet {
+	return pricer.txFromAddrs
 }
 
-func (state *Pricer) TxToAddrs() *addressSet.AddressSet {
-	return state.txToAddrs
+func (pricer *Pricer) TxToAddrs() *addressSet.AddressSet {
+	return pricer.txToAddrs
+}
+
+func IsCustomPriceTx(pricer *Pricer, tx *types.Transaction) bool {
+	if tx == nil || tx.To() == nil || pricer == nil {
+		return false
+	}
+	ok, _ := pricer.TxToAddrs().IsMember(*tx.To())
+	return ok
 }
