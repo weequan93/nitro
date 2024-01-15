@@ -845,12 +845,13 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
-		auth, err := s.builder.AuthWithAmount(ctx, stakeAmount)
+		auth, err := s.builder.Auth(ctx)
 		if err != nil {
 			return err
 		}
 		_, err = s.rollup.NewStakeOnNewNode(
 			auth,
+			stakeAmount,
 			action.assertion.AsSolidityStruct(),
 			action.hash,
 			action.prevInboxMaxCount,
@@ -895,12 +896,13 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
-		auth, err := s.builder.AuthWithAmount(ctx, stakeAmount)
+		auth, err := s.builder.Auth(ctx)
 		if err != nil {
 			return err
 		}
 		_, err = s.rollup.NewStakeOnExistingNode(
 			auth,
+			stakeAmount,
 			action.number,
 			action.hash,
 		)

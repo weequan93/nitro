@@ -14,7 +14,7 @@
 [submodule "contracts"]
 	path = contracts
 	url = https://github.com/weequan93/nitro-contracts.git
-	branch = pricer
+	branch = stake-token
 [submodule "arbitrator/wasm-testsuite/testsuite"]
 	path = arbitrator/wasm-testsuite/testsuite
 	url = https://github.com/WebAssembly/testsuite.git
