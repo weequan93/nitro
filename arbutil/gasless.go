@@ -14,8 +14,8 @@ import (
 var (
 	// web3.eth.abi.encodeFunctionSignature('handleOp((address,bytes,uint256,uint256,uint256,uint256,bytes))'
 	ENTRYPOINT_HANDLE_OP_SIG, _ = hex.DecodeString("b4e9984f")
-	ENTRYPOINT_CONTRACT         = common.HexToAddress("0x60c03C6cA6eB207BD2Cb9d8499C4fE95Ad29D4E1")
-	COUNTER_CONTRACT            = common.HexToAddress("0xd5E9937897BD904Eb7736d7049Fd474a1141B244")
+	ENTRYPOINT_CONTRACT         = common.HexToAddress("0xF91919279E393256Fa764739d6974045c19a4E01")
+	COUNTER_CONTRACT            = common.HexToAddress("0x60c03C6cA6eB207BD2Cb9d8499C4fE95Ad29D4E1")
 )
 
 func IsGaslessTx(tx *types.Transaction) bool {
