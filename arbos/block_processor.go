@@ -289,7 +289,7 @@ func ProduceBlockAdvanced(
 
 			computeGas := tx.Gas() - dataGas
 
-			if tx.To() != nil && tx.To().String() == arbutil.COUNTER_CONTRACT.String() {
+			if tx.To() != nil && arbutil.IsCustomPriceAddr(tx.To()) {
 				computeGas = params.TxGas
 			}
 
