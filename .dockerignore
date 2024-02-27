@@ -12,7 +12,7 @@ contracts/cache/
 solgen/go
 **/node_modules
 
-target/**/*
+# target/**/*
 brotli/buildfiles/**/*
 
 # these are used by environment outside the docker:

@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
+	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/util/arbmath"
 	"github.com/offchainlabs/nitro/util/headerreader"
 	flag "github.com/spf13/pflag"
@@ -127,8 +128,8 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 			return err
 		}
 	}
-	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) {
-		return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)
+	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !arbutil.IsGaslessTx(tx) && !arbutil.IsCustomPriceTx(tx) {
+		return fmt.Errorf("PreCheckTx() %w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)
 	}
 	stateNonce := statedb.GetNonce(sender)
 	if tx.Nonce() < stateNonce {

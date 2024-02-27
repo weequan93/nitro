@@ -227,3 +227,48 @@ func TestArbInfraFeeAccount(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestArbPricer(t *testing.T) {
+	version := uint64(10)
+	evm := newMockEVMForTestingWithVersion(&version)
+	caller := common.BytesToAddress(crypto.Keccak256([]byte{})[:20])
+	newAddr := common.BytesToAddress(crypto.Keccak256([]byte{0})[:20])
+	callCtx := testContext(caller, evm)
+	prec := &ArbOwner{}
+
+	Require(t, prec.AddPricerTxFrom(callCtx, evm, newAddr))
+	member, err := prec.IsPricerTxFrom(callCtx, evm, newAddr)
+	Require(t, err)
+	if !member {
+		Fail(t)
+	}
+	all, err := prec.GetPricerTxFromAddrs(callCtx, evm)
+	Require(t, err)
+	if len(all) != 1 {
+		Fail(t)
+	}
+	Require(t, prec.RemovePricerTxFrom(callCtx, evm, newAddr))
+	member, err = prec.IsPricerTxFrom(callCtx, evm, newAddr)
+	Require(t, err)
+	if member {
+		Fail(t)
+	}
+
+	Require(t, prec.AddPricerTxTo(callCtx, evm, newAddr))
+	member, err = prec.IsPricerTxTo(callCtx, evm, newAddr)
+	Require(t, err)
+	if !member {
+		Fail(t)
+	}
+	all, err = prec.GetPricerTxToAddrs(callCtx, evm)
+	Require(t, err)
+	if len(all) != 1 {
+		Fail(t)
+	}
+	Require(t, prec.RemovePricerTxTo(callCtx, evm, newAddr))
+	member, err = prec.IsPricerTxTo(callCtx, evm, newAddr)
+	Require(t, err)
+	if member {
+		Fail(t)
+	}
+}

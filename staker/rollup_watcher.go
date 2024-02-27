@@ -44,7 +44,7 @@ type StakerInfo struct {
 }
 
 type RollupWatcher struct {
-	*rollupgen.RollupUserLogic
+	*rollupgen.ERC20RollupUserLogic
 	address             common.Address
 	fromBlock           *big.Int
 	client              arbutil.L1Interface
@@ -53,16 +53,16 @@ type RollupWatcher struct {
 }
 
 func NewRollupWatcher(address common.Address, client arbutil.L1Interface, callOpts bind.CallOpts) (*RollupWatcher, error) {
-	con, err := rollupgen.NewRollupUserLogic(address, client)
+	con, err := rollupgen.NewERC20RollupUserLogic(address, client)
 	if err != nil {
 		return nil, err
 	}
 
 	return &RollupWatcher{
-		address:         address,
-		client:          client,
-		baseCallOpts:    callOpts,
-		RollupUserLogic: con,
+		address:              address,
+		client:               client,
+		baseCallOpts:         callOpts,
+		ERC20RollupUserLogic: con,
 	}, nil
 }
 
@@ -100,7 +100,7 @@ func (r *RollupWatcher) Initialize(ctx context.Context) error {
 	return err
 }
 
-func (r *RollupWatcher) LookupCreation(ctx context.Context) (*rollupgen.RollupUserLogicRollupInitialized, error) {
+func (r *RollupWatcher) LookupCreation(ctx context.Context) (*rollupgen.ERC20RollupUserLogicRollupInitialized, error) {
 	var query = ethereum.FilterQuery{
 		FromBlock: r.fromBlock,
 		ToBlock:   r.fromBlock,
@@ -166,7 +166,7 @@ func (r *RollupWatcher) LookupNode(ctx context.Context, number uint64) (*NodeInf
 }
 
 func (r *RollupWatcher) LookupNodeChildren(ctx context.Context, nodeNum uint64, nodeHash common.Hash) ([]*NodeInfo, error) {
-	node, err := r.RollupUserLogic.GetNode(r.getCallOpts(ctx), nodeNum)
+	node, err := r.ERC20RollupUserLogic.GetNode(r.getCallOpts(ctx), nodeNum)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (r *RollupWatcher) LookupNodeChildren(ctx context.Context, nodeNum uint64, 
 	if node.NodeHash != nodeHash {
 		return nil, fmt.Errorf("got unexpected node hash %v looking for node number %v with expected hash %v (reorg?)", node.NodeHash, nodeNum, nodeHash)
 	}
-	latestChild, err := r.RollupUserLogic.GetNode(r.getCallOpts(ctx), node.LatestChildNumber)
+	latestChild, err := r.ERC20RollupUserLogic.GetNode(r.getCallOpts(ctx), node.LatestChildNumber)
 	if err != nil {
 		return nil, err
 	}

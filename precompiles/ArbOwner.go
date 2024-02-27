@@ -209,3 +209,43 @@ func (con ArbOwner) SetChainConfig(c ctx, evm mech, serializedChainConfig []byte
 	}
 	return c.State.SetChainConfig(serializedChainConfig)
 }
+
+func (con ArbOwner) GetPricerTxFromAddrs(c ctx, evm mech) ([]common.Address, error) {
+	return c.State.Pricer().TxFromAddrs().AllMembers(65536)
+}
+
+func (con ArbOwner) GetPricerTxToAddrs(c ctx, evm mech) ([]common.Address, error) {
+	return c.State.Pricer().TxToAddrs().AllMembers(65536)
+}
+
+func (con ArbOwner) AddPricerTxFrom(c ctx, evm mech, addr common.Address) error {
+	return c.State.Pricer().TxFromAddrs().Add(addr)
+}
+
+func (con ArbOwner) AddPricerTxTo(c ctx, evm mech, addr common.Address) error {
+	return c.State.Pricer().TxToAddrs().Add(addr)
+}
+
+func (con ArbOwner) IsPricerTxFrom(c ctx, evm mech, addr common.Address) (bool, error) {
+	return c.State.Pricer().TxFromAddrs().IsMember(addr)
+}
+
+func (con ArbOwner) IsPricerTxTo(c ctx, evm mech, addr common.Address) (bool, error) {
+	return c.State.Pricer().TxToAddrs().IsMember(addr)
+}
+
+func (con ArbOwner) RemovePricerTxFrom(c ctx, evm mech, addr common.Address) error {
+	member, _ := con.IsPricerTxFrom(c, evm, addr)
+	if !member {
+		return errors.New("tried to remove non-tx-from")
+	}
+	return c.State.Pricer().TxFromAddrs().Remove(addr, c.State.ArbOSVersion())
+}
+
+func (con ArbOwner) RemovePricerTxTo(c ctx, evm mech, addr common.Address) error {
+	member, _ := con.IsPricerTxTo(c, evm, addr)
+	if !member {
+		return errors.New("tried to remove non-tx-to")
+	}
+	return c.State.Pricer().TxToAddrs().Remove(addr, c.State.ArbOSVersion())
+}

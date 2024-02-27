@@ -14,6 +14,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/util"
+	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/solgen/go/precompilesgen"
 	"github.com/offchainlabs/nitro/util/arbmath"
 
@@ -287,6 +288,11 @@ func ProduceBlockAdvanced(
 			}
 
 			computeGas := tx.Gas() - dataGas
+
+			if tx.To() != nil && arbutil.IsCustomPriceAddr(tx.To()) {
+				computeGas = params.TxGas
+			}
+
 			if computeGas < params.TxGas {
 				if hooks.DiscardInvalidTxsEarly {
 					return nil, nil, core.ErrIntrinsicGas
