@@ -63,3 +63,21 @@ func (con ArbOwnerPublic) IsPricerTxFrom(c ctx, evm mech, addr common.Address) (
 func (con ArbOwnerPublic) IsPricerTxTo(c ctx, evm mech, addr common.Address) (bool, error) {
 	return c.State.Pricer().TxToAddrs().IsMember(addr)
 }
+
+// GetBrotliCompressionLevel gets the current brotli compression level used for fast compression
+func (con ArbOwnerPublic) GetBrotliCompressionLevel(c ctx, evm mech) (uint64, error) {
+	return c.State.BrotliCompressionLevel()
+}
+
+// GetScheduledUpgrade gets the next scheduled ArbOS version upgrade and its activation timestamp.
+// Returns (0, 0, nil) if no ArbOS upgrade is scheduled.
+func (con ArbOwnerPublic) GetScheduledUpgrade(c ctx, evm mech) (uint64, uint64, error) {
+	version, timestamp, err := c.State.GetScheduledUpgrade()
+	if err != nil {
+		return 0, 0, err
+	}
+	if c.State.ArbOSVersion() >= version {
+		return 0, 0, nil
+	}
+	return version, timestamp, nil
+}

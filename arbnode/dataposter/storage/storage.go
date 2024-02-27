@@ -1,8 +1,12 @@
+// Copyright 2021-2023, Offchain Labs, Inc.
+// For license information, see https://github.com/nitro/blob/master/LICENSE
+
 package storage
 
 import (
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -15,6 +19,7 @@ var (
 	ErrStorageRace = errors.New("storage race error")
 
 	BlockValidatorPrefix string = "v" // the prefix for all block validator keys
+	StakerPrefix         string = "S" // the prefix for all staker keys
 	BatchPosterPrefix    string = "b" // the prefix for all batch poster keys
 	// TODO(anodar): move everything else from schema.go file to here once
 	// execution split is complete.
@@ -22,11 +27,45 @@ var (
 
 type QueuedTransaction struct {
 	FullTx          *types.Transaction
-	Data            types.DynamicFeeTx
+	DeprecatedData  types.DynamicFeeTx // FullTx should be used instead
 	Meta            []byte
 	Sent            bool
 	Created         time.Time // may be earlier than the tx was given to the tx poster
 	NextReplacement time.Time
+}
+
+type queuedTransactionForEncoding struct {
+	FullTx          *types.Transaction
+	Data            types.DynamicFeeTx
+	Meta            []byte
+	Sent            bool
+	Created         RlpTime
+	NextReplacement RlpTime
+}
+
+func (qt *QueuedTransaction) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, queuedTransactionForEncoding{
+		FullTx:          qt.FullTx,
+		Data:            qt.DeprecatedData,
+		Meta:            qt.Meta,
+		Sent:            qt.Sent,
+		Created:         (RlpTime)(qt.Created),
+		NextReplacement: (RlpTime)(qt.NextReplacement),
+	})
+}
+
+func (qt *QueuedTransaction) DecodeRLP(s *rlp.Stream) error {
+	var qtEnc queuedTransactionForEncoding
+	if err := s.Decode(&qtEnc); err != nil {
+		return err
+	}
+	qt.FullTx = qtEnc.FullTx
+	qt.DeprecatedData = qtEnc.Data
+	qt.Meta = qtEnc.Meta
+	qt.Sent = qtEnc.Sent
+	qt.Created = time.Time(qtEnc.Created)
+	qt.NextReplacement = time.Time(qtEnc.NextReplacement)
+	return nil
 }
 
 // LegacyQueuedTransaction is used for backwards compatibility.
@@ -68,7 +107,7 @@ func LegacyToQueuedTransaction(legacyQT *LegacyQueuedTransaction) (*QueuedTransa
 	}
 	return &QueuedTransaction{
 		FullTx:          legacyQT.FullTx,
-		Data:            legacyQT.Data,
+		DeprecatedData:  legacyQT.Data,
 		Meta:            meta,
 		Sent:            legacyQT.Sent,
 		Created:         legacyQT.Created,
@@ -88,7 +127,7 @@ func QueuedTransactionToLegacy(qt *QueuedTransaction) (*LegacyQueuedTransaction,
 	}
 	return &LegacyQueuedTransaction{
 		FullTx:          qt.FullTx,
-		Data:            qt.Data,
+		Data:            qt.DeprecatedData,
 		Meta:            meta,
 		Sent:            qt.Sent,
 		Created:         qt.Created,
