@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/offchainlabs/nitro/arbos/pricer"
 )
 
 var (
@@ -55,4 +56,29 @@ func IsCustomPriceAddr(addr *common.Address) bool {
 		return false
 	}
 	return IsGaslessContract
+}
+
+func IsCustomPriceTxCheck(pricer *pricer.Pricer, tx *types.Transaction) bool {
+	if tx != nil && tx.To() != nil {
+
+		addr := common.HexToAddress(tx.To().String())
+		IsGaslessContract, err := pricer.TxToAddrs().IsMember(addr)
+		if err != nil {
+			return false
+		}
+		return IsGaslessContract
+	}
+	return false
+}
+
+func IsCustomPriceTxCheckAddr(pricer *pricer.Pricer, addr *common.Address) bool {
+	if addr == nil {
+		return false
+	}
+	IsGaslessContract, err := pricer.TxToAddrs().IsMember(*addr)
+	if err != nil {
+		return false
+	}
+	return IsGaslessContract
+
 }

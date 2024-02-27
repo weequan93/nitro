@@ -215,6 +215,7 @@ func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) 
 	Require(t, err)
 	err = statelessA.Start(ctx)
 	Require(t, err)
+
 	stakerA, err := staker.NewStaker(
 		l2nodeA.L1Reader,
 		valWalletA,
@@ -225,6 +226,7 @@ func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) 
 		nil,
 		nil,
 		l2nodeA.DeployInfo.ValidatorUtils,
+		nil,
 		nil,
 	)
 	Require(t, err)
@@ -279,6 +281,7 @@ func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) 
 		nil,
 		l2nodeB.DeployInfo.ValidatorUtils,
 		nil,
+		nil,
 	)
 	Require(t, err)
 	err = stakerB.Initialize(ctx)
@@ -299,6 +302,7 @@ func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) 
 		nil,
 		nil,
 		l2nodeA.DeployInfo.ValidatorUtils,
+		nil,
 		nil,
 	)
 	Require(t, err)

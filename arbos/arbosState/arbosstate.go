@@ -37,24 +37,25 @@ import (
 // persisted beyond the end of the test.)
 
 type ArbosState struct {
-	arbosVersion      uint64                      // version of the ArbOS storage format and semantics
-	upgradeVersion    storage.StorageBackedUint64 // version we're planning to upgrade to, or 0 if not planning to upgrade
-	upgradeTimestamp  storage.StorageBackedUint64 // when to do the planned upgrade
-	networkFeeAccount storage.StorageBackedAddress
-	l1PricingState    *l1pricing.L1PricingState
-	l2PricingState    *l2pricing.L2PricingState
-	retryableState    *retryables.RetryableState
-	addressTable      *addressTable.AddressTable
-	chainOwners       *addressSet.AddressSet
-	sendMerkle        *merkleAccumulator.MerkleAccumulator
-	blockhashes       *blockhash.Blockhashes
-	chainId           storage.StorageBackedBigInt
-	chainConfig       storage.StorageBackedBytes
-	genesisBlockNum   storage.StorageBackedUint64
-	infraFeeAccount   storage.StorageBackedAddress
-	backingStorage    *storage.Storage
-	Burner            burn.Burner
-	pricer            *pricer.Pricer
+	arbosVersion           uint64                      // version of the ArbOS storage format and semantics
+	upgradeVersion         storage.StorageBackedUint64 // version we're planning to upgrade to, or 0 if not planning to upgrade
+	upgradeTimestamp       storage.StorageBackedUint64 // when to do the planned upgrade
+	networkFeeAccount      storage.StorageBackedAddress
+	l1PricingState         *l1pricing.L1PricingState
+	l2PricingState         *l2pricing.L2PricingState
+	retryableState         *retryables.RetryableState
+	addressTable           *addressTable.AddressTable
+	chainOwners            *addressSet.AddressSet
+	sendMerkle             *merkleAccumulator.MerkleAccumulator
+	blockhashes            *blockhash.Blockhashes
+	chainId                storage.StorageBackedBigInt
+	chainConfig            storage.StorageBackedBytes
+	genesisBlockNum        storage.StorageBackedUint64
+	infraFeeAccount        storage.StorageBackedAddress
+	brotliCompressionLevel storage.StorageBackedUint64 // brotli compression level used for pricing
+	backingStorage         *storage.Storage
+	Burner                 burn.Burner
+	pricer                 *pricer.Pricer
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -90,6 +91,7 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		burner,
 		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
 	}, nil
+
 }
 
 func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pricer.Pricer {

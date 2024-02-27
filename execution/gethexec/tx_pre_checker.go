@@ -133,7 +133,10 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 			return err
 		}
 	}
-	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !arbutil.IsGaslessTx(tx) && !arbutil.IsCustomPriceTx(tx) {
+
+	isGasless := arbutil.IsCustomPriceTxCheck(arbos.Pricer(), tx)
+	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !isGasless {
+		// if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !arbutil.IsGaslessTx(tx) && !arbutil.IsCustomPriceTx(tx) {
 		return fmt.Errorf("PreCheckTx() %w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)
 	}
 	stateNonce := statedb.GetNonce(sender)
