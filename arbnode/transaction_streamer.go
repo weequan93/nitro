@@ -396,6 +396,7 @@ func (s *TransactionStreamer) GetMessage(seqNum arbutil.MessageIndex) (*arbostyp
 
 // Note: if changed to acquire the mutex, some internal users may need to be updated to a non-locking version.
 func (s *TransactionStreamer) GetMessageCount() (arbutil.MessageIndex, error) {
+	log.Warn("GetMessageCount","messageCountKey", messageCountKey)
 	posBytes, err := s.db.Get(messageCountKey)
 	if err != nil {
 		return 0, err

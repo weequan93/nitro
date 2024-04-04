@@ -347,12 +347,12 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 		Message:             msg,
 		DelayedMessagesRead: delayedMessagesRead,
 	}
-
+log.Warn("sequenceTransactionsWithBlockMutex", "lastBlockHeader", lastBlockHeader.Number.Uint64())
 	pos, err := s.BlockNumberToMessageIndex(lastBlockHeader.Number.Uint64() + 1)
 	if err != nil {
 		return nil, err
 	}
-
+	log.Warn("sequenceTransactionsWithBlockMutex", "pos", pos)
 	err = s.streamer.WriteMessageFromSequencer(pos, msgWithMeta)
 	if err != nil {
 		return nil, err
@@ -382,7 +382,7 @@ func (s *ExecutionEngine) sequenceDelayedMessageWithBlockMutex(message *arbostyp
 	}
 
 	expectedDelayed := currentHeader.Nonce.Uint64()
-
+	log.Warn("sequenceTransactionsWithBlockMutex", "currentHeader", currentHeader.Number.Uint64())
 	lastMsg, err := s.BlockNumberToMessageIndex(currentHeader.Number.Uint64())
 	if err != nil {
 		return nil, err
@@ -396,7 +396,7 @@ func (s *ExecutionEngine) sequenceDelayedMessageWithBlockMutex(message *arbostyp
 		Message:             message,
 		DelayedMessagesRead: delayedSeqNum + 1,
 	}
-
+	log.Warn("sequenceDelayedMessageWithBlockMutex", "lastMsg", lastMsg)
 	err = s.streamer.WriteMessageFromSequencer(lastMsg+1, messageWithMeta)
 	if err != nil {
 		return nil, err
