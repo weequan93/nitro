@@ -22,6 +22,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
 	"github.com/offchainlabs/nitro/arbos/blockhash"
 	"github.com/offchainlabs/nitro/arbos/burn"
+	deriwguard "github.com/offchainlabs/nitro/arbos/deriwGuard"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/merkleAccumulator"
@@ -55,6 +56,7 @@ type ArbosState struct {
 	brotliCompressionLevel storage.StorageBackedUint64 // brotli compression level used for pricing
 	backingStorage         *storage.Storage
 	Burner                 burn.Burner
+	DeriwGaurd             *deriwguard.DeriwGuard
 	pricer                 *pricer.Pricer
 }
 
@@ -89,9 +91,15 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		backingStorage.OpenStorageBackedUint64(uint64(brotliCompressionLevelOffset)),
 		backingStorage,
 		burner,
+		deriwguard.OpenDeriwGuard(backingStorage.OpenSubStorage(deriwGuardSubspace)),
 		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
 	}, nil
 
+}
+
+func OpenArbosDeriwGuard(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *deriwguard.DeriwGuard {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return deriwguard.OpenDeriwGuard(backingStorage.OpenSubStorage(deriwGuardSubspace))
 }
 
 func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pricer.Pricer {
@@ -165,7 +173,8 @@ var (
 	sendMerkleSubspace   SubspaceID = []byte{5}
 	blockhashesSubspace  SubspaceID = []byte{6}
 	chainConfigSubspace  SubspaceID = []byte{7}
-	pricerSubspace       SubspaceID = []byte{8}
+	deriwGuardSubspace   SubspaceID = []byte{8}
+	pricerSubspace       SubspaceID = []byte{9}
 )
 
 // Returns a list of precompiles that only appear in Arbitrum chains (i.e. ArbOS precompiles) at the genesis block
@@ -246,6 +255,7 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	_ = addressSet.Initialize(ownersStorage)
 	_ = addressSet.OpenAddressSet(ownersStorage).Add(initialChainOwner)
 
+	_ = pricer.InitializePricer(sto.OpenSubStorage(deriwGuardSubspace))
 	_ = pricer.InitializePricer(sto.OpenSubStorage(pricerSubspace))
 
 	aState, err := OpenArbosState(stateDB, burner)
@@ -418,6 +428,10 @@ func (state *ArbosState) L1PricingState() *l1pricing.L1PricingState {
 
 func (state *ArbosState) L2PricingState() *l2pricing.L2PricingState {
 	return state.l2PricingState
+}
+
+func (state *ArbosState) DeriwGuard() *deriwguard.DeriwGuard {
+	return state.DeriwGaurd
 }
 
 func (state *ArbosState) Pricer() *pricer.Pricer {

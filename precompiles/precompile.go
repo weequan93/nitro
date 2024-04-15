@@ -552,6 +552,8 @@ func Precompiles() map[addr]ArbosPrecompile {
 		}
 	}
 
+	insert(MakePrecompile(templates.DeriwGuardPublicMetaData, &DeriwGuardPublic{Address: hex("3E8")}))
+
 	ArbOwnerPublic := insert(MakePrecompile(templates.ArbOwnerPublicMetaData, &ArbOwnerPublic{Address: hex("6b")}))
 	ArbOwnerPublic.methodsByName["GetInfraFeeAccount"].arbosVersion = 5
 	ArbOwnerPublic.methodsByName["RectifyChainOwner"].arbosVersion = 11
@@ -581,6 +583,14 @@ func Precompiles() map[addr]ArbosPrecompile {
 	arbos.ArbSysAddress = ArbSys.address
 	arbos.L2ToL1TransactionEventID = ArbSys.events["L2ToL1Transaction"].template.ID
 	arbos.L2ToL1TxEventID = ArbSys.events["L2ToL1Tx"].template.ID
+
+	DeriwGuardImpl := &DeriwGuard{Address: hex("3E9")}
+	emitDeriwGuardActs := func(evm mech, method bytes4, owner addr, data []byte) error {
+		context := eventCtx(DeriwGuardImpl.OwnerActsGasCost(method, owner, data))
+		return DeriwGuardImpl.OwnerActs(context, evm, method, owner, data)
+	}
+	_, DeriwGuard := MakePrecompile(templates.DeriwGuardMetaData, DeriwGuardImpl)
+	insert(deriwGuardOnly(DeriwGuardImpl.Address, DeriwGuard, emitDeriwGuardActs))
 
 	ArbOwnerImpl := &ArbOwner{Address: hex("70")}
 	emitOwnerActs := func(evm mech, method bytes4, owner addr, data []byte) error {
