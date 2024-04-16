@@ -897,7 +897,8 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 
 		stakeAmountReaderAmount, err := s.stakeAmountReader.GetSelfSetAmount(&s.callOpts)
 		if err != nil {
-			return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
+			stakeAmountReaderAmount = big.NewInt(0)
+			// return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
 		}
 
 		if stakeAmountReaderAmount.Cmp(big.NewInt(0)) == 0 {
@@ -977,7 +978,8 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 
 		stakeAmountReaderAmount, err := s.stakeAmountReader.GetSelfSetAmount(&s.callOpts)
 		if err != nil {
-			return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
+			stakeAmountReaderAmount = big.NewInt(0)
+			// return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
 		}
 
 		if stakeAmountReaderAmount.Cmp(big.NewInt(0)) == 0 {
