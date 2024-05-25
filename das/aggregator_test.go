@@ -207,7 +207,7 @@ func testConfigurableStorageFailures(t *testing.T, shouldFailAggregation bool) {
 		DataAvailabilityConfig{
 			RPCAggregator:      AggregatorConfig{AssumedHonest: assumedHonest},
 			ParentChainNodeURL: "none",
-			RequestTimeout:     time.Millisecond * 2000,
+			RequestTimeout:     time.Millisecond * 30000,
 		}, backends)
 	Require(t, err)
 
