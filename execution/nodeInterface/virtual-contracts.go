@@ -15,10 +15,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/offchainlabs/nitro/arbnode"
 	"github.com/offchainlabs/nitro/arbos"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
+	"github.com/offchainlabs/nitro/execution/gethexec"
 	"github.com/offchainlabs/nitro/gethhook"
 	"github.com/offchainlabs/nitro/precompiles"
 	"github.com/offchainlabs/nitro/solgen/go/node_interfacegen"
@@ -88,7 +88,7 @@ func init() {
 				return msg, nil, nil
 			}
 
-			evm, vmError := backend.GetEVM(ctx, msg, statedb, header, &vm.Config{NoBaseFee: true}, blockCtx)
+			evm := backend.GetEVM(ctx, msg, statedb, header, &vm.Config{NoBaseFee: true}, blockCtx)
 			go func() {
 				<-ctx.Done()
 				evm.Cancel()
@@ -110,7 +110,7 @@ func init() {
 				ReturnData:    output,
 				ScheduledTxes: nil,
 			}
-			return msg, res, vmError()
+			return msg, res, statedb.Error()
 		}
 		return msg, nil, nil
 	}
@@ -173,16 +173,16 @@ func init() {
 	merkleTopic = arbSys.Events["SendMerkleUpdate"].ID
 }
 
-func arbNodeFromNodeInterfaceBackend(backend BackendAPI) (*arbnode.Node, error) {
+func gethExecFromNodeInterfaceBackend(backend BackendAPI) (*gethexec.ExecutionNode, error) {
 	apiBackend, ok := backend.(*arbitrum.APIBackend)
 	if !ok {
 		return nil, errors.New("API backend isn't Arbitrum")
 	}
-	arbNode, ok := apiBackend.GetArbitrumNode().(*arbnode.Node)
+	exec, ok := apiBackend.GetArbitrumNode().(*gethexec.ExecutionNode)
 	if !ok {
 		return nil, errors.New("failed to get Arbitrum Node from backend")
 	}
-	return arbNode, nil
+	return exec, nil
 }
 
 func blockchainFromNodeInterfaceBackend(backend BackendAPI) (*core.BlockChain, error) {
