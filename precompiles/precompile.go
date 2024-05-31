@@ -560,6 +560,8 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbOwnerPublic.methodsByName["GetBrotliCompressionLevel"].arbosVersion = 20
 	ArbOwnerPublic.methodsByName["GetScheduledUpgrade"].arbosVersion = 20
 
+	insert(MakePrecompile(templates.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: hex("7E7")}))
+
 	ArbRetryableImpl := &ArbRetryableTx{Address: types.ArbRetryableTxAddress}
 	ArbRetryable := insert(MakePrecompile(templates.ArbRetryableTxMetaData, ArbRetryableImpl))
 	arbos.ArbRetryableTxAddress = ArbRetryable.address
@@ -597,6 +599,15 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbOwner.methodsByName["SetBrotliCompressionLevel"].arbosVersion = 20
 
 	insert(ownerOnly(ArbOwnerImpl.Address, ArbOwner, emitOwnerActs))
+
+	DeriwGaslessImpl := &DeriwGasless{Address: hex("7E8")}
+	emitDeriwGaslessActs := func(evm mech, method bytes4, owner addr, data []byte) error {
+		context := eventCtx(DeriwGaslessImpl.OwnerActsGasCost(method, owner, data))
+		return DeriwGaslessImpl.OwnerActs(context, evm, method, owner, data)
+	}
+	_, DeriwGasless := MakePrecompile(templates.DeriwGaslessMetaData, DeriwGaslessImpl)
+	insert(deriwGaslessOwnerOnly(DeriwGaslessImpl.Address, DeriwGasless, emitDeriwGaslessActs))
+
 	insert(debugOnly(MakePrecompile(templates.ArbDebugMetaData, &ArbDebug{Address: hex("ff")})))
 
 	ArbosActs := insert(MakePrecompile(templates.ArbosActsMetaData, &ArbosActs{Address: types.ArbosAddress}))

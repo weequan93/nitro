@@ -58,6 +58,7 @@ type ArbosState struct {
 	backingStorage                *storage.Storage
 	Burner                        burn.Burner
 	pricer                        *pricer.Pricer
+	gaslessOwners                 *addressSet.AddressSet
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -94,6 +95,7 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		backingStorage,
 		burner,
 		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
+		addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
 	}, nil
 
 }
@@ -170,6 +172,7 @@ var (
 	blockhashesSubspace  SubspaceID = []byte{6}
 	chainConfigSubspace  SubspaceID = []byte{7}
 	pricerSubspace       SubspaceID = []byte{8}
+	gaslessSubspace      SubspaceID = []byte{9}
 )
 
 // Returns a list of precompiles that only appear in Arbitrum chains (i.e. ArbOS precompiles) at the genesis block
@@ -251,6 +254,10 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	_ = addressSet.OpenAddressSet(ownersStorage).Add(initialChainOwner)
 
 	_ = pricer.InitializePricer(sto.OpenSubStorage(pricerSubspace))
+
+	gaslessOwnersStorage := sto.OpenCachedSubStorage(gaslessSubspace)
+	addressSet.Initialize(gaslessOwnersStorage)
+	_ = addressSet.OpenAddressSet(gaslessOwnersStorage).Add(initialChainOwner)
 
 	aState, err := OpenArbosState(stateDB, burner)
 	if err != nil {
@@ -455,6 +462,10 @@ func (state *ArbosState) AddressTable() *addressTable.AddressTable {
 
 func (state *ArbosState) ChainOwners() *addressSet.AddressSet {
 	return state.chainOwners
+}
+
+func (state *ArbosState) GaslessOwners() *addressSet.AddressSet {
+	return state.gaslessOwners
 }
 
 func (state *ArbosState) SendMerkleAccumulator() *merkleAccumulator.MerkleAccumulator {
