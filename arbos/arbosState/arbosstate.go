@@ -25,6 +25,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/merkleAccumulator"
+	"github.com/offchainlabs/nitro/arbos/pricer"
 	"github.com/offchainlabs/nitro/arbos/retryables"
 	"github.com/offchainlabs/nitro/arbos/storage"
 	"github.com/offchainlabs/nitro/arbos/util"
@@ -56,6 +57,8 @@ type ArbosState struct {
 	brotliCompressionLevel        storage.StorageBackedUint64 // brotli compression level used for pricing
 	backingStorage                *storage.Storage
 	Burner                        burn.Burner
+	pricer                        *pricer.Pricer
+	gaslessOwners                 *addressSet.AddressSet
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -91,7 +94,15 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		backingStorage.OpenStorageBackedUint64(uint64(brotliCompressionLevelOffset)),
 		backingStorage,
 		burner,
+		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
+		addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
 	}, nil
+
+}
+
+func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pricer.Pricer {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace))
 }
 
 func OpenSystemArbosState(stateDB vm.StateDB, tracingInfo *util.TracingInfo, readOnly bool) (*ArbosState, error) {
@@ -160,6 +171,8 @@ var (
 	sendMerkleSubspace   SubspaceID = []byte{5}
 	blockhashesSubspace  SubspaceID = []byte{6}
 	chainConfigSubspace  SubspaceID = []byte{7}
+	pricerSubspace       SubspaceID = []byte{8}
+	gaslessSubspace      SubspaceID = []byte{9}
 )
 
 // Returns a list of precompiles that only appear in Arbitrum chains (i.e. ArbOS precompiles) at the genesis block
@@ -239,6 +252,12 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	ownersStorage := sto.OpenCachedSubStorage(chainOwnerSubspace)
 	_ = addressSet.Initialize(ownersStorage)
 	_ = addressSet.OpenAddressSet(ownersStorage).Add(initialChainOwner)
+
+	_ = pricer.InitializePricer(sto.OpenSubStorage(pricerSubspace))
+
+	gaslessOwnersStorage := sto.OpenCachedSubStorage(gaslessSubspace)
+	addressSet.Initialize(gaslessOwnersStorage)
+	_ = addressSet.OpenAddressSet(gaslessOwnersStorage).Add(initialChainOwner)
 
 	aState, err := OpenArbosState(stateDB, burner)
 	if err != nil {
@@ -433,12 +452,20 @@ func (state *ArbosState) L2PricingState() *l2pricing.L2PricingState {
 	return state.l2PricingState
 }
 
+func (state *ArbosState) Pricer() *pricer.Pricer {
+	return state.pricer
+}
+
 func (state *ArbosState) AddressTable() *addressTable.AddressTable {
 	return state.addressTable
 }
 
 func (state *ArbosState) ChainOwners() *addressSet.AddressSet {
 	return state.chainOwners
+}
+
+func (state *ArbosState) GaslessOwners() *addressSet.AddressSet {
+	return state.gaslessOwners
 }
 
 func (state *ArbosState) SendMerkleAccumulator() *merkleAccumulator.MerkleAccumulator {

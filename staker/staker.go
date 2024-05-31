@@ -75,6 +75,7 @@ func L1PostingStrategyAddOptions(prefix string, f *flag.FlagSet) {
 type L1ValidatorConfig struct {
 	Enable                    bool                        `koanf:"enable"`
 	Strategy                  string                      `koanf:"strategy"`
+	StakeAmountAddress        string                      `koanf:"stake-amount-address"`
 	StakerInterval            time.Duration               `koanf:"staker-interval"`
 	MakeAssertionInterval     time.Duration               `koanf:"make-assertion-interval"`
 	PostingStrategy           L1PostingStrategy           `koanf:"posting-strategy"`
@@ -141,6 +142,7 @@ func (c *L1ValidatorConfig) Validate() error {
 var DefaultL1ValidatorConfig = L1ValidatorConfig{
 	Enable:                    true,
 	Strategy:                  "Watchtower",
+	StakeAmountAddress:        "",
 	StakerInterval:            time.Minute,
 	MakeAssertionInterval:     time.Hour,
 	PostingStrategy:           L1PostingStrategy{},
@@ -161,6 +163,7 @@ var DefaultL1ValidatorConfig = L1ValidatorConfig{
 var TestL1ValidatorConfig = L1ValidatorConfig{
 	Enable:                    true,
 	Strategy:                  "Watchtower",
+	StakeAmountAddress:        "",
 	StakerInterval:            time.Millisecond * 10,
 	MakeAssertionInterval:     -time.Hour * 1000,
 	PostingStrategy:           L1PostingStrategy{},
@@ -189,6 +192,7 @@ var DefaultValidatorL1WalletConfig = genericconf.WalletConfig{
 func L1ValidatorConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Bool(prefix+".enable", DefaultL1ValidatorConfig.Enable, "enable validator")
 	f.String(prefix+".strategy", DefaultL1ValidatorConfig.Strategy, "L1 validator strategy, either watchtower, defensive, stakeLatest, or makeNodes")
+	f.String(prefix+".stake-amount-address", DefaultL1ValidatorConfig.StakeAmountAddress, "Record amount to stake in validator, no set it will be default stake amount")
 	f.Duration(prefix+".staker-interval", DefaultL1ValidatorConfig.StakerInterval, "how often the L1 validator should check the status of the L1 rollup and maybe take action with its stake")
 	f.Duration(prefix+".make-assertion-interval", DefaultL1ValidatorConfig.MakeAssertionInterval, "if configured with the makeNodes strategy, how often to create new assertions (bypassed in case of a dispute)")
 	L1PostingStrategyAddOptions(prefix+".posting-strategy", f)
@@ -250,6 +254,7 @@ type Staker struct {
 	inboxReader             InboxReaderInterface
 	statelessBlockValidator *StatelessBlockValidator
 	fatalErr                chan<- error
+	stakeAmountReader       *StakeAmountReader
 }
 
 type ValidatorWalletInterface interface {
@@ -284,6 +289,7 @@ func NewStaker(
 	confirmedNotifiers []LatestConfirmedNotifier,
 	validatorUtilsAddress common.Address,
 	fatalErr chan<- error,
+	stakeAmountAddress *common.Address,
 ) (*Staker, error) {
 
 	if err := config.Validate(); err != nil {
@@ -299,6 +305,17 @@ func NewStaker(
 	if config.StartValidationFromStaked && blockValidator != nil {
 		stakedNotifiers = append(stakedNotifiers, blockValidator)
 	}
+	var stakeAmountReader *StakeAmountReader
+	log.Info("NewStaker", "stakeAmountAddress", stakeAmountAddress.Hex())
+	if stakeAmountAddress != nil {
+		builder, err := txbuilder.NewBuilder(wallet)
+		con, err := NewStakeAmountReader(*stakeAmountAddress, builder)
+		if err != nil {
+			return nil, err
+		}
+		stakeAmountReader = con
+	}
+
 	return &Staker{
 		L1Validator:             val,
 		l1Reader:                l1Reader,
@@ -311,6 +328,7 @@ func NewStaker(
 		inboxReader:             statelessBlockValidator.inboxReader,
 		statelessBlockValidator: statelessBlockValidator,
 		fatalErr:                fatalErr,
+		stakeAmountReader:       stakeAmountReader,
 	}, nil
 }
 
@@ -872,12 +890,50 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
-		auth, err := s.builder.AuthWithAmount(ctx, stakeAmount)
+
+		stakeToken, err := s.rollup.StakeToken(s.getCallOpts(ctx))
+		if err != nil {
+			return fmt.Errorf("error getting current required stake: %w", err)
+		}
+
+		stakeAmountReaderAmount, err := s.stakeAmountReader.GetStakeAmount(&s.callOpts)
+		if err != nil {
+			stakeAmountReaderAmount = big.NewInt(0)
+			// return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
+		}
+
+		if stakeAmountReaderAmount.Cmp(big.NewInt(0)) == 0 {
+			stakeAmountReaderAmount = stakeAmount
+		} else if stakeAmountReaderAmount.Cmp(stakeAmount) == -1 {
+			return fmt.Errorf("error stakeAmountReader less than required stake: %w", err)
+		}
+
+		stakeTokenReader, err := NewIERC20(stakeToken, s.builder)
 		if err != nil {
 			return err
 		}
+
+		auth, err := s.builder.Auth(ctx)
+		if err != nil {
+			return err
+		}
+
+		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
+		if err != nil {
+			return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
+		}
+		if allowed.Cmp(stakeAmountReaderAmount) == -1 {
+
+			tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmountReaderAmount)
+			if err != nil {
+				return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+			}
+			log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
+		}
+
 		_, err = s.rollup.NewStakeOnNewNode(
 			auth,
+			stakeAmountReaderAmount,
 			action.assertion.AsSolidityStruct(),
 			action.hash,
 			action.prevInboxMaxCount,
@@ -922,12 +978,50 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
-		auth, err := s.builder.AuthWithAmount(ctx, stakeAmount)
+
+		stakeToken, err := s.rollup.StakeToken(s.getCallOpts(ctx))
+		if err != nil {
+			return fmt.Errorf("error getting current required stake: %w", err)
+		}
+
+		stakeAmountReaderAmount, err := s.stakeAmountReader.GetStakeAmount(&s.callOpts)
+		if err != nil {
+			stakeAmountReaderAmount = big.NewInt(0)
+			// return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
+		}
+
+		if stakeAmountReaderAmount.Cmp(big.NewInt(0)) == 0 {
+			stakeAmountReaderAmount = stakeAmount
+		} else if stakeAmountReaderAmount.Cmp(stakeAmount) == -1 {
+			return fmt.Errorf("error stakeAmountReader less than required stake: %w", err)
+		}
+
+		stakeTokenReader, err := NewIERC20(stakeToken, s.builder)
 		if err != nil {
 			return err
 		}
+
+		auth, err := s.builder.Auth(ctx)
+		if err != nil {
+			return err
+		}
+
+		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
+		if err != nil {
+			return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
+		}
+		if allowed.Cmp(stakeAmountReaderAmount) == -1 {
+
+			tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmountReaderAmount)
+			if err != nil {
+				return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+			}
+			log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
+		}
+
 		_, err = s.rollup.NewStakeOnExistingNode(
 			auth,
+			stakeAmountReaderAmount,
 			action.number,
 			action.hash,
 		)
