@@ -306,6 +306,7 @@ func NewStaker(
 		stakedNotifiers = append(stakedNotifiers, blockValidator)
 	}
 	var stakeAmountReader *StakeAmountReader
+	log.Info("NewStaker", "stakeAmountAddress", stakeAmountAddress.Hex())
 	if stakeAmountAddress != nil {
 		builder, err := txbuilder.NewBuilder(wallet)
 		con, err := NewStakeAmountReader(*stakeAmountAddress, builder)
@@ -895,7 +896,7 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeAmountReaderAmount, err := s.stakeAmountReader.GetSelfSetAmount(&s.callOpts)
+		stakeAmountReaderAmount, err := s.stakeAmountReader.GetStakeAmount(&s.callOpts)
 		if err != nil {
 			stakeAmountReaderAmount = big.NewInt(0)
 			// return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
@@ -907,8 +908,7 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return fmt.Errorf("error stakeAmountReader less than required stake: %w", err)
 		}
 
-		builder, err := txbuilder.NewBuilder(s.wallet)
-		stakeTokenReader, err := NewIERC20(stakeToken, builder)
+		stakeTokenReader, err := NewIERC20(stakeToken, s.builder)
 		if err != nil {
 			return err
 		}
@@ -918,9 +918,17 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return err
 		}
 
-		_, err = stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmountReaderAmount)
+		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
 		if err != nil {
-			return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+			return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
+		}
+		if allowed.Cmp(stakeAmountReaderAmount) == -1 {
+
+			tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmountReaderAmount)
+			if err != nil {
+				return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+			}
+			log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
 		}
 
 		_, err = s.rollup.NewStakeOnNewNode(
@@ -976,7 +984,7 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeAmountReaderAmount, err := s.stakeAmountReader.GetSelfSetAmount(&s.callOpts)
+		stakeAmountReaderAmount, err := s.stakeAmountReader.GetStakeAmount(&s.callOpts)
 		if err != nil {
 			stakeAmountReaderAmount = big.NewInt(0)
 			// return fmt.Errorf("error getting current required stake from stakeAmountReader: %w", err)
@@ -988,8 +996,7 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return fmt.Errorf("error stakeAmountReader less than required stake: %w", err)
 		}
 
-		builder, err := txbuilder.NewBuilder(s.wallet)
-		stakeTokenReader, err := NewIERC20(stakeToken, builder)
+		stakeTokenReader, err := NewIERC20(stakeToken, s.builder)
 		if err != nil {
 			return err
 		}
@@ -999,9 +1006,17 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return err
 		}
 
-		_, err = stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmountReaderAmount)
+		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
 		if err != nil {
-			return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+			return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
+		}
+		if allowed.Cmp(stakeAmountReaderAmount) == -1 {
+
+			tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmountReaderAmount)
+			if err != nil {
+				return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+			}
+			log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
 		}
 
 		_, err = s.rollup.NewStakeOnExistingNode(
