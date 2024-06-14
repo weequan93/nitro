@@ -302,6 +302,7 @@ func (v *L1Validator) generateNodeAction(
 	var validatedGlobalState validator.GoGlobalState
 	if v.blockValidator != nil {
 		valInfo, err := v.blockValidator.ReadLastValidatedInfo()
+		log.Info("generateNodeAction", "valInfo", valInfo)
 		if err != nil || valInfo == nil {
 			return nil, false, err
 		}
@@ -309,6 +310,7 @@ func (v *L1Validator) generateNodeAction(
 		caughtUp, validatedCount, err = GlobalStateToMsgCount(
 			v.inboxTracker, v.txStreamer, valInfo.GlobalState,
 		)
+		log.Info("generateNodeAction", "caughtUp", caughtUp, "validatedCount", validatedCount)
 		if err != nil {
 			return nil, false, fmt.Errorf("%w: not found validated block in blockchain", err)
 		}
@@ -326,6 +328,7 @@ func (v *L1Validator) generateNodeAction(
 				break
 			}
 		}
+		log.Info("generateNodeAction", "wasmRootValid", wasmRootValid)
 		if !wasmRootValid {
 			if !stakerConfig.Dangerous.IgnoreRollupWasmModuleRoot {
 				if len(valInfo.WasmRoots) == 0 {
@@ -340,11 +343,13 @@ func (v *L1Validator) generateNodeAction(
 		}
 	} else {
 		validatedCount, err = v.txStreamer.GetProcessedMessageCount()
+		log.Info("generateNodeAction", "validatedCount", validatedCount)
 		if err != nil || validatedCount == 0 {
 			return nil, false, err
 		}
 		var batchNum uint64
 		messageCount, err := v.inboxTracker.GetBatchMessageCount(localBatchCount - 1)
+		log.Info("generateNodeAction", "messageCount", messageCount)
 		if err != nil {
 			return nil, false, fmt.Errorf("error getting latest batch %v message count: %w", localBatchCount-1, err)
 		}
@@ -353,15 +358,18 @@ func (v *L1Validator) generateNodeAction(
 			validatedCount = messageCount
 		} else {
 			batchNum, err = FindBatchContainingMessageIndex(v.inboxTracker, validatedCount-1, localBatchCount)
+			log.Info("generateNodeAction", "batchNum", batchNum)
 			if err != nil {
 				return nil, false, err
 			}
 		}
 		execResult, err := v.txStreamer.ResultAtCount(validatedCount)
+		log.Info("generateNodeAction", "execResult", execResult, "validatedCount", validatedCount)
 		if err != nil {
 			return nil, false, err
 		}
 		_, gsPos, err := GlobalStatePositionsAtCount(v.inboxTracker, validatedCount, batchNum)
+		log.Info("generateNodeAction", "gsPos", gsPos)
 		if err != nil {
 			return nil, false, fmt.Errorf("%w: failed calculating GSposition for count %d", err, validatedCount)
 		}
@@ -369,6 +377,7 @@ func (v *L1Validator) generateNodeAction(
 	}
 
 	currentL1BlockNum, err := v.client.BlockNumber(ctx)
+	log.Info("generateNodeAction", "currentL1BlockNum", currentL1BlockNum)
 	if err != nil {
 		return nil, false, fmt.Errorf("error getting latest L1 block number: %w", err)
 	}
@@ -400,6 +409,7 @@ func (v *L1Validator) generateNodeAction(
 		log.Info("examining existing potential successors", "count", len(successorNodes))
 	}
 	for _, nd := range successorNodes {
+		log.Info("generateNodeAction", "correctNode", correctNode, "wrongNodesExist", wrongNodesExist)
 		if correctNode != nil && wrongNodesExist {
 			// We've found everything we could hope to find
 			break
@@ -410,6 +420,7 @@ func (v *L1Validator) generateNodeAction(
 			continue
 		}
 		afterGS := nd.AfterState().GlobalState
+		log.Info("generateNodeAction", "afterGS", afterGS)
 		requiredBatch := afterGS.Batch
 		if afterGS.PosInBatch == 0 && afterGS.Batch > 0 {
 			requiredBatch -= 1
@@ -419,6 +430,7 @@ func (v *L1Validator) generateNodeAction(
 			return nil, false, nil
 		}
 		nodeBatchMsgCount, err := v.inboxTracker.GetBatchMessageCount(requiredBatch)
+		log.Info("generateNodeAction", "nodeBatchMsgCount", nodeBatchMsgCount, "validatedCount", validatedCount)
 		if err != nil {
 			return nil, false, err
 		}
@@ -426,12 +438,14 @@ func (v *L1Validator) generateNodeAction(
 			log.Info("staker: waiting for validator to catch up to assertion batch messages", "current", validatedCount, "target", nodeBatchMsgCount)
 			return nil, false, nil
 		}
+		log.Info("generateNodeAction", "nd.Assertion.AfterState.MachineStatus", nd.Assertion.AfterState.MachineStatus, " validator.MachineStatusFinished", validator.MachineStatusFinished)
 		if nd.Assertion.AfterState.MachineStatus != validator.MachineStatusFinished {
 			wrongNodesExist = true
 			log.Error("Found incorrect assertion: Machine status not finished", "node", nd.NodeNum, "machineStatus", nd.Assertion.AfterState.MachineStatus)
 			continue
 		}
 		caughtUp, nodeMsgCount, err := GlobalStateToMsgCount(v.inboxTracker, v.txStreamer, afterGS)
+		log.Info("generateNodeAction", "caughtUp", caughtUp, "nodeMsgCount", nodeMsgCount)
 		if errors.Is(err, ErrGlobalStateNotInChain) {
 			wrongNodesExist = true
 			log.Error("Found incorrect assertion", "node", nd.NodeNum, "afterGS", afterGS, "err", err)
@@ -458,7 +472,7 @@ func (v *L1Validator) generateNodeAction(
 	if correctNode != nil || strategy == WatchtowerStrategy {
 		return correctNode, wrongNodesExist, nil
 	}
-
+	log.Info("generateNodeAction", "correctNode", correctNode, "WatchtowerStrategy", WatchtowerStrategy, "strategy", strategy)
 	makeAssertionInterval := stakerConfig.MakeAssertionInterval
 	if wrongNodesExist || (strategy >= MakeNodesStrategy && time.Since(startStateProposedTime) >= makeAssertionInterval) {
 		// There's no correct node; create one.
