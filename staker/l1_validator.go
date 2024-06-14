@@ -234,6 +234,7 @@ func (v *L1Validator) generateNodeAction(
 	strategy StakerStrategy,
 	stakerConfig *L1ValidatorConfig,
 ) (nodeAction, bool, error) {
+	log.Info("generateNodeAction")
 	startState, prevInboxMaxCount, startStateProposedL1, startStateProposedParentChain, err := lookupNodeStartState(
 		ctx, v.rollup, stakerInfo.LatestStakedNode, stakerInfo.LatestStakedNodeHash,
 	)
@@ -243,6 +244,7 @@ func (v *L1Validator) generateNodeAction(
 			stakerInfo.LatestStakedNode, stakerInfo.LatestStakedNodeHash, err,
 		)
 	}
+	log.Info("generateNodeAction", "startState", startState, "prevInboxMaxCount", prevInboxMaxCount)
 
 	startStateProposedHeader, err := v.client.HeaderByNumber(ctx, arbmath.UintToBig(startStateProposedParentChain))
 	if err != nil {
@@ -251,6 +253,7 @@ func (v *L1Validator) generateNodeAction(
 			startStateProposedParentChain, err,
 		)
 	}
+	log.Info("generateNodeAction", "startStateProposedHeader", startStateProposedHeader)
 	startStateProposedTime := time.Unix(int64(startStateProposedHeader.Time), 0)
 
 	v.txStreamer.PauseReorgs()
@@ -260,6 +263,7 @@ func (v *L1Validator) generateNodeAction(
 	if err != nil {
 		return nil, false, fmt.Errorf("error getting batch count from inbox tracker: %w", err)
 	}
+	log.Info("generateNodeAction", "localBatchCount", localBatchCount)
 	if localBatchCount < startState.RequiredBatches() || localBatchCount == 0 {
 		log.Info(
 			"catching up to chain batches", "localBatches", localBatchCount,
@@ -267,21 +271,25 @@ func (v *L1Validator) generateNodeAction(
 		)
 		return nil, false, nil
 	}
-
+	log.Info("generateNodeAction", "startState.RequiredBatches()", startState.RequiredBatches())
 	caughtUp, startCount, err := GlobalStateToMsgCount(v.inboxTracker, v.txStreamer, startState.GlobalState)
 	if err != nil {
 		return nil, false, fmt.Errorf("start state not in chain: %w", err)
 	}
+	log.Info("generateNodeAction", "caughtUp", caughtUp, "startCount", startCount)
 	if !caughtUp {
+		log.Info("generateNodeAction", "startState.GlobalState.Batch", startState.GlobalState.PosInBatch)
 		target := GlobalStatePosition{
 			BatchNumber: startState.GlobalState.Batch,
 			PosInBatch:  startState.GlobalState.PosInBatch,
 		}
+
 		var current GlobalStatePosition
 		head, err := v.txStreamer.GetProcessedMessageCount()
 		if err != nil {
 			_, current, err = v.blockValidator.GlobalStatePositionsAtCount(head)
 		}
+		log.Info("generateNodeAction", "v.txStreamer.GetProcessedMessageCount()", head)
 		if err != nil {
 			log.Info("catching up to chain messages", "target", target)
 		} else {
@@ -364,28 +372,28 @@ func (v *L1Validator) generateNodeAction(
 	if err != nil {
 		return nil, false, fmt.Errorf("error getting latest L1 block number: %w", err)
 	}
-
+	log.Info("generateNodeAction", "currentL1BlockNum", currentL1BlockNum)
 	l1BlockNumber, err := arbutil.CorrespondingL1BlockNumber(ctx, v.client, currentL1BlockNum)
 	if err != nil {
 		return nil, false, err
 	}
-
+	log.Info("generateNodeAction", "l1BlockNumber", l1BlockNumber)
 	minAssertionPeriod, err := v.rollup.MinimumAssertionPeriod(v.getCallOpts(ctx))
 	if err != nil {
 		return nil, false, fmt.Errorf("error getting rollup minimum assertion period: %w", err)
 	}
-
+	log.Info("generateNodeAction", "minAssertionPeriod", minAssertionPeriod)
 	timeSinceProposed := big.NewInt(int64(l1BlockNumber) - int64(startStateProposedL1))
 	if timeSinceProposed.Cmp(minAssertionPeriod) < 0 {
 		// Too soon to assert
 		return nil, false, nil
 	}
-
+	log.Info("generateNodeAction", "timeSinceProposed", timeSinceProposed)
 	successorNodes, err := v.rollup.LookupNodeChildren(ctx, stakerInfo.LatestStakedNode, stakerInfo.LatestStakedNodeHash)
 	if err != nil {
 		return nil, false, fmt.Errorf("error looking up node %v (hash %v) children: %w", stakerInfo.LatestStakedNode, stakerInfo.LatestStakedNodeHash, err)
 	}
-
+	log.Info("generateNodeAction", "successorNodes", successorNodes)
 	var correctNode nodeAction
 	wrongNodesExist := false
 	if len(successorNodes) > 0 {
