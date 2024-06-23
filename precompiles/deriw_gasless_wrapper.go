@@ -56,7 +56,13 @@ func (wrapper *DeriwGaslessPrecompile) Call(
 		return nil, burner.gasLeft, err
 	}
 
-	if !isOwner {
+	chainOwners := state.ChainOwners()
+	isChainOwner, err := chainOwners.IsMember(caller)
+	if err != nil {
+		return nil, burner.gasLeft, err
+	}
+
+	if !isOwner && !isChainOwner {
 		return nil, burner.gasLeft, errors.New("unauthorized caller to access-controlled method")
 	}
 
