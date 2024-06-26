@@ -64,7 +64,7 @@ type DataAvailabilityConfig struct {
 }
 
 var DefaultDataAvailabilityConfig = DataAvailabilityConfig{
-	RequestTimeout:                5 * time.Second,
+	RequestTimeout:                30 * time.Second,
 	Enable:                        false,
 	RestAggregator:                DefaultRestfulClientAggregatorConfig,
 	ParentChainConnectionAttempts: 15,
