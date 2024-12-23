@@ -147,8 +147,8 @@ RUN apt-get update && apt-get install -y unzip wget curl
 WORKDIR /workspace/machines
 # Download WAVM machines
 COPY ./scripts/download-machine.sh .
-COPY --from=module-root-calc /workspace/target/machines/latest/replay.wasm ./0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17/replay.wasm
-RUN echo "0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17" > ./0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17/module-root.txt
+COPY --from=module-root-calc /workspace/target/machines/latest/replay.wasm ./0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39/replay.wasm
+RUN echo "0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39" > ./0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39/module-root.txt
 #RUN ./download-machine.sh consensus-v1-rc1 0xbb9d58e9527566138b682f3a207c0976d5359837f6e330f4017434cca983ff41
 #RUN ./download-machine.sh consensus-v2.1 0x9d68e40c47e3b87a8a7e6368cc52915720a6484bb2f47ceabad7e573e3a11232
 #RUN ./download-machine.sh consensus-v3 0x53c288a0ca7100c0f2db8ab19508763a51c7fd1be125d376d940a65378acaee7
@@ -167,7 +167,7 @@ RUN echo "0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17" > 
 # RUN ./download-machine.sh consensus-v11 0xf4389b835497a910d7ba3ebfb77aa93da985634f3c052de1290360635be40c4a
 # RUN ./download-machine.sh consensus-v11.1 0x68e4fe5023f792d4ef584796c84d710303a5e12ea02d6e37e2b5e9c4332507c4
 # RUN ./download-machine.sh consensus-v20 0x8b104a2e80ac6165dc58b9048de12f301d70b02a0ab51396c22b4b4b802a16a4
-RUN ln -sfT 0x0754e09320c381566cc0449904c377a52bd34a6b9404432e80afd573b67f7b17 latest
+RUN ln -sfT 0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39 latest
 
 FROM golang:1.20-bookworm as node-builder
 WORKDIR /workspace

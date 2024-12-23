@@ -277,8 +277,26 @@ func ProduceBlockAdvanced(
 			}
 
 			sender, err = signer.Sender(tx)
+
 			if err != nil {
 				return nil, nil, err
+			}
+
+			// sender overwrite
+			parentAccount, err := state.SubAccount().ReadRelationFromChild(sender)
+			if err != nil {
+				return nil, nil, err
+			}
+			if parentAccount.Cmp(common.Address{}) != 0 {
+
+				isAllowedAddress, err := state.SubAccount().AllowedAddress().IsMember(*tx.To())
+				if err != nil {
+					return nil, nil, err
+				}
+				if isAllowedAddress {
+					sender.SetBytes(parentAccount.Bytes())
+				}
+
 			}
 
 			if err = hooks.PreTxFilter(chainConfig, header, statedb, state, tx, options, sender, l1Info); err != nil {

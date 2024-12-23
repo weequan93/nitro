@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/offchainlabs/nitro/arbos/subAccount"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -59,6 +61,7 @@ type ArbosState struct {
 	Burner                        burn.Burner
 	pricer                        *pricer.Pricer
 	gaslessOwners                 *addressSet.AddressSet
+	subAccountState               *subAccount.SubAccountState
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -96,6 +99,7 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		burner,
 		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
 		addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
+		subAccount.OpenSubAccountState(backingStorage.OpenCachedSubStorage(subAccountSubspace)),
 	}, nil
 
 }
@@ -103,6 +107,11 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pricer.Pricer {
 	backingStorage := storage.NewGeth(stateDB, burner)
 	return pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace))
+}
+
+func OpenSubAccountState(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *subAccount.SubAccountState {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return subAccount.OpenSubAccountState(backingStorage.OpenCachedSubStorage(subAccountSubspace))
 }
 
 func OpenSystemArbosState(stateDB vm.StateDB, tracingInfo *util.TracingInfo, readOnly bool) (*ArbosState, error) {
@@ -173,6 +182,7 @@ var (
 	chainConfigSubspace  SubspaceID = []byte{7}
 	pricerSubspace       SubspaceID = []byte{8}
 	gaslessSubspace      SubspaceID = []byte{9}
+	subAccountSubspace   SubspaceID = []byte{10}
 )
 
 // Returns a list of precompiles that only appear in Arbitrum chains (i.e. ArbOS precompiles) at the genesis block
@@ -259,6 +269,8 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	gaslessOwnersStorage := sto.OpenCachedSubStorage(gaslessSubspace)
 	_ = addressSet.Initialize(gaslessOwnersStorage)
 	_ = addressSet.OpenAddressSet(gaslessOwnersStorage).Add(initialChainOwner)
+
+	_ = subAccount.InitializeSubAccountState(sto.OpenCachedSubStorage(subAccountSubspace))
 
 	aState, err := OpenArbosState(stateDB, burner)
 	if err != nil {
@@ -469,6 +481,10 @@ func (state *ArbosState) ChainOwners() *addressSet.AddressSet {
 
 func (state *ArbosState) GaslessOwners() *addressSet.AddressSet {
 	return state.gaslessOwners
+}
+
+func (state *ArbosState) SubAccount() *subAccount.SubAccountState {
+	return state.subAccountState
 }
 
 func (state *ArbosState) SendMerkleAccumulator() *merkleAccumulator.MerkleAccumulator {

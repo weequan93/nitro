@@ -561,6 +561,7 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbOwnerPublic.methodsByName["GetScheduledUpgrade"].arbosVersion = 20
 
 	insert(MakePrecompile(templates.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: hex("7E7")}))
+	insert(MakePrecompile(templates.DeriwSubAccountPublicMetaData, &DeriwSubAccountPublic{Address: hex("7E9")}))
 
 	ArbRetryableImpl := &ArbRetryableTx{Address: types.ArbRetryableTxAddress}
 	ArbRetryable := insert(MakePrecompile(templates.ArbRetryableTxMetaData, ArbRetryableImpl))
@@ -607,6 +608,14 @@ func Precompiles() map[addr]ArbosPrecompile {
 	}
 	_, DeriwGasless := MakePrecompile(templates.DeriwGaslessMetaData, DeriwGaslessImpl)
 	insert(deriwGaslessOwnerOnly(DeriwGaslessImpl.Address, DeriwGasless, emitDeriwGaslessActs))
+
+	DeriwSubAccountImpl := &DeriwSubAccount{Address: hex("7EA")}
+	emitDeriwSubAccountActs := func(evm mech, method bytes4, owner addr, data []byte) error {
+		context := eventCtx(DeriwSubAccountImpl.OwnerActsGasCost(method, owner, data))
+		return DeriwSubAccountImpl.OwnerActs(context, evm, method, owner, data)
+	}
+	_, DeriwSubAccount := MakePrecompile(templates.DeriwSubAccountMetaData, DeriwSubAccountImpl)
+	insert(deriwSubAccountOwnerOnly(DeriwSubAccountImpl.Address, DeriwSubAccount, emitDeriwSubAccountActs))
 
 	insert(debugOnly(MakePrecompile(templates.ArbDebugMetaData, &ArbDebug{Address: hex("ff")})))
 
