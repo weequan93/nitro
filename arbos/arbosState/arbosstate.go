@@ -63,7 +63,7 @@ type ArbosState struct {
 	brotliCompressionLevel storage.StorageBackedUint64 // brotli compression level used for pricing
 	backingStorage         *storage.Storage
 	Burner                 burn.Burner
-	price                  *pricer.Pricer
+	pricer                 *pricer.Pricer
 	gaslessOwners          *addressSet.AddressSet
 	subAccountState        *subAccount.SubAccountState
 }

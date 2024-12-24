@@ -15,7 +15,6 @@ import (
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/arbutil"
-	"github.com/offchainlabs/nitro/solgen/go/precompilesgen"
 	"github.com/offchainlabs/nitro/util/arbmath"
 
 	"github.com/ethereum/go-ethereum/arbitrum_types"

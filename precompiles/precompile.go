@@ -581,8 +581,8 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbWasmCache.methodsByName["CacheCodehash"].maxArbosVersion = params.ArbosVersion_Stylus
 	ArbWasmCache.methodsByName["CacheProgram"].arbosVersion = params.ArbosVersion_StylusFixes
 
-	insert(MakePrecompile(templates.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: hex("7E7")}))
-	insert(MakePrecompile(templates.DeriwSubAccountPublicMetaData, &DeriwSubAccountPublic{Address: hex("7E9")}))
+	insert(MakePrecompile(pgen.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: hex("7E7")}))
+	insert(MakePrecompile(pgen.DeriwSubAccountPublicMetaData, &DeriwSubAccountPublic{Address: hex("7E9")}))
 
 	ArbRetryableImpl := &ArbRetryableTx{Address: types.ArbRetryableTxAddress}
 	ArbRetryable := insert(MakePrecompile(pgen.ArbRetryableTxMetaData, ArbRetryableImpl))
@@ -639,7 +639,7 @@ func Precompiles() map[addr]ArbosPrecompile {
 		context := eventCtx(DeriwGaslessImpl.OwnerActsGasCost(method, owner, data))
 		return DeriwGaslessImpl.OwnerActs(context, evm, method, owner, data)
 	}
-	_, DeriwGasless := MakePrecompile(templates.DeriwGaslessMetaData, DeriwGaslessImpl)
+	_, DeriwGasless := MakePrecompile(pgen.DeriwGaslessMetaData, DeriwGaslessImpl)
 	insert(deriwGaslessOwnerOnly(DeriwGaslessImpl.Address, DeriwGasless, emitDeriwGaslessActs))
 
 	DeriwSubAccountImpl := &DeriwSubAccount{Address: hex("7EA")}
@@ -647,10 +647,10 @@ func Precompiles() map[addr]ArbosPrecompile {
 		context := eventCtx(DeriwSubAccountImpl.OwnerActsGasCost(method, owner, data))
 		return DeriwSubAccountImpl.OwnerActs(context, evm, method, owner, data)
 	}
-	_, DeriwSubAccount := MakePrecompile(templates.DeriwSubAccountMetaData, DeriwSubAccountImpl)
+	_, DeriwSubAccount := MakePrecompile(pgen.DeriwSubAccountMetaData, DeriwSubAccountImpl)
 	insert(deriwSubAccountOwnerOnly(DeriwSubAccountImpl.Address, DeriwSubAccount, emitDeriwSubAccountActs))
 
-	insert(debugOnly(MakePrecompile(templates.ArbDebugMetaData, &ArbDebug{Address: hex("ff")})))
+	insert(debugOnly(MakePrecompile(pgen.ArbDebugMetaData, &ArbDebug{Address: hex("ff")})))
 
 	ArbosActs := insert(MakePrecompile(pgen.ArbosActsMetaData, &ArbosActs{Address: types.ArbosAddress}))
 	arbos.InternalTxStartBlockMethodID = ArbosActs.GetMethodID("StartBlock")
