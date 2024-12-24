@@ -61,7 +61,11 @@ func TestSequencerFeed(t *testing.T) {
 	defer cleanupSeq()
 	seqInfo, seqNode, seqClient := builderSeq.L2Info, builderSeq.L2.ConsensusNode, builderSeq.L2.Client
 
-	port := seqNode.BroadcastServer.ListenerAddr().(*net.TCPAddr).Port
+	var port int
+	if listenerAddr, ok := seqNode.BroadcastServer.ListenerAddr().(*net.TCPAddr); ok {
+		port = listenerAddr.Port
+	}
+
 	builder := NewNodeBuilder(ctx).DefaultConfig(t, false)
 	builder.nodeConfig.Feed.Input = *newBroadcastClientConfigTest(port)
 	builder.takeOwnership = false
@@ -107,7 +111,12 @@ func TestRelayedSequencerFeed(t *testing.T) {
 	Require(t, err)
 
 	config := relay.ConfigDefault
-	port := seqNode.BroadcastServer.ListenerAddr().(*net.TCPAddr).Port
+
+	var port int
+	if listenerAddr, ok := seqNode.BroadcastServer.ListenerAddr().(*net.TCPAddr); ok {
+		port = listenerAddr.Port
+	}
+
 	config.Node.Feed.Input = *newBroadcastClientConfigTest(port)
 	config.Node.Feed.Output = *newBroadcasterConfigTest()
 	config.Chain.ID = bigChainId.Uint64()
@@ -119,7 +128,10 @@ func TestRelayedSequencerFeed(t *testing.T) {
 	Require(t, err)
 	defer currentRelay.StopAndWait()
 
-	port = currentRelay.GetListenerAddr().(*net.TCPAddr).Port
+	if listenerAddr, ok := currentRelay.GetListenerAddr().(*net.TCPAddr); ok {
+		port = listenerAddr.Port
+	}
+
 	builder := NewNodeBuilder(ctx).DefaultConfig(t, false)
 	builder.nodeConfig.Feed.Input = *newBroadcastClientConfigTest(port)
 	builder.takeOwnership = false
@@ -219,7 +231,10 @@ func testLyingSequencer(t *testing.T, dasModeStr string) {
 	defer cleanupC()
 	l2clientC, nodeC := testClientC.Client, testClientC.ConsensusNode
 
-	port := nodeC.BroadcastServer.ListenerAddr().(*net.TCPAddr).Port
+	var port int
+	if listenerAddr, ok := nodeC.BroadcastServer.ListenerAddr().(*net.TCPAddr); ok {
+		port = listenerAddr.Port
+	}
 
 	// The client node, connects to lying sequencer's feed
 	nodeConfigB := arbnode.ConfigDefaultL1NonSequencerTest()
@@ -361,7 +376,10 @@ func testBlockHashComparison(t *testing.T, blockHash *common.Hash, mustMismatch 
 	}
 	defer wsBroadcastServer.StopAndWait()
 
-	port := wsBroadcastServer.ListenerAddr().(*net.TCPAddr).Port
+	var port int
+	if listenerAddress, ok := wsBroadcastServer.ListenerAddr().(*net.TCPAddr); ok {
+		port = listenerAddress.Port
+	}
 
 	builder := NewNodeBuilder(ctx).DefaultConfig(t, true)
 	builder.nodeConfig.Feed.Input = *newBroadcastClientConfigTest(port)
@@ -468,7 +486,12 @@ func TestPopulateFeedBacklog(t *testing.T) {
 
 	// Creates a sink node that will read from the output feed of the previous node.
 	nodeConfigSink := builder.nodeConfig
-	port := builder.L2.ConsensusNode.BroadcastServer.ListenerAddr().(*net.TCPAddr).Port
+
+	var port int
+	if listenerAddr, ok := builder.L2.ConsensusNode.BroadcastServer.ListenerAddr().(*net.TCPAddr); ok {
+		port = listenerAddr.Port
+	}
+
 	nodeConfigSink.Feed.Input = *newBroadcastClientConfigTest(port)
 	testClientSink, cleanupSink := builder.Build2ndNode(t, &SecondNodeParams{nodeConfig: nodeConfigSink})
 	defer cleanupSink()

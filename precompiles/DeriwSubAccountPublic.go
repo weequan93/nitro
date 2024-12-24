@@ -4,76 +4,98 @@
 package precompiles
 
 import (
+	"bytes"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/offchainlabs/nitro/arbutil"
 	"math/big"
-	"time"
 )
 
 // DeriwSubAccount precompile,public accessible contract, allow anyone to grant permission so that another public key can act on behalf on their permission
 type DeriwSubAccountPublic struct {
-	Address          addr // 0x7E9 2025
-	OwnerActs        func(ctx, mech, bytes4, addr, []byte) error
-	OwnerActsGasCost func(bytes4, addr, []byte) (uint64, error)
+	Address addr // 0x7E9 2023
 }
 
 // AddChainOwner adds account as a chain owner
 func (con DeriwSubAccountPublic) GrantAccountControl(c ctx, evm mech, signData []byte, signature []byte) error {
-
-	var hasUsed, err = c.State.SubAccount().HasUsedHash(common.BytesToHash(signature))
+	signatureUse := bytes.Clone(signature)
+	var hasUsed, err = c.State.SubAccount().HasUsedHash(common.BytesToHash(signatureUse))
 	if err != nil {
 		return err
 	}
 
-	if hasUsed == true {
-		return errors.New("Signature already used")
-	}
-
-	typedData, address, validSignature, err := arbutil.ParseTypeDataNSignature(signData, signature)
+	err = c.State.SubAccount().SetUsedHash(common.BytesToHash(signatureUse))
 	if err != nil {
 		return err
 	}
-	if validSignature != true {
-		return errors.New("failed to verify signature")
+
+	if hasUsed {
+		return errors.New("GrantAccountControl Signature already used")
 	}
 
-	currentTimestamp := big.NewInt(time.Now().UnixMilli())
+	typedData, address, validSignature, err := arbutil.ParseTypeDataNSignature(signData, signatureUse)
+	if err != nil {
+		return err
+	}
+
+	if !validSignature {
+		return errors.New("GrantAccountControl failed to verify signature")
+	}
+
+	//currentTimestamp := big.NewInt(time.Now().Unix())
 	timestamp := big.NewInt(0)
-	timestamp.SetString((typedData.Message["Timestamp"]).(string), 10)
-	if currentTimestamp.Cmp(timestamp) < 0 {
-		// over current time
-		return errors.New("timestamp is over current")
+
+	if signedTimestamp, ok := (typedData.Message["Timestamp"]).(string); ok {
+		timestamp.SetString(signedTimestamp, 10)
+	} else {
+		return errors.New("GrantAccountControl timestamp casting error")
 	}
 
-	currentTimestamp = currentTimestamp.Sub(currentTimestamp, big.NewInt(60))
-	if timestamp.Cmp(currentTimestamp) < 0 {
-		// more than 60s old of signature
-		return errors.New("timestamp is too old")
-	}
+	//if currentTimestamp.Cmp(timestamp) < 0 {
+	//	// over current time
+	//	return errors.New("GrantAccountControl timestamp is over current")
+	//}
+
+	//currentTimestamp = currentTimestamp.Sub(currentTimestamp, big.NewInt(600))
+	//if timestamp.Cmp(currentTimestamp) < 0 {
+	//	// more than 60s old of signature
+	//	log.Info("GrantAccountControl timestamp is less than current", "currentTimestamp", currentTimestamp, "timestamp", timestamp)
+	//	return errors.New("GrantAccountControl timestamp is too old")
+	//}
 
 	operation := typedData.Message["Operation"]
+
 	if operation != "Grant" {
-		return errors.New("operation not supported")
+		return errors.New("GrantAccountControl operation not supported")
 	}
 
-	childAddr := typedData.Message["child"]
-	childAddress := common.HexToAddress(childAddr.(string))
+	childAddr := typedData.Message["Child"]
+
+	var childAddress common.Address
+	if childAddrString, ok := childAddr.(string); ok {
+		childAddress = common.HexToAddress(childAddrString)
+	} else {
+		return errors.New("Cast child address failed")
+	}
+
 	if childAddress.Cmp(c.caller) != 0 {
-		return errors.New("address validation fail ")
+		return errors.New("GrantAccountControl address validation fail ")
 	}
 
 	// update sub-account
-	return c.State.SubAccount().BindRelation(*address, childAddress)
+	return c.State.SubAccount().BindRelation(*address, childAddress, timestamp)
 }
 
 // RemoveGaslessOwner removes account from the list of chain owners
 func (con DeriwSubAccountPublic) RevokeAccountControl(c ctx, evm mech, signData []byte, signature []byte) error {
-	typedData, address, validSignature, err := arbutil.ParseTypeDataNSignature(signData, signature)
+
+	signatureUse := bytes.Clone(signature)
+
+	typedData, address, validSignature, err := arbutil.ParseTypeDataNSignature(signData, signatureUse)
 	if err != nil {
 		return err
 	}
-	if validSignature != true {
+	if !validSignature {
 		return errors.New("failed to verify signature")
 	}
 
@@ -81,12 +103,14 @@ func (con DeriwSubAccountPublic) RevokeAccountControl(c ctx, evm mech, signData 
 	if operation != "Revoke" {
 		return errors.New("operation not supported")
 	}
-
 	// update sub-account
 	return c.State.SubAccount().RevokeRelation(*address)
 }
 
 func (con DeriwSubAccountPublic) ReadAccountControl(c ctx, evm mech, addr addr) (common.Address, error) {
-
-	return c.State.SubAccount().ReadRelationFromChild(c.caller)
+	return c.State.SubAccount().ReadRelationFromChild(addr)
 }
+
+//func (con DeriwSubAccountPublic) IsValidAccountSession(c ctx, evm mech, addr addr) (bool, *big.Int, *big.Int, error) {
+//	return c.State.SubAccount().IsValidSession(addr)
+//}

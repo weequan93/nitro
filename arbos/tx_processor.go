@@ -462,8 +462,9 @@ func (p *TxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, err
 		p.posterGas = GetPosterGas(p.state, basefee, p.msg.TxRunMode, posterCost)
 		p.PosterFee = arbmath.BigMulByUint(basefee, p.posterGas) // round down
 
-		isGasless := arbutil.IsCustomPriceTxCheck(p.state.Pricer(), p.msg.Tx)
-		if isGasless && err == nil {
+		isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx)
+		// isGasless := arbutil.IsCustomPriceTxCheck(p.state.Pricer(), p.msg.Tx)
+		if isGasless {
 			// if arbutil.IsCustomPriceTx(p.msg.Tx) {
 			p.PosterFee.Set(common.Big0)
 		}
@@ -611,7 +612,8 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, success bool) {
 	totalCost := arbmath.BigMul(basefee, arbmath.UintToBig(gasUsed)) // total cost = price of gas * gas burnt
 	computeCost := arbmath.BigSub(totalCost, p.PosterFee)            // total cost = network's compute + poster's L1 costs
 
-	isGasless := arbutil.IsCustomPriceTxCheck(p.state.Pricer(), p.msg.Tx)
+	isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx)
+	// isGasless := arbutil.IsCustomPriceTxCheck(p.state.Pricer(), p.msg.Tx)
 	if isGasless {
 		// if arbutil.IsCustomPriceTx(p.msg.Tx) {
 		totalCost.Set(common.Big0)

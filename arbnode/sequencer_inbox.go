@@ -123,7 +123,11 @@ func (m *SequencerInboxBatch) getSequencerData(ctx context.Context, client arbut
 		if err != nil {
 			return nil, err
 		}
-		return args["data"].([]byte), nil
+
+		if dataByte, ok := args["data"].([]byte); ok {
+			return dataByte, nil
+		}
+		return nil, err
 	case batchDataSeparateEvent:
 		var numberAsHash common.Hash
 		binary.BigEndian.PutUint64(numberAsHash[(32-8):], m.SequenceNumber)

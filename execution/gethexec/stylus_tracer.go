@@ -150,7 +150,7 @@ func (t *stylusTracer) CaptureExit(output []byte, gasUsed uint64, _ error) {
 	}
 }
 
-func (t *stylusTracer) GetResult() (json.RawMessage, error) {
+func (t *stylusTracer) GetResult(from *common.Address) (json.RawMessage, error) {
 	if t.reason != nil {
 		return nil, t.reason
 	}

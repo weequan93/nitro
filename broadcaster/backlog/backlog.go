@@ -326,9 +326,16 @@ func newBacklogSegment() *backlogSegment {
 // variable of type BacklogSegment is nil or not. Comparing whether an
 // interface is nil directly will not work.
 func IsBacklogSegmentNil(segment BacklogSegment) bool {
+	var backlogSegmentInstance *backlogSegment
+
+	if segment != nil {
+		if backlogSegmentInstance_, ok := segment.(*backlogSegment); ok {
+			backlogSegmentInstance = backlogSegmentInstance_
+		}
+	}
 	if segment == nil {
 		return true
-	} else if segment.(*backlogSegment) == nil {
+	} else if backlogSegmentInstance == nil {
 		return true
 	}
 	return false

@@ -169,7 +169,7 @@ func (r *BlockRecorder) RecordBlockCreation(
 	// check we got the canonical hash
 	canonicalHash := r.execEngine.bc.GetCanonicalHash(uint64(blockNum))
 	if canonicalHash != blockHash {
-		return nil, fmt.Errorf("Blockhash doesn't match when recording got %v canonical %v", blockHash, canonicalHash)
+		return nil, fmt.Errorf("Blockhash doesn't match when recording got %v canonical %v blocknumber %d", blockHash, canonicalHash, blockNum)
 	}
 
 	// these won't usually do much here (they will in preparerecording), but doesn't hurt to check

@@ -686,9 +686,6 @@ func createNodeImpl(
 		}
 
 		stakerObj, err = staker.NewStaker(l1Reader, wallet, bind.CallOpts{}, func() *staker.L1ValidatorConfig { return &configFetcher.Get().Staker }, blockValidator, statelessBlockValidator, nil, confirmedNotifiers, deployInfo.ValidatorUtils, fatalErrChan)
-		tmpAddress := common.HexToAddress(config.Staker.StakeAmountAddress)
-
-		stakerObj, err = staker.NewStaker(l1Reader, wallet, bind.CallOpts{}, config.Staker, blockValidator, statelessBlockValidator, nil, confirmedNotifiers, deployInfo.ValidatorUtils, fatalErrChan, &tmpAddress)
 		if err != nil {
 			return nil, err
 		}

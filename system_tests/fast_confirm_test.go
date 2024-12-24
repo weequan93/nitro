@@ -167,6 +167,7 @@ func TestFastConfirmation(t *testing.T) {
 		nil,
 		l2node.DeployInfo.ValidatorUtils,
 		nil,
+		nil,
 	)
 	Require(t, err)
 	err = stakerA.Initialize(ctx)
@@ -368,6 +369,7 @@ func TestFastConfirmationWithSafe(t *testing.T) {
 		nil,
 		l2nodeA.DeployInfo.ValidatorUtils,
 		nil,
+		nil,
 	)
 	Require(t, err)
 	err = stakerA.Initialize(ctx)
@@ -419,6 +421,7 @@ func TestFastConfirmationWithSafe(t *testing.T) {
 		nil,
 		nil,
 		l2nodeB.DeployInfo.ValidatorUtils,
+		nil,
 		nil,
 	)
 	Require(t, err)

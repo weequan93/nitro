@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func TestGaslessOwner(t *testing.T) {
+func TestGaslessOwnerPublic(t *testing.T) {
 	evm := newMockEVMForTesting()
 	caller := common.BytesToAddress(crypto.Keccak256([]byte{})[:20])
 	// tracer := util.NewTracingInfo(evm, testhelpers.RandomAddress(), types.ArbosAddress, util.TracingDuringEVM)
@@ -23,6 +23,7 @@ func TestGaslessOwner(t *testing.T) {
 	addr3 := common.BytesToAddress(crypto.Keccak256([]byte{3})[:20])
 
 	prec := &DeriwGasless{}
+	precPublic := &DeriwGaslessPublic{}
 	// gasInfo := &ArbGasInfo{}
 	callCtx := testContext(caller, evm)
 
@@ -33,38 +34,38 @@ func TestGaslessOwner(t *testing.T) {
 	Require(t, prec.AddGaslessOwner(callCtx, evm, addr2))
 	Require(t, prec.AddGaslessOwner(callCtx, evm, addr1))
 
-	member, err := prec.IsGaslessOwner(callCtx, evm, addr1)
+	member, err := precPublic.IsGaslessOwner(callCtx, evm, addr1)
 	Require(t, err)
 	if !member {
 		Fail(t)
 	}
 
-	member, err = prec.IsGaslessOwner(callCtx, evm, addr2)
+	member, err = precPublic.IsGaslessOwner(callCtx, evm, addr2)
 	Require(t, err)
 	if !member {
 		Fail(t)
 	}
 
-	member, err = prec.IsGaslessOwner(callCtx, evm, addr3)
+	member, err = precPublic.IsGaslessOwner(callCtx, evm, addr3)
 	Require(t, err)
 	if member {
 		Fail(t)
 	}
 
 	Require(t, prec.RemoveGaslessOwner(callCtx, evm, addr1))
-	member, err = prec.IsGaslessOwner(callCtx, evm, addr1)
+	member, err = precPublic.IsGaslessOwner(callCtx, evm, addr1)
 	Require(t, err)
 	if member {
 		Fail(t)
 	}
-	member, err = prec.IsGaslessOwner(callCtx, evm, addr2)
+	member, err = precPublic.IsGaslessOwner(callCtx, evm, addr2)
 	Require(t, err)
 	if !member {
 		Fail(t)
 	}
 
 	Require(t, prec.AddGaslessOwner(callCtx, evm, addr1))
-	all, err := prec.GetAllGaslessOwners(callCtx, evm)
+	all, err := precPublic.GetAllGaslessOwners(callCtx, evm)
 	Require(t, err)
 	if len(all) != 3 {
 		Fail(t)
@@ -83,7 +84,7 @@ func TestGaslessOwner(t *testing.T) {
 	}
 }
 
-func TestGaslessPricer(t *testing.T) {
+func TestGaslessPricerPublic(t *testing.T) {
 	version := uint64(10)
 	evm := newMockEVMForTestingWithVersion(&version)
 	caller := common.BytesToAddress(crypto.Keccak256([]byte{})[:20])
@@ -91,37 +92,39 @@ func TestGaslessPricer(t *testing.T) {
 	callCtx := testContext(caller, evm)
 	prec := &DeriwGasless{}
 
+	precPublic := &DeriwGaslessPublic{}
+
 	Require(t, prec.AddPricerTxFrom(callCtx, evm, newAddr))
-	member, err := prec.IsPricerTxFrom(callCtx, evm, newAddr)
+	member, err := precPublic.IsPricerTxFrom(callCtx, evm, newAddr)
 	Require(t, err)
 	if !member {
 		Fail(t)
 	}
-	all, err := prec.GetPricerTxFromAddrs(callCtx, evm)
+	all, err := precPublic.GetPricerTxFromAddrs(callCtx, evm)
 	Require(t, err)
 	if len(all) != 1 {
 		Fail(t)
 	}
 	Require(t, prec.RemovePricerTxFrom(callCtx, evm, newAddr))
-	member, err = prec.IsPricerTxFrom(callCtx, evm, newAddr)
+	member, err = precPublic.IsPricerTxFrom(callCtx, evm, newAddr)
 	Require(t, err)
 	if member {
 		Fail(t)
 	}
 
 	Require(t, prec.AddPricerTxTo(callCtx, evm, newAddr))
-	member, err = prec.IsPricerTxTo(callCtx, evm, newAddr)
+	member, err = precPublic.IsPricerTxTo(callCtx, evm, newAddr)
 	Require(t, err)
 	if !member {
 		Fail(t)
 	}
-	all, err = prec.GetPricerTxToAddrs(callCtx, evm)
+	all, err = precPublic.GetPricerTxToAddrs(callCtx, evm)
 	Require(t, err)
 	if len(all) != 1 {
 		Fail(t)
 	}
 	Require(t, prec.RemovePricerTxTo(callCtx, evm, newAddr))
-	member, err = prec.IsPricerTxTo(callCtx, evm, newAddr)
+	member, err = precPublic.IsPricerTxTo(callCtx, evm, newAddr)
 	Require(t, err)
 	if member {
 		Fail(t)

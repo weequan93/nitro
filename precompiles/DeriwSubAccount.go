@@ -44,7 +44,7 @@ func (con DeriwSubAccount) AddAllowedAddress(c ctx, evm mech, newAddress addr) e
 
 // RemoveGaslessOwner removes account from the list of chain owners
 func (con DeriwSubAccount) RemoveAllowedAddress(c ctx, evm mech, addr addr) error {
-	member, _ := con.IsSubAccountOwner(c, evm, addr)
+	member, _ := con.IsAllowedAddress(c, evm, addr)
 	if !member {
 		return errors.New("tried to remove non-allowed address")
 	}
@@ -56,10 +56,33 @@ func (con DeriwSubAccount) IsAllowedAddress(c ctx, evm mech, addr addr) (bool, e
 	return c.State.SubAccount().AllowedAddress().IsMember(addr)
 }
 
-func (con DeriwSubAccount) GetAllAllowedOwner(c ctx, evm mech) ([]common.Address, error) {
+func (con DeriwSubAccount) GetAllAllowedAddress(c ctx, evm mech) ([]common.Address, error) {
 	return c.State.SubAccount().AllowedAddress().AllMembers(65536)
 }
 
 func (con DeriwSubAccount) GetAllSubAccountOwner(c ctx, evm mech) ([]common.Address, error) {
 	return c.State.SubAccount().SubAccountOwner().AllMembers(65536)
+}
+
+// Add usdt address
+func (con DeriwSubAccount) AddUsdtAddress(c ctx, evm mech, newAddress addr) error {
+	return c.State.SubAccount().UsdtAddress().Add(newAddress)
+}
+
+// Remove address from usdt address
+func (con DeriwSubAccount) RemoveUsdtAddress(c ctx, evm mech, addr addr) error {
+	member, _ := con.IsUsdtAddress(c, evm, addr)
+	if !member {
+		return errors.New("tried to remove non-allowed address")
+	}
+	return c.State.SubAccount().UsdtAddress().Remove(addr, c.State.ArbOSVersion())
+}
+
+// IsGaslessOwner checks if the account is a chain owner
+func (con DeriwSubAccount) IsUsdtAddress(c ctx, evm mech, addr addr) (bool, error) {
+	return c.State.SubAccount().UsdtAddress().IsMember(addr)
+}
+
+func (con DeriwSubAccount) GetAllUsdtAddress(c ctx, evm mech) ([]common.Address, error) {
+	return c.State.SubAccount().UsdtAddress().AllMembers(65536)
 }

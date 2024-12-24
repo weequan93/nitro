@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
-	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/util/arbmath"
 	"github.com/offchainlabs/nitro/util/headerreader"
 	flag "github.com/spf13/pflag"
@@ -134,7 +133,8 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 		}
 	}
 
-	isGasless := arbutil.IsCustomPriceTxCheck(arbos.Pricer(), tx)
+	isGasless := arbos.Pricer().IsCustomPriceTxCheck(tx)
+	// isGasless := arbutil.IsCustomPriceTxCheck(arbos.Pricer(), tx)
 	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !isGasless {
 		// if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !arbutil.IsGaslessTx(tx) && !arbutil.IsCustomPriceTx(tx) {
 		return fmt.Errorf("PreCheckTx() %w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)

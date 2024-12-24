@@ -42,7 +42,7 @@ func IsGaslessTx(tx *types.Transaction) bool {
 func IsCustomPriceTx(tx *types.Transaction) bool {
 	if tx != nil && tx.To() != nil {
 		IsGaslessContract, err := GASLESS_CONTRACT[tx.To().String()]
-		if err != true {
+		if !err {
 			return false
 		}
 		return IsGaslessContract
@@ -52,7 +52,7 @@ func IsCustomPriceTx(tx *types.Transaction) bool {
 
 func IsCustomPriceAddr(addr *common.Address) bool {
 	IsGaslessContract, err := GASLESS_CONTRACT[addr.String()]
-	if err != true {
+	if !err {
 		return false
 	}
 	return IsGaslessContract

@@ -31,8 +31,9 @@ func ParseTypeDataNSignature(signData []byte, signature []byte) (*apitypes.Typed
 
 	// update the recovery id
 	// https://github.com/ethereum/go-ethereum/blob/55599ee95d4151a2502465e0afc7c47bd1acba77/internal/ethapi/api.go#L442
-
-	signature[64] -= 27
+	if signature[64] > 0 {
+		signature[64] -= 27
+	}
 
 	// get the pubkey used to sign this signature
 	sigPubkey, err := crypto.Ecrecover(sighash, signature)
@@ -43,7 +44,7 @@ func ParseTypeDataNSignature(signData []byte, signature []byte) (*apitypes.Typed
 	// get the address to confirm it's the same one in the auth token
 	pubkey, err := crypto.UnmarshalPubkey(sigPubkey)
 	if err != nil {
-		return nil, nil, false, nil
+		return nil, nil, false, err
 	}
 
 	address := crypto.PubkeyToAddress(*pubkey)

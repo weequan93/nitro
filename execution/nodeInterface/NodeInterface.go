@@ -521,8 +521,16 @@ func (n NodeInterface) GasEstimateL1Component(
 	randomGas := l1pricing.RandomGas
 	args.Gas = (*hexutil.Uint64)(&randomGas)
 
+	var stateDb *state.StateDB
+
+	if stateDb_, ok := evm.StateDB.(*state.StateDB); ok {
+		stateDb = stateDb_
+	} else {
+		return 0, nil, nil, errors.New("Statedb casting error")
+	}
+
 	// We set the run mode to eth_call mode here because we want an exact estimate, not a padded estimate
-	msg, err := args.ToMessage(randomGas, n.header, evm.StateDB.(*state.StateDB), core.MessageEthcallMode)
+	msg, err := args.ToMessage(randomGas, n.header, stateDb, core.MessageEthcallMode)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -578,7 +586,13 @@ func (n NodeInterface) GasEstimateComponents(
 	// Setting the gas currently doesn't affect the PosterDataCost,
 	// but we do it anyways for accuracy with potential future changes.
 	args.Gas = &totalRaw
-	msg, err := args.ToMessage(gasCap, n.header, evm.StateDB.(*state.StateDB), core.MessageGasEstimationMode)
+
+	var stateDb *state.StateDB
+	if stateDb_, ok := evm.StateDB.(*state.StateDB); ok {
+		stateDb = stateDb_
+	}
+
+	msg, err := args.ToMessage(gasCap, n.header, stateDb, core.MessageGasEstimationMode)
 	if err != nil {
 		return 0, 0, nil, nil, err
 	}

@@ -35,7 +35,14 @@ func TestSequencerRejection(t *testing.T) {
 
 	builder := NewNodeBuilder(ctx).DefaultConfig(t, false)
 	builder.takeOwnership = false
-	port := builderSeq.L2.ConsensusNode.BroadcastServer.ListenerAddr().(*net.TCPAddr).Port
+
+	var port int
+	if listenerAddr, ok := builderSeq.L2.ConsensusNode.BroadcastServer.ListenerAddr().(*net.TCPAddr); ok {
+		port = listenerAddr.Port
+	} else {
+		port = 0
+	}
+
 	builder.nodeConfig.Feed.Input = *newBroadcastClientConfigTest(port)
 	cleanup := builder.Build(t)
 	defer cleanup()

@@ -63,7 +63,7 @@ type ArbosState struct {
 	brotliCompressionLevel storage.StorageBackedUint64 // brotli compression level used for pricing
 	backingStorage         *storage.Storage
 	Burner                 burn.Burner
-	price                  *pricer.Pricer
+	pricer                 *pricer.Pricer
 	gaslessOwners          *addressSet.AddressSet
 	subAccountState        *subAccount.SubAccountState
 }
@@ -105,7 +105,7 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		burner,
 		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
 		addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
-		subAccount.OpenSubAccountState(backingStorage.OpenCachedSubStorage(subAccountSubspace)),
+		subAccount.OpenSubAccountState(backingStorage.OpenSubStorage(subAccountSubspace)),
 	}, nil
 
 }
@@ -117,7 +117,7 @@ func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pri
 
 func OpenSubAccountState(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *subAccount.SubAccountState {
 	backingStorage := storage.NewGeth(stateDB, burner)
-	return subAccount.OpenSubAccountState(backingStorage.OpenCachedSubStorage(subAccountSubspace))
+	return subAccount.OpenSubAccountState(backingStorage.OpenSubStorage(subAccountSubspace))
 }
 
 func OpenSystemArbosState(stateDB vm.StateDB, tracingInfo *util.TracingInfo, readOnly bool) (*ArbosState, error) {

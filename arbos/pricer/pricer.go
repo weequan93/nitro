@@ -1,6 +1,7 @@
 package pricer
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/offchainlabs/nitro/arbos/addressSet"
 	"github.com/offchainlabs/nitro/arbos/storage"
@@ -40,10 +41,28 @@ func (pricer *Pricer) TxToAddrs() *addressSet.AddressSet {
 	return pricer.txToAddrs
 }
 
-func IsCustomPriceTx(pricer *Pricer, tx *types.Transaction) bool {
-	if tx == nil || tx.To() == nil || pricer == nil {
+func (pricer *Pricer) IsCustomPriceTxCheck(tx *types.Transaction) bool {
+	if tx != nil {
+	}
+	if tx != nil && tx.To() != nil {
+		addr := common.HexToAddress(tx.To().String())
+		IsGaslessContract, err := pricer.TxToAddrs().IsMember(addr)
+		if err != nil {
+			return false
+		}
+		return IsGaslessContract
+	}
+	return false
+}
+
+func (pricer *Pricer) IsCustomPriceTxCheckAddr(addr *common.Address) bool {
+	if addr == nil {
 		return false
 	}
-	ok, _ := pricer.TxToAddrs().IsMember(*tx.To())
-	return ok
+	IsGaslessContract, err := pricer.TxToAddrs().IsMember(*addr)
+	if err != nil {
+		return false
+	}
+	return IsGaslessContract
+
 }

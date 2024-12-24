@@ -55,7 +55,12 @@ func readLogMessagesFromJSONFile(t *testing.T, path string) ([]string, error) {
 		if !ok {
 			testhelpers.FailImpl(t, "Incorrect record, msg key is missing", "record", record)
 		}
-		messages = append(messages, msg.(string))
+
+		if msgCasted, ok := msg.(string); ok {
+			messages = append(messages, msgCasted)
+		} else {
+			testhelpers.FailImpl(t, "Incorrect record,msg type casting fail", "msg", msg)
+		}
 	}
 	if errors.Is(err, io.EOF) {
 		return messages, nil
