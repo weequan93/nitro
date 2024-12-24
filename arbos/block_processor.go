@@ -14,6 +14,8 @@ import (
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/util"
+	"github.com/offchainlabs/nitro/arbutil"
+	"github.com/offchainlabs/nitro/solgen/go/precompilesgen"
 	"github.com/offchainlabs/nitro/util/arbmath"
 
 	"github.com/ethereum/go-ethereum/arbitrum_types"
@@ -257,8 +259,26 @@ func ProduceBlockAdvanced(
 			}
 
 			sender, err = signer.Sender(tx)
+
 			if err != nil {
 				return nil, nil, err
+			}
+
+			// sender overwrite
+			parentAccount, err := state.SubAccount().ReadRelationFromChild(sender)
+			if err != nil {
+				return nil, nil, err
+			}
+			if parentAccount.Cmp(common.Address{}) != 0 {
+
+				isAllowedAddress, err := state.SubAccount().AllowedAddress().IsMember(*tx.To())
+				if err != nil {
+					return nil, nil, err
+				}
+				if isAllowedAddress {
+					sender.SetBytes(parentAccount.Bytes())
+				}
+
 			}
 
 			if err = hooks.PreTxFilter(chainConfig, header, statedb, state, tx, options, sender, l1Info); err != nil {
@@ -292,6 +312,11 @@ func ProduceBlockAdvanced(
 			}
 
 			computeGas := tx.Gas() - dataGas
+
+			if tx.To() != nil && arbutil.IsCustomPriceAddr(tx.To()) {
+				computeGas = params.TxGas
+			}
+
 			if computeGas < params.TxGas {
 				if hooks.DiscardInvalidTxsEarly {
 					return nil, nil, core.ErrIntrinsicGas

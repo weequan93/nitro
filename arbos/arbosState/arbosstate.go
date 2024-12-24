@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/offchainlabs/nitro/arbos/subAccount"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -28,6 +30,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/merkleAccumulator"
+	"github.com/offchainlabs/nitro/arbos/pricer"
 	"github.com/offchainlabs/nitro/arbos/programs"
 	"github.com/offchainlabs/nitro/arbos/retryables"
 	"github.com/offchainlabs/nitro/arbos/storage"
@@ -60,6 +63,9 @@ type ArbosState struct {
 	brotliCompressionLevel storage.StorageBackedUint64 // brotli compression level used for pricing
 	backingStorage         *storage.Storage
 	Burner                 burn.Burner
+	price                  *pricer.Pricer
+	gaslessOwners          *addressSet.AddressSet
+	subAccountState        *subAccount.SubAccountState
 }
 
 const MaxArbosVersionSupported uint64 = params.ArbosVersion_StylusChargingFixes
@@ -97,7 +103,21 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		backingStorage.OpenStorageBackedUint64(uint64(brotliCompressionLevelOffset)),
 		backingStorage,
 		burner,
+		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
+		addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
+		subAccount.OpenSubAccountState(backingStorage.OpenCachedSubStorage(subAccountSubspace)),
 	}, nil
+
+}
+
+func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pricer.Pricer {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace))
+}
+
+func OpenSubAccountState(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *subAccount.SubAccountState {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return subAccount.OpenSubAccountState(backingStorage.OpenCachedSubStorage(subAccountSubspace))
 }
 
 func OpenSystemArbosState(stateDB vm.StateDB, tracingInfo *util.TracingInfo, readOnly bool) (*ArbosState, error) {
@@ -170,7 +190,10 @@ var (
 	sendMerkleSubspace   SubspaceID = []byte{5}
 	blockhashesSubspace  SubspaceID = []byte{6}
 	chainConfigSubspace  SubspaceID = []byte{7}
-	programsSubspace     SubspaceID = []byte{8}
+	pricerSubspace       SubspaceID = []byte{8}
+	gaslessSubspace      SubspaceID = []byte{9}
+	subAccountSubspace   SubspaceID = []byte{10}
+	programsSubspace     SubspaceID = []byte{11}
 )
 
 var PrecompileMinArbOSVersions = make(map[common.Address]uint64)
@@ -230,10 +253,21 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	_ = addressSet.Initialize(ownersStorage)
 	_ = addressSet.OpenAddressSet(ownersStorage).Add(initialChainOwner)
 
+	_ = pricer.InitializePricer(sto.OpenSubStorage(pricerSubspace))
+
+	log.Info("InitializeArbosState", "initialChainOwner", initialChainOwner)
+	gaslessOwnersStorage := sto.OpenCachedSubStorage(gaslessSubspace)
+	_ = addressSet.Initialize(gaslessOwnersStorage)
+	_ = addressSet.OpenAddressSet(gaslessOwnersStorage).Add(initialChainOwner)
+
+	_ = subAccount.InitializeSubAccountState(sto.OpenCachedSubStorage(subAccountSubspace))
+
 	aState, err := OpenArbosState(stateDB, burner)
 	if err != nil {
 		return nil, err
 	}
+	log.Info("InitializeArbosState", "aState.GaslessOwners()", aState.GaslessOwners())
+
 	if desiredArbosVersion > 1 {
 		err = aState.UpgradeArbosVersion(desiredArbosVersion, true, stateDB, chainConfig)
 		if err != nil {
@@ -426,12 +460,24 @@ func (state *ArbosState) L2PricingState() *l2pricing.L2PricingState {
 	return state.l2PricingState
 }
 
+func (state *ArbosState) Pricer() *pricer.Pricer {
+	return state.pricer
+}
+
 func (state *ArbosState) AddressTable() *addressTable.AddressTable {
 	return state.addressTable
 }
 
 func (state *ArbosState) ChainOwners() *addressSet.AddressSet {
 	return state.chainOwners
+}
+
+func (state *ArbosState) GaslessOwners() *addressSet.AddressSet {
+	return state.gaslessOwners
+}
+
+func (state *ArbosState) SubAccount() *subAccount.SubAccountState {
+	return state.subAccountState
 }
 
 func (state *ArbosState) SendMerkleAccumulator() *merkleAccumulator.MerkleAccumulator {

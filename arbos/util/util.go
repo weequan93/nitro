@@ -259,3 +259,9 @@ func SafeMapGet[T any](kvs map[string]interface{}, field string) T {
 	}
 	return cast
 }
+
+func Int64ToBytes(number int64) []byte {
+	big := new(big.Int)
+	big.SetInt64(number)
+	return big.Bytes()
+}
