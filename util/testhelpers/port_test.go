@@ -14,20 +14,18 @@ func TestFreeTCPPortListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if aListenerAddr, ok := aListener.Addr().(*net.TCPAddr); ok {
-		if bListenerAddr, ok := bListener.Addr().(*net.TCPAddr); ok {
-			if aListenerAddr.Port == bListenerAddr.Port {
-				t.Errorf("FreeTCPPortListener() got same port: %v, %v", aListener, bListener)
-			}
-		}
+	aTCPAddr, ok := aListener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("aListener.Addr() is not a *net.TCPAddr: %v", aListener.Addr())
 	}
-
-	if aListenerAddr, ok := aListener.Addr().(*net.TCPAddr); ok {
-		if bListenerAddr, ok := bListener.Addr().(*net.TCPAddr); ok {
-			if aListenerAddr.Port == 0 || bListenerAddr.Port == 0 {
-				t.Errorf("FreeTCPPortListener() got port 0")
-			}
-		}
+	bTCPAddr, ok := bListener.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("bListener.Addr() is not a *net.TCPAddr: %v", aListener.Addr())
+	}
+	if aTCPAddr.Port == bTCPAddr.Port {
+		t.Errorf("FreeTCPPortListener() got same port: %v, %v", aListener, bListener)
+	}
+	if aTCPAddr.Port == 0 || bTCPAddr.Port == 0 {
+		t.Errorf("FreeTCPPortListener() got port 0")
 	}
 }

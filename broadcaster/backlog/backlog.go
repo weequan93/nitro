@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+
 	m "github.com/offchainlabs/nitro/broadcaster/message"
 	"github.com/offchainlabs/nitro/util/arbmath"
 	"github.com/offchainlabs/nitro/util/containers"
@@ -326,16 +327,15 @@ func newBacklogSegment() *backlogSegment {
 // variable of type BacklogSegment is nil or not. Comparing whether an
 // interface is nil directly will not work.
 func IsBacklogSegmentNil(segment BacklogSegment) bool {
-	var backlogSegmentInstance *backlogSegment
-
-	if segment != nil {
-		if backlogSegmentInstance_, ok := segment.(*backlogSegment); ok {
-			backlogSegmentInstance = backlogSegmentInstance_
-		}
-	}
 	if segment == nil {
 		return true
-	} else if backlogSegmentInstance == nil {
+	}
+	bs, ok := segment.(*backlogSegment)
+	if !ok {
+		log.Error("error in backlogSegment type assertion: clearing backlog")
+		return false
+	}
+	if bs == nil {
 		return true
 	}
 	return false

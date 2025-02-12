@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/offchainlabs/nitro/arbstate/daprovider"
 )
 
@@ -72,13 +73,10 @@ func TestDAS_SimpleExploreExploit(t *testing.T) {
 		}
 
 		for i := 0; i < len(was) && doMatch; i++ {
-
-			if expectedDummyReader, ok := expected[i].(*dummyReader); ok {
-				if wasDummyReader, ok := was[i].(*dummyReader); ok {
-					if expectedDummyReader.int != wasDummyReader.int {
-						Fail(t, fmt.Sprintf("expected %d, was %d", expectedDummyReader.int, wasDummyReader.int))
-					}
-				}
+			expR, expOK := expected[i].(*dummyReader)
+			wasR, wasOK := was[i].(*dummyReader)
+			if !expOK || !wasOK || expR.int != wasR.int {
+				Fail(t, fmt.Sprintf("expected %d, was %d", expected[i], was[i]))
 			}
 		}
 	}
