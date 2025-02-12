@@ -9,15 +9,14 @@ package arbnode
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/offchainlabs/bold/solgen/go/bridgegen"
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
-	"github.com/offchainlabs/nitro/util/headerreader"
 )
 
 // DelayBufferConfig originates from the sequencer inbox contract.
@@ -32,13 +31,14 @@ func GetDelayBufferConfig(ctx context.Context, sequencerInbox *bridgegen.Sequenc
 	*DelayBufferConfig, error) {
 
 	callOpts := bind.CallOpts{Context: ctx}
-	enabled, err := sequencerInbox.IsDelayBufferable(&callOpts)
-	if err != nil {
-		if headerreader.ExecutionRevertedRegexp.MatchString(err.Error()) {
-			return &DelayBufferConfig{Enabled: false}, nil
-		}
-		return nil, fmt.Errorf("retrieve SequencerInbox.isDelayBufferable: %w", err)
-	}
+	//enabled, err := sequencerInbox.IsDelayBufferable(&callOpts)
+	//if err != nil {
+	//	if headerreader.ExecutionRevertedRegexp.MatchString(err.Error()) {
+	//		return &DelayBufferConfig{Enabled: false}, nil
+	//	}
+	//	return nil, fmt.Errorf("retrieve SequencerInbox.isDelayBufferable: %w", err)
+	//}
+	enabled := false
 	if !enabled {
 		return &DelayBufferConfig{Enabled: false}, nil
 	}

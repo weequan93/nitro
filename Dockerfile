@@ -88,6 +88,7 @@ COPY ./safe-smart-account ./safe-smart-account
 COPY ./solgen/gen.go ./solgen/
 COPY ./fastcache ./fastcache
 COPY ./go-ethereum ./go-ethereum
+COPY ./bold ./bold
 COPY --from=brotli-wasm-export / target/
 COPY --from=contracts-builder workspace/contracts/build/contracts/src/precompiles/ contracts/build/contracts/src/precompiles/
 COPY --from=contracts-builder workspace/contracts/node_modules/@offchainlabs/upgrade-executor/build/contracts/src/UpgradeExecutor.sol/UpgradeExecutor.json contracts/
@@ -198,6 +199,7 @@ RUN apt-get update && apt-get install -y unzip wget curl
 WORKDIR /workspace/machines
 # Download WAVM machines
 COPY ./scripts/download-machine.sh .
+COPY ./scripts/download-deriw-machine.sh .
 #RUN ./download-machine.sh consensus-v1-rc1 0xbb9d58e9527566138b682f3a207c0976d5359837f6e330f4017434cca983ff41
 #RUN ./download-machine.sh consensus-v2.1 0x9d68e40c47e3b87a8a7e6368cc52915720a6484bb2f47ceabad7e573e3a11232
 #RUN ./download-machine.sh consensus-v3 0x53c288a0ca7100c0f2db8ab19508763a51c7fd1be125d376d940a65378acaee7
@@ -219,7 +221,9 @@ COPY ./scripts/download-machine.sh .
 RUN ./download-machine.sh consensus-v30 0xb0de9cb89e4d944ae6023a3b62276e54804c242fd8c4c2d8e6cc4450f5fa8b1b && true
 RUN ./download-machine.sh consensus-v31 0x260f5fa5c3176a856893642e149cf128b5a8de9f828afec8d11184415dd8dc69
 RUN ./download-machine.sh consensus-v32 0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39
-RUN ln -sfT 0x5ebd2e10affd0335df183ec22936e943f0079e2856f897bd364e14b318b2a6bb latest
+RUN ./download-deriw-machine.sh consensus-v32.arm64.deriw1 0x3b68623c622d17784f4c9fc1b4fd57e41ce3bf930e8085596df8adbaa3363eb5
+RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw1 0xdc1e1c6d401767b2cb11f66af9b17a7795319ff4ea7ccd72ce1dea982634e7bf
+RUN ./download-deriw-machine.sh consensus-v32.arm64.deriw2 0xd41ab0afd67575e0fe131b56eb44a1785d68666fe8f672292e3099434b739b28
 
 FROM golang:1.23.1-bookworm AS node-builder
 WORKDIR /workspace
@@ -351,9 +355,6 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /usr/share/doc/* /var/cache/ldconfig/aux-cache /usr/lib/python3.9/__pycache__/ /usr/lib/python3.9/*/__pycache__/ /var/log/* && \
     nitro --version
-
-RUN mkdir -p /home/user/target/machines/target
-RUN chown user /home/user/target/machines/target
 
 USER user
 

@@ -596,10 +596,8 @@ func (n NodeInterface) GasEstimateComponents(
 		stateDb = stateDb_
 	}
 
-	msg, err := args.ToMessage(gasCap, n.header, stateDb, core.MessageGasEstimationMode)
-	if err != nil {
-		return 0, 0, nil, nil, err
-	}
+	msg := args.ToMessage(evm.Context.BaseFee, gasCap, n.header, stateDb, core.MessageGasEstimationMode)
+
 	brotliCompressionLevel, err := c.State.BrotliCompressionLevel()
 	if err != nil {
 		return 0, 0, nil, nil, fmt.Errorf("failed to get brotli compression level: %w", err)

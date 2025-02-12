@@ -252,7 +252,6 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 
 	_ = pricer.InitializePricer(sto.OpenSubStorage(pricerSubspace))
 
-	log.Info("InitializeArbosState", "initialChainOwner", initialChainOwner)
 	gaslessOwnersStorage := sto.OpenCachedSubStorage(gaslessSubspace)
 	_ = addressSet.Initialize(gaslessOwnersStorage)
 	_ = addressSet.OpenAddressSet(gaslessOwnersStorage).Add(initialChainOwner)
@@ -263,7 +262,6 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	if err != nil {
 		return nil, err
 	}
-	log.Info("InitializeArbosState", "aState.GaslessOwners()", aState.GaslessOwners())
 
 	if desiredArbosVersion > 1 {
 		err = aState.UpgradeArbosVersion(desiredArbosVersion, true, stateDB, chainConfig)

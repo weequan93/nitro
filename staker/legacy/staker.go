@@ -1058,15 +1058,13 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeTokenReader, err := NewIERC20(stakeToken, s.builder)
+		stakeTokenReader, err := NewIERC20(stakeToken, s.client)
 		if err != nil {
 			return err
 		}
 
-		auth, err := s.builder.Auth(ctx)
-		if err != nil {
-			return err
-		}
+		auth := s.builder.SingleTxAuth()
+		auth.NoSend = false
 
 		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
 		if err != nil {
@@ -1082,7 +1080,8 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		}
 
 		_, err = s.rollup.NewStakeOnNewNode(
-			s.builder.AuthWithAmount(ctx, stakeAmount),
+			auth,
+			stakeAmount,
 			action.assertion.AsSolidityStruct(),
 			action.hash,
 			action.prevInboxMaxCount,
@@ -1133,15 +1132,13 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeTokenReader, err := NewIERC20(stakeToken, s.builder)
+		stakeTokenReader, err := NewIERC20(stakeToken, s.client)
 		if err != nil {
 			return err
 		}
 
-		auth, err := s.builder.Auth(ctx)
-		if err != nil {
-			return err
-		}
+		auth := s.builder.SingleTxAuth()
+		auth.NoSend = false
 
 		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
 		if err != nil {
@@ -1157,7 +1154,8 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		}
 
 		_, err = s.rollup.NewStakeOnExistingNode(
-			s.builder.AuthWithAmount(ctx, stakeAmount),
+			auth,
+			stakeAmount,
 			action.number,
 			action.hash,
 		)
