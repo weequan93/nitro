@@ -579,6 +579,7 @@ func Precompiles() map[addr]ArbosPrecompile {
 
 	insert(MakePrecompile(pgen.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: types.DeriwGaslessPublicAddress}))
 	insert(MakePrecompile(pgen.DeriwSubAccountPublicMetaData, &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}))
+	insert(MakePrecompile(pgen.DeriwBlacklistPublicMetaData, &DeriwBlacklistPublic{Address: types.DeriwBlacklistPublicAddress}))
 
 	ArbRetryableImpl := &ArbRetryableTx{Address: types.ArbRetryableTxAddress}
 	ArbRetryable := insert(MakePrecompile(pgen.ArbRetryableTxMetaData, ArbRetryableImpl))
@@ -637,6 +638,14 @@ func Precompiles() map[addr]ArbosPrecompile {
 	}
 	_, DeriwGasless := MakePrecompile(pgen.DeriwGaslessMetaData, DeriwGaslessImpl)
 	insert(deriwGaslessOwnerOnly(DeriwGaslessImpl.Address, DeriwGasless, emitDeriwGaslessActs))
+
+	DeriwBlacklistImpl := &DeriwBlacklist{Address: types.DeriwBlacklistAddress}
+	emitDeriwBlacklistActs := func(evm mech, method bytes4, owner addr, data []byte) error {
+		context := eventCtx(DeriwBlacklistImpl.OwnerActsGasCost(method, owner, data))
+		return DeriwBlacklistImpl.OwnerActs(context, evm, method, owner, data)
+	}
+	_, DeriwBlacklist := MakePrecompile(pgen.DeriwBlacklistMetaData, DeriwBlacklistImpl)
+	insert(deriwBlacklistOwnerOnly(DeriwBlacklistImpl.Address, DeriwBlacklist, emitDeriwBlacklistActs))
 
 	DeriwSubAccountImpl := &DeriwSubAccount{Address: types.DeriwSubAccountAddress}
 	emitDeriwSubAccountActs := func(evm mech, method bytes4, owner addr, data []byte) error {

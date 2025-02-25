@@ -6,6 +6,7 @@ package arbosState
 import (
 	"errors"
 	"fmt"
+	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"math/big"
 
 	"github.com/offchainlabs/nitro/arbos/subAccount"
@@ -66,6 +67,7 @@ type ArbosState struct {
 	pricer                 *pricer.Pricer
 	gaslessOwners          *addressSet.AddressSet
 	subAccountState        *subAccount.SubAccountState
+	blacklist              *blacklist.Blacklist
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -103,6 +105,7 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
 		addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
 		subAccount.OpenSubAccountState(backingStorage.OpenSubStorage(subAccountSubspace)),
+		blacklist.OpenBlacklist(backingStorage.OpenSubStorage(blacklistSubspace)),
 	}, nil
 
 }
@@ -115,6 +118,11 @@ func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pri
 func OpenSubAccountState(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *subAccount.SubAccountState {
 	backingStorage := storage.NewGeth(stateDB, burner)
 	return subAccount.OpenSubAccountState(backingStorage.OpenSubStorage(subAccountSubspace))
+}
+
+func OpenArbosBlacklist(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *blacklist.Blacklist {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return blacklist.OpenBlacklist(backingStorage.OpenSubStorage(blacklistSubspace))
 }
 
 func OpenSystemArbosState(stateDB vm.StateDB, tracingInfo *util.TracingInfo, readOnly bool) (*ArbosState, error) {
@@ -191,6 +199,7 @@ var (
 	gaslessSubspace      SubspaceID = []byte{9}
 	subAccountSubspace   SubspaceID = []byte{10}
 	programsSubspace     SubspaceID = []byte{11}
+	blacklistSubspace    SubspaceID = []byte{12}
 )
 
 var PrecompileMinArbOSVersions = make(map[common.Address]uint64)
@@ -257,6 +266,8 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 	_ = addressSet.OpenAddressSet(gaslessOwnersStorage).Add(initialChainOwner)
 
 	_ = subAccount.InitializeSubAccountState(sto.OpenCachedSubStorage(subAccountSubspace))
+
+	_ = blacklist.InitializeBlacklist(sto.OpenSubStorage(blacklistSubspace))
 
 	aState, err := OpenArbosState(stateDB, burner)
 	if err != nil {
@@ -469,6 +480,10 @@ func (state *ArbosState) ChainOwners() *addressSet.AddressSet {
 
 func (state *ArbosState) GaslessOwners() *addressSet.AddressSet {
 	return state.gaslessOwners
+}
+
+func (state *ArbosState) Blacklist() *blacklist.Blacklist {
+	return state.blacklist
 }
 
 func (state *ArbosState) SubAccount() *subAccount.SubAccountState {
