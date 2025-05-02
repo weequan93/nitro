@@ -230,6 +230,23 @@ func (c *TxPreChecker) PublishTransaction(ctx context.Context, tx *types.Transac
 	return c.TransactionPublisher.PublishTransaction(ctx, tx, options)
 }
 
+func (c *TxPreChecker) PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	block := c.bc.CurrentBlock()
+	statedb, err := c.bc.StateAt(block.Root)
+	if err != nil {
+		return err
+	}
+	arbos, err := arbosState.OpenSystemArbosState(statedb, nil, true)
+	if err != nil {
+		return err
+	}
+	err = PreCheckTx(c.bc, c.bc.Config(), block, statedb, arbos, tx, options, c.config())
+	if err != nil {
+		return err
+	}
+	return c.TransactionPublisher.PublishPriorityTransaction(ctx, tx, options)
+}
+
 func (c *TxPreChecker) PublishExpressLaneTransaction(ctx context.Context, msg *timeboost.ExpressLaneSubmission) error {
 	if msg == nil || msg.Transaction == nil {
 		return timeboost.ErrMalformedData
