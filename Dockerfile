@@ -227,6 +227,8 @@ RUN ./download-deriw-machine.sh consensus-v32.arm64.deriw2 0xd41ab0afd67575e0fe1
 RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw2 0x58dc4b5ce8a268aa9ead2ad96ffb2fb1c54dc98d3abc8ccfdfbc679bda95f1eb
 RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw3 0xcb68723ef526e62b4a1bc50beaccc6ac75044a0bc8006eab1d7f7831861c1f17
 RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw4 0x52121965b38261c506d8db0baded88857757fdf79ac1695f01c252150a0083b9
+RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw5 0x6594f00133a728a53902cff5d44f9ef5f8849b66cf5c7ccf3a07dd650f20585b
+RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw6 0xc6708a804c5cc1cbfb579a0db22085f15cb75ad2b45bf064b00216ca980bfbc6
 
 
 FROM golang:1.23.1-bookworm AS node-builder

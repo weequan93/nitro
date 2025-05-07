@@ -81,7 +81,6 @@ func (con DeriwSubAccountPublic) GrantAccountControl(c ctx, evm mech, signData [
 	if childAddress.Cmp(c.caller) != 0 {
 		return errors.New("GrantAccountControl address validation fail ")
 	}
-
 	// update sub-account
 	return c.State.SubAccount().BindRelation(*address, childAddress, timestamp)
 }

@@ -74,6 +74,22 @@ func OpenSubAccountState(sto *storage.Storage) *SubAccountState {
 }
 
 func (subAccountState *SubAccountState) BindRelation(parentAccount common.Address, subAccount common.Address, timestamp *big.Int) (err error) {
+	// revalidate old-sub-account
+	oldSubAccount, err := subAccountState.ReadRelationFromParent(parentAccount)
+	if err != nil {
+		return err
+	}
+	//parentAccount, err := subAccountState.childParentRelation.GetMember(subAccount)
+	err = subAccountState.childParentRelation.Remove(oldSubAccount, 16)
+	if err != nil {
+		return err
+	}
+
+	err = subAccountState.parentChildRelation.Remove(parentAccount, 16)
+	if err != nil {
+		return err
+	}
+
 	//err = subAccountState.parentChildRelation.Set(common.BytesToHash(parentAccount.Bytes()), common.BytesToHash(subAccount.Bytes()))
 	err = subAccountState.parentChildRelation.Add(parentAccount, subAccount)
 	if err != nil {
@@ -86,10 +102,10 @@ func (subAccountState *SubAccountState) BindRelation(parentAccount common.Addres
 		return err
 	}
 
-	err = subAccountState.relationTimer.Set(common.BytesToHash(subAccount.Bytes()), common.BytesToHash(timestamp.Bytes()))
-	if err != nil {
-		return err
-	}
+	//err = subAccountState.relationTimer.Set(common.BytesToHash(subAccount.Bytes()), common.BytesToHash(timestamp.Bytes()))
+	//if err != nil {
+	//	return err
+	//}
 
 	return nil
 }
