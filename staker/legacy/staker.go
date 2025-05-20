@@ -465,8 +465,9 @@ func (s *Staker) tryFastConfirmation(ctx context.Context, blockHash common.Hash,
 		return s.fastConfirmSafe.tryFastConfirmation(ctx, blockHash, sendRoot, nodeHash)
 	}
 	auth := s.builder.Auth(ctx)
+
 	log.Info("Fast confirming node with wallet", "wallet", auth.From, "nodeHash", nodeHash)
-	_, err := s.rollup.FastConfirmNextNode(auth, blockHash, sendRoot, nodeHash)
+	_, err := s.rollup.RollUpLogic.FastConfirmNextNode(auth, blockHash, sendRoot, nodeHash)
 	return err
 }
 
@@ -623,7 +624,7 @@ func (s *Staker) Start(ctxIn context.Context) {
 
 func (s *Staker) isWhitelisted(ctx context.Context) (bool, error) {
 	callOpts := s.getCallOpts(ctx)
-	whitelistDisabled, err := s.rollup.ValidatorWhitelistDisabled(callOpts)
+	whitelistDisabled, err := s.rollup.RollUpLogic.ValidatorWhitelistDisabled(callOpts)
 	if err != nil {
 		return false, err
 	}
@@ -632,7 +633,7 @@ func (s *Staker) isWhitelisted(ctx context.Context) (bool, error) {
 	}
 	addr := s.wallet.Address()
 	if addr != nil {
-		return s.rollup.IsValidator(callOpts, *addr)
+		return s.rollup.RollUpLogic.IsValidator(callOpts, *addr)
 	}
 	return false, nil
 }
@@ -794,7 +795,7 @@ func (s *Staker) Act(ctx context.Context) (*types.Transaction, error) {
 	}
 
 	if cfg.EnableFastConfirmation {
-		firstUnresolvedNode, err := s.rollup.FirstUnresolvedNode(callOpts)
+		firstUnresolvedNode, err := s.rollup.RollUpLogic.FirstUnresolvedNode(callOpts)
 		if err != nil {
 			return nil, err
 		}
@@ -808,7 +809,7 @@ func (s *Staker) Act(ctx context.Context) (*types.Transaction, error) {
 			// To keep this call consistent with the GetNode call, we pin a specific parent chain block hash.
 			checkNodeCorrectCallOpts := s.getCallOpts(ctx)
 			checkNodeCorrectCallOpts.BlockHash = lastHeader.ParentHash
-			nodeInfo, err := s.rollup.GetNode(checkNodeCorrectCallOpts, firstUnresolvedNode)
+			nodeInfo, err := s.rollup.RollUpLogic.GetNode(checkNodeCorrectCallOpts, firstUnresolvedNode)
 			if err != nil {
 				return nil, err
 			}
@@ -818,7 +819,7 @@ func (s *Staker) Act(ctx context.Context) (*types.Transaction, error) {
 			})
 			confirmedCorrect := haveValidated && validatedNode.hash == nodeInfo.NodeHash
 			if !confirmedCorrect {
-				stakedOnNode, err := s.rollup.NodeHasStaker(checkNodeCorrectCallOpts, firstUnresolvedNode, walletAddressOrZero)
+				stakedOnNode, err := s.rollup.RollUpLogic.NodeHasStaker(checkNodeCorrectCallOpts, firstUnresolvedNode, walletAddressOrZero)
 				if err != nil {
 					return nil, err
 				}
@@ -838,7 +839,7 @@ func (s *Staker) Act(ctx context.Context) (*types.Transaction, error) {
 		}
 	}
 
-	latestConfirmedNode, err := s.rollup.LatestConfirmed(callOpts)
+	latestConfirmedNode, err := s.rollup.RollUpLogic.LatestConfirmed(callOpts)
 	if err != nil {
 		return nil, fmt.Errorf("error getting latest confirmed node: %w", err)
 	}
@@ -882,7 +883,7 @@ func (s *Staker) Act(ctx context.Context) (*types.Transaction, error) {
 			// and we don't have a stake yet. That means we were planning to enter the rollup on
 			// the latest confirmed node, which has now changed. We fix this by updating our staker info
 			// to indicate that we're now entering the rollup on the newly confirmed node.
-			nodeInfo, err := s.rollup.GetNode(callOpts, latestConfirmedNode)
+			nodeInfo, err := s.rollup.RollUpLogic.GetNode(callOpts, latestConfirmedNode)
 			if err != nil {
 				return nil, fmt.Errorf("error getting latest confirmed node %v info: %w", latestConfirmedNode, err)
 			}
@@ -903,11 +904,11 @@ func (s *Staker) Act(ctx context.Context) (*types.Transaction, error) {
 		if stakeIsTooOutdated || stakeIsUnwanted {
 			// Note: we must have an address if rawInfo != nil
 			auth := s.builder.Auth(ctx)
-			_, err = s.rollup.ReturnOldDeposit(auth, walletAddressOrZero)
+			_, err = s.rollup.RollUpLogic.ReturnOldDeposit(auth, walletAddressOrZero)
 			if err != nil {
 				return nil, fmt.Errorf("error returning old deposit (from our staker %v): %w", walletAddressOrZero, err)
 			}
-			_, err = s.rollup.WithdrawStakerFunds(auth)
+			_, err = s.rollup.RollUpLogic.WithdrawStakerFunds(auth)
 			if err != nil {
 				return nil, fmt.Errorf("error withdrawing staker funds from our staker %v: %w", walletAddressOrZero, err)
 			}
@@ -917,12 +918,12 @@ func (s *Staker) Act(ctx context.Context) (*types.Transaction, error) {
 	}
 
 	if walletAddressOrZero != (common.Address{}) && canActFurther() {
-		withdrawable, err := s.rollup.WithdrawableFunds(callOpts, walletAddressOrZero)
+		withdrawable, err := s.rollup.RollUpLogic.WithdrawableFunds(callOpts, walletAddressOrZero)
 		if err != nil {
 			return nil, fmt.Errorf("error checking withdrawable funds of our staker %v: %w", walletAddressOrZero, err)
 		}
 		if withdrawable.Sign() > 0 {
-			_, err = s.rollup.WithdrawStakerFunds(s.builder.Auth(ctx))
+			_, err = s.rollup.RollUpLogic.WithdrawStakerFunds(s.builder.Auth(ctx))
 			if err != nil {
 				return nil, fmt.Errorf("error withdrawing our staker %v funds: %w", walletAddressOrZero, err)
 			}
@@ -1040,7 +1041,7 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 
 		// We'll return early if we already have a stake
 		if info.StakeExists {
-			_, err = s.rollup.StakeOnNewNode(s.builder.Auth(ctx), action.assertion.AsSolidityStruct(), action.hash, action.prevInboxMaxCount)
+			_, err = s.rollup.RollUpLogic.StakeOnNewNode(s.builder.Auth(ctx), action.assertion.AsSolidityStruct(), action.hash, action.prevInboxMaxCount)
 			if err != nil {
 				return fmt.Errorf("error staking on new node: %w", err)
 			}
@@ -1048,47 +1049,62 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		}
 
 		// If we have no stake yet, we'll put one down
-		stakeAmount, err := s.rollup.CurrentRequiredStake(s.getCallOpts(ctx))
+		stakeAmount, err := s.rollup.RollUpLogic.CurrentRequiredStake(s.getCallOpts(ctx))
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeToken, err := s.rollup.StakeToken(s.getCallOpts(ctx))
+		stakeToken, err := s.rollup.RollUpLogic.StakeToken(s.getCallOpts(ctx))
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeTokenReader, err := NewIERC20(stakeToken, s.client)
-		if err != nil {
-			return err
-		}
-
-		auth := s.builder.SingleTxAuth()
-		auth.NoSend = false
-
-		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
-		if err != nil {
-			return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
-		}
-		if allowed.Cmp(stakeAmount) == -1 {
-
-			tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmount)
+		if stakeToken == (common.Address{}) {
+			// this is eth
+			_, err = s.rollup.RollUpLogic.RollUpUserLogic.NewStakeOnNewNode(
+				s.builder.AuthWithAmount(ctx, stakeAmount),
+				action.assertion.AsSolidityStruct(),
+				action.hash,
+				action.prevInboxMaxCount,
+			)
 			if err != nil {
-				return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+				return fmt.Errorf("error placing new stake on new node: %w", err)
 			}
-			log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
+		} else {
+			stakeTokenReader, err := NewIERC20(stakeToken, s.client)
+			if err != nil {
+				return err
+			}
+
+			auth := s.builder.SingleTxAuth()
+			auth.NoSend = false
+
+			allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
+			if err != nil {
+				return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
+			}
+			if allowed.Cmp(stakeAmount) == -1 {
+
+				tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmount)
+				if err != nil {
+					return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+				}
+				log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
+			}
+
+			_, err = s.rollup.RollUpLogic.Erc20RollUpUserLogic.NewStakeOnNewNode(
+				auth,
+				stakeAmount,
+				action.assertion.AsSolidityStruct(),
+				action.hash,
+				action.prevInboxMaxCount,
+			)
+			if err != nil {
+				return fmt.Errorf("error placing new stake on new node: %w", err)
+			}
+
 		}
 
-		_, err = s.rollup.NewStakeOnNewNode(
-			auth,
-			stakeAmount,
-			action.assertion.AsSolidityStruct(),
-			action.hash,
-			action.prevInboxMaxCount,
-		)
-		if err != nil {
-			return fmt.Errorf("error placing new stake on new node: %w", err)
-		}
 		info.StakeExists = true
 		return s.tryFastConfirmation(ctx, action.assertion.AfterState.GlobalState.BlockHash, action.assertion.AfterState.GlobalState.SendRoot, action.hash)
 	case existingNodeAction:
@@ -1114,7 +1130,7 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		log.Info("staking on existing node", "node", action.number)
 		// We'll return early if we already havea stake
 		if info.StakeExists {
-			_, err = s.rollup.StakeOnExistingNode(s.builder.Auth(ctx), action.number, action.hash)
+			_, err = s.rollup.RollUpLogic.StakeOnExistingNode(s.builder.Auth(ctx), action.number, action.hash)
 			if err != nil {
 				return fmt.Errorf("error staking on existing node: %w", err)
 			}
@@ -1122,46 +1138,59 @@ func (s *Staker) advanceStake(ctx context.Context, info *OurStakerInfo, effectiv
 		}
 
 		// If we have no stake yet, we'll put one down
-		stakeAmount, err := s.rollup.CurrentRequiredStake(s.getCallOpts(ctx))
+		stakeAmount, err := s.rollup.RollUpLogic.CurrentRequiredStake(s.getCallOpts(ctx))
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeToken, err := s.rollup.StakeToken(s.getCallOpts(ctx))
+		stakeToken, err := s.rollup.RollUpLogic.StakeToken(s.getCallOpts(ctx))
 		if err != nil {
 			return fmt.Errorf("error getting current required stake: %w", err)
 		}
 
-		stakeTokenReader, err := NewIERC20(stakeToken, s.client)
-		if err != nil {
-			return err
-		}
-
-		auth := s.builder.SingleTxAuth()
-		auth.NoSend = false
-
-		allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
-		if err != nil {
-			return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
-		}
-		if allowed.Cmp(stakeAmount) == -1 {
-
-			tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmount)
+		if stakeToken == (common.Address{}) {
+			// this is eth
+			_, err = s.rollup.RollUpLogic.RollUpUserLogic.NewStakeOnExistingNode(
+				s.builder.AuthWithAmount(ctx, stakeAmount),
+				action.number,
+				action.hash,
+			)
 			if err != nil {
-				return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+				return fmt.Errorf("error placing new stake on new node: %w", err)
 			}
-			log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
+		} else {
+			stakeTokenReader, err := NewIERC20(stakeToken, s.client)
+			if err != nil {
+				return err
+			}
+
+			auth := s.builder.SingleTxAuth()
+			auth.NoSend = false
+
+			allowed, err := stakeTokenReader.Allowance(&s.callOpts, *s.builder.WalletAddress(), s.rollupAddress)
+			if err != nil {
+				return fmt.Errorf("Allowance erc20 for staker to rollup error e: %w", err)
+			}
+			if allowed.Cmp(stakeAmount) == -1 {
+
+				tx, err := stakeTokenReader.Approve(auth, s.rollupAddress, stakeAmount)
+				if err != nil {
+					return fmt.Errorf("approve erc20 for staker to rollup error e: %w", err)
+				}
+				log.Info("stakeTokenReader", "approve txahash", tx.Hash().String())
+			}
+
+			_, err = s.rollup.RollUpLogic.Erc20RollUpUserLogic.NewStakeOnExistingNode(
+				auth,
+				stakeAmount,
+				action.number,
+				action.hash,
+			)
+			if err != nil {
+				return fmt.Errorf("error placing new stake on existing node: %w", err)
+			}
 		}
 
-		_, err = s.rollup.NewStakeOnExistingNode(
-			auth,
-			stakeAmount,
-			action.number,
-			action.hash,
-		)
-		if err != nil {
-			return fmt.Errorf("error placing new stake on existing node: %w", err)
-		}
 		info.StakeExists = true
 		return s.tryFastConfirmationNodeNumber(ctx, action.number, action.hash)
 	default:
@@ -1187,7 +1216,7 @@ func (s *Staker) createConflict(ctx context.Context, info *staker.StakerInfo) er
 		}
 		stakers = append(stakers, newStakers...)
 	}
-	latestNode, err := s.rollup.LatestConfirmed(callOpts)
+	latestNode, err := s.rollup.RollUpLogic.LatestConfirmed(callOpts)
 	if err != nil {
 		return err
 	}
@@ -1231,7 +1260,7 @@ func (s *Staker) createConflict(ctx context.Context, info *staker.StakerInfo) er
 			return fmt.Errorf("error looking up node %v: %w", conflictInfo.Node2, err)
 		}
 		log.Warn("creating challenge", "node1", conflictInfo.Node1, "node2", conflictInfo.Node2, "otherStaker", staker)
-		_, err = s.rollup.CreateChallenge(
+		_, err = s.rollup.RollUpLogic.CreateChallenge(
 			s.builder.Auth(ctx),
 			[2]common.Address{staker1, staker2},
 			[2]uint64{conflictInfo.Node1, conflictInfo.Node2},

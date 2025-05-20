@@ -122,10 +122,11 @@ func findImportantRoots(ctx context.Context, chainDb ethdb.Database, stack *node
 		if err != nil {
 			return nil, err
 		}
-		latestConfirmedNum, err := rollup.LatestConfirmed(&callOpts)
+		latestConfirmedNum, err := rollup.RollUpLogic.LatestConfirmed(&callOpts)
 		if err != nil {
 			return nil, err
 		}
+
 		latestConfirmedNode, err := rollup.LookupNode(ctx, latestConfirmedNum)
 		if err != nil {
 			return nil, err

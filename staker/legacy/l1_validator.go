@@ -114,7 +114,7 @@ func (v *L1Validator) updateBlockValidatorModuleRoot(ctx context.Context) error 
 	if v.blockValidator == nil {
 		return nil
 	}
-	moduleRoot, err := v.rollup.WasmModuleRoot(v.getCallOpts(ctx))
+	moduleRoot, err := v.rollup.RollUpLogic.WasmModuleRoot(v.getCallOpts(ctx))
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (v *L1Validator) resolveNextNode(ctx context.Context, info *staker.StakerIn
 	if err != nil {
 		return false, err
 	}
-	unresolvedNodeIndex, err := v.rollup.FirstUnresolvedNode(callOpts)
+	unresolvedNodeIndex, err := v.rollup.RollUpLogic.FirstUnresolvedNode(callOpts)
 	if err != nil {
 		return false, err
 	}
@@ -160,7 +160,7 @@ func (v *L1Validator) resolveNextNode(ctx context.Context, info *staker.StakerIn
 			return false, nil
 		}
 		log.Warn("rejecting node", "node", unresolvedNodeIndex)
-		_, err = v.rollup.RejectNextNode(v.builder.Auth(ctx), *addr)
+		_, err = v.rollup.RollUpLogic.RejectNextNode(v.builder.Auth(ctx), *addr)
 		return true, err
 	case CONFIRM_TYPE_VALID:
 		nodeInfo, err := v.rollup.LookupNode(ctx, unresolvedNodeIndex)
@@ -169,7 +169,7 @@ func (v *L1Validator) resolveNextNode(ctx context.Context, info *staker.StakerIn
 		}
 		afterGs := nodeInfo.AfterState().GlobalState
 		log.Info("confirming node", "node", unresolvedNodeIndex)
-		_, err = v.rollup.ConfirmNextNode(v.builder.Auth(ctx), afterGs.BlockHash, afterGs.SendRoot)
+		_, err = v.rollup.RollUpLogic.ConfirmNextNode(v.builder.Auth(ctx), afterGs.BlockHash, afterGs.SendRoot)
 		if err != nil {
 			return false, err
 		}
@@ -182,11 +182,11 @@ func (v *L1Validator) resolveNextNode(ctx context.Context, info *staker.StakerIn
 
 func (v *L1Validator) isRequiredStakeElevated(ctx context.Context) (bool, error) {
 	callOpts := v.getCallOpts(ctx)
-	baseStake, err := v.rollup.BaseStake(callOpts)
+	baseStake, err := v.rollup.RollUpLogic.BaseStake(callOpts)
 	if err != nil {
 		return false, err
 	}
-	requiredStake, err := v.rollup.CurrentRequiredStake(callOpts)
+	requiredStake, err := v.rollup.RollUpLogic.CurrentRequiredStake(callOpts)
 	if err != nil {
 		if headerreader.ExecutionRevertedRegexp.MatchString(err.Error()) {
 			log.Warn("execution reverted checking if required state is elevated; assuming elevated", "err", err)
@@ -365,7 +365,7 @@ func (v *L1Validator) generateNodeAction(
 		return nil, false, err
 	}
 
-	minAssertionPeriod, err := v.rollup.MinimumAssertionPeriod(v.getCallOpts(ctx))
+	minAssertionPeriod, err := v.rollup.RollUpLogic.MinimumAssertionPeriod(v.getCallOpts(ctx))
 	if err != nil {
 		return nil, false, fmt.Errorf("error getting rollup minimum assertion period: %w", err)
 	}
@@ -514,7 +514,7 @@ func (v *L1Validator) createNewNodeAction(
 
 	wasmModuleRoot := v.lastWasmModuleRoot
 	if v.blockValidator == nil {
-		wasmModuleRoot, err = v.rollup.WasmModuleRoot(v.getCallOpts(ctx))
+		wasmModuleRoot, err = v.rollup.RollUpLogic.WasmModuleRoot(v.getCallOpts(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("error rollup wasm module root: %w", err)
 		}
@@ -535,18 +535,28 @@ func (v *L1Validator) createNewNodeAction(
 // Returns (execution state, inbox max count, L1 block proposed, parent chain block proposed, error)
 func lookupNodeStartState(ctx context.Context, rollup *staker.RollupWatcher, nodeNum uint64, nodeHash common.Hash) (*validator.ExecutionState, *big.Int, uint64, uint64, error) {
 	if nodeNum == 0 {
-		creationEvent, err := rollup.LookupCreation(ctx)
-		if err != nil {
-			return nil, nil, 0, 0, fmt.Errorf("error looking up rollup creation event: %w", err)
+		var blockNumber uint64
+		if rollup.RollUpLogic.Erc20RollUpUserLogic == nil {
+			creationEvent, err := rollup.LookupCreation(ctx)
+			if err != nil {
+				return nil, nil, 0, 0, fmt.Errorf("error looking up rollup creation event: %w", err)
+			}
+			blockNumber = creationEvent.Raw.BlockNumber
+		} else {
+			creationEvent, err := rollup.Erc20LookupCreation(ctx)
+			if err != nil {
+				return nil, nil, 0, 0, fmt.Errorf("error looking up rollup creation event: %w", err)
+			}
+			blockNumber = creationEvent.Raw.BlockNumber
 		}
-		l1BlockNumber, err := arbutil.CorrespondingL1BlockNumber(ctx, rollup.Client(), creationEvent.Raw.BlockNumber)
+		l1BlockNumber, err := arbutil.CorrespondingL1BlockNumber(ctx, rollup.Client(), blockNumber)
 		if err != nil {
 			return nil, nil, 0, 0, err
 		}
 		return &validator.ExecutionState{
 			GlobalState:   validator.GoGlobalState{},
 			MachineStatus: validator.MachineStatusFinished,
-		}, big.NewInt(1), l1BlockNumber, creationEvent.Raw.BlockNumber, nil
+		}, big.NewInt(1), l1BlockNumber, blockNumber, nil
 	}
 	node, err := rollup.LookupNode(ctx, nodeNum)
 	if err != nil {
