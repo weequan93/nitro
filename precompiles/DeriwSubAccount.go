@@ -69,6 +69,17 @@ func (con DeriwSubAccount) AddUsdtAddress(c ctx, evm mech, newAddress addr) erro
 	return c.State.SubAccount().UsdtAddress().Add(newAddress)
 }
 
+// Add usdt address
+func (con DeriwSubAccount) ResetAllRelationship(c ctx, evm mech) error {
+
+	return c.State.SubAccount().ResetAllRelationship()
+}
+
+func (con DeriwSubAccount) ResetAllRelationshipByIndex(c ctx, evm mech, size uint64) error {
+
+	return c.State.SubAccount().ResetAllRelationshipByIndex(size)
+}
+
 // Remove address from usdt address
 func (con DeriwSubAccount) RemoveUsdtAddress(c ctx, evm mech, addr addr) error {
 	member, _ := con.IsUsdtAddress(c, evm, addr)
@@ -85,4 +96,9 @@ func (con DeriwSubAccount) IsUsdtAddress(c ctx, evm mech, addr addr) (bool, erro
 
 func (con DeriwSubAccount) GetAllUsdtAddress(c ctx, evm mech) ([]common.Address, error) {
 	return c.State.SubAccount().UsdtAddress().AllMembers(65536)
+}
+
+func (con DeriwSubAccount) ResetAllRelationshipByPosition(c ctx, evm mech, addr addr) error {
+
+	return c.State.SubAccount().ResetAllRelationshipByPosition(addr)
 }

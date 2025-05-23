@@ -110,6 +110,10 @@ func (con DeriwSubAccountPublic) ReadAccountControl(c ctx, evm mech, addr addr) 
 	return c.State.SubAccount().ReadRelationFromChild(addr)
 }
 
+func (con DeriwSubAccountPublic) ReadAccountGranted(c ctx, evm mech, addr addr) (common.Address, error) {
+	return c.State.SubAccount().ReadAccountGranted(addr)
+}
+
 //func (con DeriwSubAccountPublic) IsValidAccountSession(c ctx, evm mech, addr addr) (bool, *big.Int, *big.Int, error) {
 //	return c.State.SubAccount().IsValidSession(addr)
 //}
