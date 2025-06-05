@@ -410,9 +410,11 @@ func ProduceBlockAdvanced(
 		switch txInner := tx.GetInner().(type) {
 		case *types.ArbitrumDepositTx:
 			// L1->L2 deposits add eth to the system
+			log.Error("ArbitrumDepositTx", "expectedBalanceDelta", expectedBalanceDelta, "txInner.DepositValue", txInner.Value)
 			expectedBalanceDelta.Add(expectedBalanceDelta, txInner.Value)
 		case *types.ArbitrumSubmitRetryableTx:
 			// Retryable submission can include a deposit which adds eth to the system
+			log.Error("ArbitrumSubmitRetryableTx", "expectedBalanceDelta", expectedBalanceDelta, "txInner.DepositValue", txInner.DepositValue)
 			expectedBalanceDelta.Add(expectedBalanceDelta, txInner.DepositValue)
 		}
 
@@ -440,6 +442,8 @@ func ProduceBlockAdvanced(
 				switch txLog.Topics[0] {
 				case L2ToL1TransactionEventID:
 					event, err := util.ParseL2ToL1TransactionLog(txLog)
+					log.Error("L2ToL1TransactionEventID", "L2ToL1TransactionEventID", expectedBalanceDelta, "event.Callvalue", event.Callvalue)
+
 					if err != nil {
 						log.Error("Failed to parse L2ToL1Transaction log", "err", err)
 					} else {
@@ -447,6 +451,7 @@ func ProduceBlockAdvanced(
 					}
 				case L2ToL1TxEventID:
 					event, err := util.ParseL2ToL1TxLog(txLog)
+					log.Error("L2ToL1TxEventID", "expectedBalanceDelta", expectedBalanceDelta, "event.Callvalue", event.Callvalue)
 					if err != nil {
 						log.Error("Failed to parse L2ToL1Tx log", "err", err)
 					} else {
