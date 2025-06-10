@@ -18,6 +18,7 @@ type Offset uint64
 var (
 	// web3.eth.abi.encodeFunctionSignature(approve((address,address))'
 	ERC20_APPROVE_OP_SIG, _ = hex.DecodeString("095ea7b3")
+	// 095ea7b3 | 00000000000000000000000035b3ac4003e1afee7601c190db4f039fcb1bbcb5
 )
 
 type SubAccountState struct {
@@ -269,7 +270,7 @@ func (subAccountState *SubAccountState) IsAllowedUsdtAddress(contractAddress com
 	isUsdtMember, err := subAccountState.usdtAddress.IsMember(contractAddress)
 
 	if err != nil {
-		return true, err
+		return false, err
 	}
 
 	if isUsdtMember == true {
@@ -278,7 +279,18 @@ func (subAccountState *SubAccountState) IsAllowedUsdtAddress(contractAddress com
 		}
 		// is usdt address, cmp op
 		if bytes.Equal(txData[:4], ERC20_APPROVE_OP_SIG) {
-			return true, nil
+			// is subaccount allowed address
+			spender := common.BytesToAddress(txData[16:36])
+			isAllowedAddress, err := subAccountState.AllowedAddress().IsMember(spender)
+			if err != nil {
+				return false, err
+			}
+
+			if isAllowedAddress == true {
+				return true, nil
+			}
+
+			return false, nil
 		} else {
 			return false, nil
 		}
