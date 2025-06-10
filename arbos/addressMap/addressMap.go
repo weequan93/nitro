@@ -6,6 +6,7 @@ package addressMap
 // TODO lowercase this package name
 
 import (
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/offchainlabs/nitro/arbos/storage"
 	"github.com/offchainlabs/nitro/arbos/util"
@@ -116,7 +117,7 @@ func (as *AddressMap) Add(addr common.Address, value common.Address) error {
 		return err
 	}
 	if present || err != nil {
-		return err
+		return errors.New("address already present in address map")
 	}
 
 	size, err := as.size.Get()
