@@ -233,7 +233,7 @@ RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw7 0x98e9dd9c183a903a89b
 RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw8 0x9078685c07cc54deb8e6b7086015abba0ddef072c22122aba28debbb929d097c
 RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw9 0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f
 
-FROM golang:1.23.1-bookworm AS node-builder
+FROM nitro-occlum:latest AS node-builder
 WORKDIR /workspace
 ARG version=""
 ARG datetime=""
