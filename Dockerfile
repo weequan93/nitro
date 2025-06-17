@@ -260,6 +260,7 @@ COPY --from=brotli-library-export / target/
 COPY --from=prover-export / target/
 RUN mkdir -p target/bin
 COPY .nitro-tag.txt /nitro-tag.txt
+RUN occlum-go mod tidy
 RUN NITRO_BUILD_IGNORE_TIMESTAMPS=1 make build
 
 FROM node-builder AS fuzz-builder
