@@ -300,45 +300,45 @@ docker:
 # regular build rules
 
 $(output_root)/bin/nitro: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/nitro"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/nitro"
 
 $(output_root)/bin/deploy: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/deploy"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/deploy"
 
 $(output_root)/bin/relay: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/relay"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/relay"
 
 $(output_root)/bin/daserver: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/daserver"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/daserver"
 
 $(output_root)/bin/autonomous-auctioneer: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/autonomous-auctioneer"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/autonomous-auctioneer"
 
 $(output_root)/bin/bidder-client: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/bidder-client"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/bidder-client"
 
 $(output_root)/bin/datool: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/datool"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/datool"
 
 $(output_root)/bin/mockexternalsigner: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/mockexternalsigner"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/mockexternalsigner"
 
 $(output_root)/bin/seq-coordinator-invalidate: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/seq-coordinator-invalidate"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/seq-coordinator-invalidate"
 
 $(output_root)/bin/nitro-val: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/nitro-val"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/nitro-val"
 
 $(output_root)/bin/seq-coordinator-manager: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/seq-coordinator-manager"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/seq-coordinator-manager"
 
 $(output_root)/bin/dbconv: $(DEP_PREDICATE) build-node-deps
-	go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/dbconv"
+	occlum-go build $(GOLANG_PARAMS) -o $@ "$(CURDIR)/cmd/dbconv"
 
 # recompile wasm, but don't change timestamp unless files differ
 $(replay_wasm): $(DEP_PREDICATE) $(go_source) .make/solgen
 	mkdir -p `dirname $(replay_wasm)`
-	GOOS=wasip1 GOARCH=wasm go build -o $@ ./cmd/replay/...
+	GOOS=wasip1 GOARCH=wasm occlum-go build -o $@ ./cmd/replay/...
 
 $(prover_bin): $(DEP_PREDICATE) $(rust_prover_files)
 	mkdir -p `dirname $(prover_bin)`
@@ -359,7 +359,7 @@ $(arbitrator_cases)/rust/$(wasm32_wasi)/%.wasm: $(arbitrator_cases)/rust/src/bin
 	cargo build --manifest-path $(arbitrator_cases)/rust/Cargo.toml --release --target wasm32-wasi --config $(arbitrator_cases)/rust/.cargo/config.toml --bin $(patsubst $(arbitrator_cases)/rust/$(wasm32_wasi)/%.wasm,%, $@)
 
 $(arbitrator_cases)/go/testcase.wasm: $(arbitrator_cases)/go/*.go .make/solgen
-	cd $(arbitrator_cases)/go && GOOS=wasip1 GOARCH=wasm go build -o testcase.wasm
+	cd $(arbitrator_cases)/go && GOOS=wasip1 GOARCH=wasm occlum-go build -o testcase.wasm
 
 $(arbitrator_generated_header): $(DEP_PREDICATE) $(stylus_files)
 	@echo creating ${PWD}/$(arbitrator_generated_header)
@@ -570,7 +570,7 @@ contracts/test/prover/proofs/%.json: $(arbitrator_cases)/%.wasm $(prover_bin)
 # strategic rules to minimize dependency building
 
 .make/lint: $(DEP_PREDICATE) build-node-deps $(ORDER_ONLY_PREDICATE) .make
-	go run ./linters ./...
+	occlum-go run ./linters ./...
 	golangci-lint run --fix
 	yarn --cwd contracts solhint
 	@touch $@
@@ -593,7 +593,7 @@ contracts/test/prover/proofs/%.json: $(arbitrator_cases)/%.wasm $(prover_bin)
 
 .make/solgen: $(DEP_PREDICATE) solgen/gen.go .make/solidity $(ORDER_ONLY_PREDICATE) .make
 	mkdir -p solgen/go/
-	go run solgen/gen.go
+	occlum-go run solgen/gen.go
 	@touch $@
 
 .make/solidity: $(DEP_PREDICATE) safe-smart-account/contracts/*/*.sol safe-smart-account/contracts/*.sol contracts/src/*/*.sol .make/yarndeps $(ORDER_ONLY_PREDICATE) .make
