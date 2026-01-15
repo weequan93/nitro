@@ -500,7 +500,18 @@ func (s *Staker) getLatestStakedState(ctx context.Context, stakerAddress common.
 	}
 
 	if !caughtUp {
-		log.Info("latest assertion not yet in our node", "stakerAddress", stakerAddress, "assertion", latestStaked, "state", globalState)
+		logFields := []interface{}{
+			"stakerAddress", stakerAddress,
+			"assertion", latestStaked,
+			"state", globalState,
+		}
+		if batchCount, err := s.inboxTracker.GetBatchCount(); err == nil {
+			logFields = append(logFields, "localBatches", batchCount)
+		}
+		if processedCount, err := s.txStreamer.GetProcessedMessageCount(); err == nil {
+			logFields = append(logFields, "processedCount", processedCount)
+		}
+		log.Info("latest assertion not yet in our node", logFields...)
 		return latestStaked, 0, nil, nil
 	}
 

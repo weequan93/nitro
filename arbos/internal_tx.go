@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/erigontech/erigon-lib/common/dbg"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -18,6 +19,8 @@ import (
 	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/util/arbmath"
 )
+
+var internalTxDebug = dbg.EnvBool("ERIGON_BAD_ROOT_DEBUG", false)
 
 func InternalTxStartBlock(
 	chainId,
@@ -56,10 +59,13 @@ func ApplyInternalTxUpdate(tx *types.ArbitrumInternalTx, state *arbosState.Arbos
 		}
 
 		l1BlockNumber := util.SafeMapGet[uint64](inputs, "l1BlockNumber")
-		timePassed := util.SafeMapGet[uint64](inputs, "timePassed")
+		l2BlockNumber := util.SafeMapGet[uint64](inputs, "l2BlockNumber")
+		timePassedRaw := util.SafeMapGet[uint64](inputs, "timePassed")
+		l1BaseFee := util.SafeMapGet[*big.Int](inputs, "l1BaseFee")
+		timePassed := timePassedRaw
 		if state.ArbOSVersion() < params.ArbosVersion_3 {
 			// (incorrectly) use the L2 block number instead
-			timePassed = util.SafeMapGet[uint64](inputs, "l2BlockNumber")
+			timePassed = l2BlockNumber
 		}
 		if state.ArbOSVersion() < params.ArbosVersion_8 {
 			// in old versions we incorrectly used an L1 block number one too high
@@ -72,21 +78,77 @@ func ApplyInternalTxUpdate(tx *types.ArbitrumInternalTx, state *arbosState.Arbos
 		l2BaseFee, err := state.L2PricingState().BaseFeeWei()
 		state.Restrict(err)
 
-		if l1BlockNumber > oldL1BlockNumber {
-			var prevHash common.Hash
-			if evm.Context.BlockNumber.Sign() > 0 {
-				prevHash = evm.Context.GetHash(evm.Context.BlockNumber.Uint64() - 1)
+		var prevHash common.Hash
+		var prevHashBlock uint64
+		if evm.Context.BlockNumber.Sign() > 0 {
+			prevHashBlock = evm.Context.BlockNumber.Uint64() - 1
+			prevHash = evm.Context.GetHash(prevHashBlock)
+		}
+		if internalTxDebug {
+			baseFee := "<nil>"
+			if evm.Context.BaseFee != nil {
+				baseFee = evm.Context.BaseFee.String()
 			}
+			baseFeeInBlock := "<nil>"
+			if evm.Context.BaseFeeInBlock != nil {
+				baseFeeInBlock = evm.Context.BaseFeeInBlock.String()
+			}
+			log.Warn("arbos internal tx startblock",
+				"block_number", evm.Context.BlockNumber,
+				"block_time", evm.Context.Time,
+				"header_base_fee", baseFee,
+				"header_base_fee_in_block", baseFeeInBlock,
+				"l2_base_fee_before", l2BaseFee,
+				"l1_base_fee", l1BaseFee,
+				"l1_block_number", l1BlockNumber,
+				"l2_block_number", l2BlockNumber,
+				"time_passed", timePassed,
+				"time_passed_raw", timePassedRaw,
+				"old_l1_block_number", oldL1BlockNumber,
+				"prev_hash_block", prevHashBlock,
+				"prev_hash", prevHash,
+				"arbos_version", state.ArbOSVersion(),
+			)
+		}
+		if l1BlockNumber > oldL1BlockNumber {
 			state.Restrict(state.Blockhashes().RecordNewL1Block(l1BlockNumber-1, prevHash, state.ArbOSVersion()))
 		}
 
 		currentTime := evm.Context.Time
+
+		if internalTxDebug {
+			if backlogBefore, err := state.L2PricingState().GasBacklog(); err == nil {
+				log.Warn("arbos internal tx backlog before",
+					"block_number", evm.Context.BlockNumber,
+					"backlog", backlogBefore,
+				)
+			}
+		}
 
 		// Try to reap 2 retryables
 		_ = state.RetryableState().TryToReapOneRetryable(currentTime, evm, util.TracingDuringEVM)
 		_ = state.RetryableState().TryToReapOneRetryable(currentTime, evm, util.TracingDuringEVM)
 
 		state.L2PricingState().UpdatePricingModel(l2BaseFee, timePassed, false)
+		if internalTxDebug {
+			newBaseFee, err := state.L2PricingState().BaseFeeWei()
+			if err != nil {
+				log.Warn("arbos internal tx pricing base fee read failed",
+					"block_number", evm.Context.BlockNumber,
+					"err", err,
+				)
+			} else {
+				backlogAfter, _ := state.L2PricingState().GasBacklog()
+				log.Warn("arbos internal tx pricing update",
+					"block_number", evm.Context.BlockNumber,
+					"l2_base_fee_before", l2BaseFee,
+					"l2_base_fee_after", newBaseFee,
+					"header_base_fee", evm.Context.BaseFee,
+					"time_passed", timePassed,
+					"gas_backlog", backlogAfter,
+				)
+			}
+		}
 
 		return state.UpgradeArbosVersionIfNecessary(currentTime, evm.StateDB, evm.ChainConfig())
 	case InternalTxBatchPostingReportMethodID:
@@ -106,6 +168,33 @@ func ApplyInternalTxUpdate(tx *types.ArbitrumInternalTx, state *arbosState.Arbos
 		}
 		gasSpent := arbmath.SaturatingAdd(perBatchGas, arbmath.SaturatingCast[int64](batchDataGas))
 		weiSpent := arbmath.BigMulByUint(l1BaseFeeWei, arbmath.SaturatingUCast[uint64](gasSpent))
+		if internalTxDebug {
+			batchTimestampStr := "<nil>"
+			if batchTimestamp != nil {
+				batchTimestampStr = batchTimestamp.String()
+			}
+			l1BaseFeeWeiStr := "<nil>"
+			if l1BaseFeeWei != nil {
+				l1BaseFeeWeiStr = l1BaseFeeWei.String()
+			}
+			l1FeesAvailableBefore := "<err>"
+			if fees, feeErr := l1p.L1FeesAvailable(); feeErr == nil {
+				l1FeesAvailableBefore = fees.String()
+			}
+			log.Warn("arbos internal tx batch posting report",
+				"block_number", evm.Context.BlockNumber,
+				"block_time", evm.Context.Time,
+				"batch_timestamp", batchTimestampStr,
+				"poster", batchPosterAddress,
+				"batch_data_gas", batchDataGas,
+				"per_batch_gas", perBatchGas,
+				"gas_spent", gasSpent,
+				"l1_base_fee_wei", l1BaseFeeWeiStr,
+				"wei_spent", weiSpent,
+				"l1_fees_available_before", l1FeesAvailableBefore,
+				"arbos_version", state.ArbOSVersion(),
+			)
+		}
 		err = l1p.UpdateForBatchPosterSpending(
 			evm.StateDB,
 			evm,
@@ -119,6 +208,17 @@ func ApplyInternalTxUpdate(tx *types.ArbitrumInternalTx, state *arbosState.Arbos
 		)
 		if err != nil {
 			log.Warn("L1Pricing UpdateForSequencerSpending failed", "err", err)
+		}
+		if internalTxDebug {
+			l1FeesAvailableAfter := "<err>"
+			if fees, feeErr := l1p.L1FeesAvailable(); feeErr == nil {
+				l1FeesAvailableAfter = fees.String()
+			}
+			log.Warn("arbos internal tx batch posting report applied",
+				"block_number", evm.Context.BlockNumber,
+				"poster", batchPosterAddress,
+				"l1_fees_available_after", l1FeesAvailableAfter,
+			)
 		}
 		return nil
 	default:

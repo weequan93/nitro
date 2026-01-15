@@ -289,7 +289,42 @@ func (con ArbOwner) SetWasmBlockCacheSize(c ctx, _ mech, count uint16) error {
 
 // Adds account as a wasm cache manager
 func (con ArbOwner) AddWasmCacheManager(c ctx, _ mech, manager addr) error {
-	return c.State.Programs().CacheManagers().Add(manager)
+	if mdbxMigrateDebug && c != nil && c.State != nil {
+		managers := c.State.Programs().CacheManagers()
+		beforeSize, _ := managers.Size()
+		wasMember, _ := managers.IsMember(manager)
+		txType := "<nil>"
+		if c.txProcessor != nil && c.txProcessor.TopTxType != nil {
+			txType = fmt.Sprintf("%d", *c.txProcessor.TopTxType)
+		}
+		logMdbxMigrateDebug(
+			"arbos owner: add wasm cache manager start",
+			"caller", c.caller,
+			"manager", manager,
+			"was_member", wasMember,
+			"size_before", beforeSize,
+			"arbos_version", c.State.ArbOSVersion(),
+			"tx_type", txType,
+		)
+	}
+	err := c.State.Programs().CacheManagers().Add(manager)
+	if mdbxMigrateDebug && c != nil && c.State != nil {
+		managers := c.State.Programs().CacheManagers()
+		afterSize, _ := managers.Size()
+		nowMember, _ := managers.IsMember(manager)
+		logMdbxMigrateDebug(
+			"arbos owner: add wasm cache manager done",
+			"caller", c.caller,
+			"manager", manager,
+			"now_member", nowMember,
+			"size_after", afterSize,
+			"err", err,
+		)
+	}
+	if err != nil {
+		logMdbxMigrateDebug("arbos owner: add wasm cache manager failed", "manager", manager, "err", err)
+	}
+	return err
 }
 
 // Removes account from the list of wasm cache managers

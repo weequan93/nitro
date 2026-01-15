@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/holiman/uint256"
 
@@ -19,6 +20,8 @@ import (
 
 	"github.com/offchainlabs/nitro/util/arbmath"
 )
+
+var mdbxMigrateDebug = os.Getenv("ERIGON_MDBX_MIGRATE_DEBUG") != "" || os.Getenv("MDBX_MIGRATE_DEBUG") != ""
 
 // TransferBalance represents a balance change occurring aside from a call.
 // While most uses will be transfers, setting `from` or `to` to nil will mint or burn funds, respectively.
@@ -68,12 +71,29 @@ func TransferBalance(
 			return fmt.Errorf("%w: addr %v have %v want %v", vm.ErrInsufficientBalance, *from, balance, amount)
 		}
 		if evm.Context.ArbOSVersion < params.ArbosVersion_Stylus && amount.Sign() == 0 {
+			if mdbxMigrateDebug && purpose == "escrow" {
+				toHex := "<nil>"
+				if to != nil {
+					toHex = to.Hex()
+				}
+				log.Info("arbos transfer zero-value escrow, creating zombie if deleted",
+					"from", from.Hex(),
+					"to", toHex,
+					"amount", amount.String(),
+					"purpose", purpose,
+					"arbos_version", evm.Context.ArbOSVersion,
+				)
+			}
 			evm.StateDB.CreateZombieIfDeleted(*from)
 		}
 		evm.StateDB.SubBalance(*from, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
 	}
+	toReason := tracing.BalanceChangeTransfer
+	if purpose == "escrow-in" {
+		toReason = tracing.BalanceIncreaseEscrow
+	}
 	if to != nil {
-		evm.StateDB.AddBalance(*to, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
+		evm.StateDB.AddBalance(*to, uint256.MustFromBig(amount), toReason)
 	}
 	return nil
 }

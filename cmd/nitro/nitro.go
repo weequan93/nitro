@@ -30,12 +30,14 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/arbitrum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -54,6 +56,9 @@ import (
 	"github.com/offchainlabs/nitro/cmd/util"
 	"github.com/offchainlabs/nitro/cmd/util/confighelpers"
 	"github.com/offchainlabs/nitro/das"
+	"github.com/offchainlabs/nitro/execution"
+	execbackend "github.com/offchainlabs/nitro/execution/backend"
+	"github.com/offchainlabs/nitro/execution/erigonexec"
 	"github.com/offchainlabs/nitro/execution/gethexec"
 	_ "github.com/offchainlabs/nitro/execution/nodeInterface"
 	"github.com/offchainlabs/nitro/solgen/go/bridgegen"
@@ -164,6 +169,40 @@ func startMetrics(cfg *NodeConfig) error {
 	return nil
 }
 
+func initChainDbForBackend(
+	ctx context.Context,
+	backendKind execbackend.Kind,
+	stack *node.Node,
+	nodeConfig *NodeConfig,
+	l1Client *ethclient.Client,
+	rollupAddrs chaininfo.RollupAddresses,
+) (ethdb.Database, *core.BlockChain, error) {
+	if backendKind == execbackend.KindErigon {
+		if reasons := erigonexec.InitConfigUnsupportedWithErigon(nodeConfig.Init); len(reasons) > 0 {
+			return nil, nil, fmt.Errorf(
+				"init/reorg options are not supported with erigon backend (options: %s)",
+				strings.Join(reasons, ", "),
+			)
+		}
+		if nodeConfig.BlocksReExecutor.Enable {
+			return nil, nil, errors.New("blocks-reexecutor is not supported with erigon backend")
+		}
+		return nil, nil, nil
+	}
+
+	return openInitializeChainDb(
+		ctx,
+		stack,
+		nodeConfig,
+		new(big.Int).SetUint64(nodeConfig.Chain.ID),
+		gethexec.DefaultCacheConfigFor(stack, &nodeConfig.Execution.Caching),
+		&nodeConfig.Execution.StylusTarget,
+		&nodeConfig.Persistent,
+		l1Client,
+		rollupAddrs,
+	)
+}
+
 // Returns the exit code
 func mainImpl() int {
 	ctx, cancelFunc := context.WithCancel(context.Background())
@@ -175,8 +214,12 @@ func mainImpl() int {
 		confighelpers.PrintErrorAndExit(err, printSampleUsage)
 	}
 	stackConf := node.DefaultConfig
+	backendKind, err := resolveBackendAndDBApply(nodeConfig, &stackConf)
+	if err != nil {
+		log.Error("invalid backend configuration", "err", err)
+		return 1
+	}
 	stackConf.DataDir = nodeConfig.Persistent.Chain
-	stackConf.DBEngine = nodeConfig.Persistent.DBEngine
 	nodeConfig.Rpc.Apply(&stackConf)
 	nodeConfig.HTTP.Apply(&stackConf)
 	nodeConfig.WS.Apply(&stackConf)
@@ -221,6 +264,12 @@ func mainImpl() int {
 		return 1
 	}
 
+	log.Info(
+		"Execution backend selected",
+		"backend", backendKind,
+		"db_engine", nodeConfig.Persistent.DBEngine,
+		"stack_db_engine", stackConf.DBEngine,
+	)
 	log.Info("Running Arbitrum nitro node", "revision", vcsRevision, "vcs.time", vcsTime)
 
 	if nodeConfig.Node.Dangerous.NoL1Listener {
@@ -440,28 +489,19 @@ func mainImpl() int {
 		}
 	}
 
-	chainDb, l2BlockChain, err := openInitializeChainDb(ctx, stack, nodeConfig, new(big.Int).SetUint64(nodeConfig.Chain.ID), gethexec.DefaultCacheConfigFor(stack, &nodeConfig.Execution.Caching), &nodeConfig.Execution.StylusTarget, &nodeConfig.Persistent, l1Client, rollupAddrs)
-	if l2BlockChain != nil {
-		deferFuncs = append(deferFuncs, func() { l2BlockChain.Stop() })
-	}
-	deferFuncs = append(deferFuncs, func() { closeDb(chainDb, "chainDb") })
+	chainDb, l2BlockChain, err := initChainDbForBackend(ctx, backendKind, stack, nodeConfig, l1Client, rollupAddrs)
 	if err != nil {
 		flag.Usage()
 		log.Error("error initializing database", "err", err)
 		return 1
 	}
+	if l2BlockChain != nil {
+		deferFuncs = append(deferFuncs, func() { l2BlockChain.Stop() })
+	}
+	deferFuncs = append(deferFuncs, func() { closeDb(chainDb, "chainDb") })
 
-	arbDb, err := stack.OpenDatabaseWithExtraOptions("arbitrumdata", 0, 0, "arbitrumdata/", false, nodeConfig.Persistent.Pebble.ExtraOptions("arbitrumdata"))
-	deferFuncs = append(deferFuncs, func() { closeDb(arbDb, "arbDb") })
-	if err != nil {
-		log.Error("failed to open database", "err", err)
-		log.Error("database is corrupt; delete it and try again", "database-directory", stack.InstanceDir())
-		return 1
-	}
-	if err := dbutil.UnfinishedConversionCheck(arbDb); err != nil {
-		log.Error("arbitrumdata unfinished conversion check error", "err", err)
-		return 1
-	}
+	var arbDb ethdb.Database
+	var arbDbOwned bool
 
 	fatalErrChan := make(chan error, 10)
 
@@ -500,16 +540,6 @@ func mainImpl() int {
 		log.Error("error processing l2 chain info", "err", err)
 		return 1
 	}
-	if err := validateBlockChain(l2BlockChain, chainInfo.ChainConfig); err != nil {
-		log.Error("user provided chain config is not compatible with onchain chain config", "err", err)
-		return 1
-	}
-
-	if l2BlockChain.Config().ArbitrumChainParams.DataAvailabilityCommittee != nodeConfig.Node.DataAvailability.Enable {
-		flag.Usage()
-		log.Error(fmt.Sprintf("data availability service usage for this chain is set to %v but --node.data-availability.enable is set to %v", l2BlockChain.Config().ArbitrumChainParams.DataAvailabilityCommittee, nodeConfig.Node.DataAvailability.Enable))
-		return 1
-	}
 
 	var valNode *valnode.ValidationNode
 	if sameProcessValidationNodeEnabled {
@@ -524,26 +554,137 @@ func mainImpl() int {
 		}
 	}
 
-	execNode, err := gethexec.CreateExecutionNode(
-		ctx,
-		stack,
-		chainDb,
-		l2BlockChain,
-		l1Client,
-		func() *gethexec.Config { return &liveNodeConfig.Get().Execution },
+	var execNode *gethexec.ExecutionNode
+	var erigonTxPublisher gethexec.TransactionPublisher
+	var erigonClient *erigonexec.Client
+	execClient, err := execbackend.Select(
+		backendKind,
+		func() (execution.FullExecutionClient, error) {
+			node, err := gethexec.CreateExecutionNode(
+				ctx,
+				stack,
+				chainDb,
+				l2BlockChain,
+				l1Client,
+				func() *gethexec.Config { return &liveNodeConfig.Get().Execution },
+			)
+			if err != nil {
+				return nil, err
+			}
+			execNode = node
+			return node, nil
+		},
+		func() (execution.FullExecutionClient, error) {
+			return erigonexec.New(
+				ctx,
+				stack,
+				l2BlockChain,
+				l1Client, erigonexec.Config{
+					ChainDir:                    nodeConfig.Persistent.Chain,
+					ChainName:                   nodeConfig.Chain.Name,
+					Mdbx:                        erigonexec.MdbxOptionsFromConfig(nodeConfig.Persistent.Mdbx),
+					ExpectedChainID:             new(big.Int).SetUint64(nodeConfig.Chain.ID),
+					PruneMode:                   nodeConfig.Execution.Erigon.PruneMode,
+					BlockMetadataApiBlocksLimit: nodeConfig.Execution.BlockMetadataApiBlocksLimit,
+					Forwarder:                   nodeConfig.Execution.Forwarder,
+				})
+		},
 	)
 	if err != nil {
 		log.Error("failed to create execution node", "err", err)
 		return 1
 	}
+	if backendKind == execbackend.KindErigon {
+		var ok bool
+		erigonClient, ok = execClient.(*erigonexec.Client)
+		if !ok {
+			log.Error("failed to create erigon execution client: unexpected execution client type")
+			return 1
+		}
+	}
+
+	if backendKind == execbackend.KindErigon {
+		arbDb = erigonClient.ArbDB()
+		if arbDb == nil {
+			log.Error("failed to access arbitrumdata database from erigon execution client")
+			return 1
+		}
+	} else {
+		arbDb, err = stack.OpenDatabaseWithExtraOptions("arbitrumdata", 0, 0, "arbitrumdata/", false, nodeConfig.Persistent.Pebble.ExtraOptions("arbitrumdata"))
+		if err != nil {
+			log.Error("failed to open database", "err", err)
+			log.Error("database is corrupt; delete it and try again", "database-directory", stack.InstanceDir())
+			return 1
+		}
+		arbDbOwned = true
+	}
+	if arbDbOwned {
+		deferFuncs = append(deferFuncs, func() { closeDb(arbDb, "arbDb") })
+	}
+	if err := dbutil.UnfinishedConversionCheck(arbDb); err != nil {
+		log.Error("arbitrumdata unfinished conversion check error", "err", err)
+		return 1
+	}
+
+	var l2ChainConfig *params.ChainConfig
+	if backendKind == execbackend.KindErigon {
+		if err := erigonClient.ValidateChainConfig(ctx, chainInfo.ChainConfig); err != nil {
+			log.Error("user provided chain config is not compatible with onchain chain config", "err", err)
+			return 1
+		}
+		l2ChainConfig, err = erigonClient.ArbOSChainConfig(ctx)
+		if err != nil {
+			log.Error("failed to read chain config from ArbOS state", "err", err)
+			return 1
+		}
+		if l2ChainConfig == nil {
+			l2ChainConfig = chainInfo.ChainConfig
+		}
+	} else {
+		if err := validateBlockChain(l2BlockChain, chainInfo.ChainConfig); err != nil {
+			log.Error("user provided chain config is not compatible with onchain chain config", "err", err)
+			return 1
+		}
+		l2ChainConfig = l2BlockChain.Config()
+	}
+	if l2ChainConfig == nil {
+		log.Error("missing L2 chain config")
+		return 1
+	}
+
+	if l2ChainConfig.ArbitrumChainParams.DataAvailabilityCommittee != nodeConfig.Node.DataAvailability.Enable {
+		flag.Usage()
+		log.Error(fmt.Sprintf("data availability service usage for this chain is set to %v but --node.data-availability.enable is set to %v", l2ChainConfig.ArbitrumChainParams.DataAvailabilityCommittee, nodeConfig.Node.DataAvailability.Enable))
+		return 1
+	}
+
+	if backendKind == execbackend.KindErigon {
+		erigonTxPublisher, err = erigonexec.SetupServices(
+			ctx,
+			stack,
+			execClient,
+			erigonClient,
+			l1Client,
+			func() *gethexec.Config { return &liveNodeConfig.Get().Execution },
+		)
+		if err != nil {
+			log.Error("failed to initialize erigon services", "err", err)
+			return 1
+		}
+		deferFuncs = append(deferFuncs, func() {
+			if erigonTxPublisher != nil && erigonTxPublisher.Started() {
+				erigonTxPublisher.StopAndWait()
+			}
+		})
+	}
 
 	currentNode, err := arbnode.CreateNode(
 		ctx,
 		stack,
-		execNode,
+		execClient,
 		arbDb,
 		&NodeConfigFetcher{liveNodeConfig},
-		l2BlockChain.Config(),
+		l2ChainConfig,
 		l1Client,
 		&rollupAddrs,
 		l1TransactionOptsValidator,
@@ -657,6 +798,10 @@ func mainImpl() int {
 
 	gqlConf := nodeConfig.GraphQL
 	if gqlConf.Enable {
+		if execNode == nil {
+			log.Error("GraphQL not supported without geth execution backend")
+			return 1
+		}
 		if err := graphql.New(stack, execNode.Backend.APIBackend(), execNode.FilterSystem, gqlConf.CORSDomain, gqlConf.VHosts); err != nil {
 			log.Error("failed to register the GraphQL service", "err", err)
 			return 1
@@ -676,35 +821,79 @@ func mainImpl() int {
 		if err != nil {
 			fatalErrChan <- fmt.Errorf("error starting node: %w", err)
 		}
+		if err == nil && erigonTxPublisher != nil {
+			if err := erigonTxPublisher.Start(ctx); err != nil {
+				fatalErrChan <- fmt.Errorf("error starting erigon tx publisher: %w", err)
+			}
+		}
 		// remove previous deferFuncs, StopAndWait closes database and blockchain.
-		deferFuncs = []func(){func() { currentNode.StopAndWait() }}
+		deferFuncs = []func(){func() {
+			currentNode.StopAndWait()
+			if erigonTxPublisher != nil && erigonTxPublisher.Started() {
+				erigonTxPublisher.StopAndWait()
+			}
+		}}
 	}
 
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
 
 	if err == nil && nodeConfig.Init.IsReorgRequested() {
-		err = initReorg(nodeConfig.Init, chainInfo.ChainConfig, currentNode.InboxTracker)
-		if err != nil {
-			fatalErrChan <- fmt.Errorf("error reorging per init config: %w", err)
-		} else if nodeConfig.Init.ThenQuit {
-			return 0
+		if backendKind == execbackend.KindErigon {
+			fatalErrChan <- errors.New("init reorg is not supported with erigon backend")
+		} else {
+			err = initReorg(nodeConfig.Init, chainInfo.ChainConfig, currentNode.InboxTracker)
+			if err != nil {
+				fatalErrChan <- fmt.Errorf("error reorging per init config: %w", err)
+			} else if nodeConfig.Init.ThenQuit {
+				return 0
+			}
 		}
 	}
 
-	execNodeConfig := execNode.ConfigFetcher()
-	if execNodeConfig.Sequencer.Enable && execNodeConfig.Sequencer.Dangerous.Timeboost.Enable {
-		err := execNode.Sequencer.InitializeExpressLaneService(
-			execNode.Backend.APIBackend(),
-			execNode.FilterSystem,
-			common.HexToAddress(execNodeConfig.Sequencer.Dangerous.Timeboost.AuctionContractAddress),
-			common.HexToAddress(execNodeConfig.Sequencer.Dangerous.Timeboost.AuctioneerAddress),
-			execNodeConfig.Sequencer.Dangerous.Timeboost.EarlySubmissionGrace,
-		)
-		if err != nil {
-			log.Error("failed to create express lane service", "err", err)
+	if execNode != nil {
+		execNodeConfig := execNode.ConfigFetcher()
+		if execNodeConfig.Sequencer.Enable && execNodeConfig.Sequencer.Dangerous.Timeboost.Enable {
+			err := execNode.Sequencer.InitializeExpressLaneService(
+				execNode.Backend.APIBackend(),
+				execNode.FilterSystem,
+				common.HexToAddress(execNodeConfig.Sequencer.Dangerous.Timeboost.AuctionContractAddress),
+				common.HexToAddress(execNodeConfig.Sequencer.Dangerous.Timeboost.AuctioneerAddress),
+				execNodeConfig.Sequencer.Dangerous.Timeboost.EarlySubmissionGrace,
+			)
+			if err != nil {
+				log.Error("failed to create express lane service", "err", err)
+			}
+			execNode.Sequencer.StartExpressLaneService(ctx)
 		}
-		execNode.Sequencer.StartExpressLaneService(ctx)
+	}
+	if backendKind == execbackend.KindErigon && erigonTxPublisher != nil {
+		erigonConfig := &liveNodeConfig.Get().Execution
+		if erigonConfig.Sequencer.Enable && erigonConfig.Sequencer.Dangerous.Timeboost.Enable {
+			var erigonSequencer *erigonexec.Sequencer
+			if prechecker, ok := erigonTxPublisher.(*erigonexec.TxPreChecker); ok {
+				if current := prechecker.Current(); current != nil {
+					if seq, ok := current.(*erigonexec.Sequencer); ok {
+						erigonSequencer = seq
+					}
+				}
+			}
+			if erigonSequencer == nil {
+				log.Error("failed to initialize express lane service: erigon sequencer unavailable")
+			} else {
+				err := erigonSequencer.InitializeExpressLaneService(
+					nil,
+					nil,
+					common.HexToAddress(erigonConfig.Sequencer.Dangerous.Timeboost.AuctionContractAddress),
+					common.HexToAddress(erigonConfig.Sequencer.Dangerous.Timeboost.AuctioneerAddress),
+					erigonConfig.Sequencer.Dangerous.Timeboost.EarlySubmissionGrace,
+				)
+				if err != nil {
+					log.Error("failed to create express lane service", "err", err)
+				}
+				erigonSequencer.StartExpressLaneService(ctx)
+			}
+		}
 	}
 
 	err = nil
@@ -1086,9 +1275,11 @@ func checkWasmModuleRootCompatibility(ctx context.Context, wasmConfig valnode.Wa
 	if err != nil {
 		return fmt.Errorf("failed to get on-chain WASM module root: %w", err)
 	}
-	if (moduleRoot == common.Hash{}) {
+	moduleRootHash := common.BytesToHash(moduleRoot[:])
+	if (moduleRootHash == common.Hash{}) {
 		return errors.New("on-chain WASM module root is zero")
 	}
+	log.Debug("Checking on-chain WASM module root compatibility", "moduleRoot", moduleRootHash.Hex(), "allowedRoots", wasmConfig.AllowedWasmModuleRoots, "rootPath", wasmConfig.RootPath)
 	// Check if the on-chain WASM module root belongs to the set of allowed module roots
 	allowedWasmModuleRoots := wasmConfig.AllowedWasmModuleRoots
 	if len(allowedWasmModuleRoots) > 0 {
@@ -1107,13 +1298,15 @@ func checkWasmModuleRootCompatibility(ctx context.Context, wasmConfig valnode.Wa
 				log.Warn("allowed-wasm-module-roots: value not a hex nor valid path:", "value", root, "locatorErr", locatorErr, "decodeErr", err)
 				continue
 			}
-			path := locator.GetMachinePath(moduleRoot)
+			path := locator.GetMachinePath(moduleRootHash)
 			if _, err := os.Stat(path); err == nil {
 				moduleRootMatched = true
 				break
 			}
+			log.Debug("Allowed WASM module root path not found", "moduleRoot", moduleRootHash.Hex(), "allowedRoot", root, "machinePath", path, "err", err)
 		}
 		if !moduleRootMatched {
+			log.Warn("On-chain WASM module root not in allowed list", "moduleRoot", moduleRootHash.Hex(), "allowedRoots", allowedWasmModuleRoots)
 			return errors.New("on-chain WASM module root did not match with any of the allowed WASM module roots")
 		}
 	} else {
@@ -1122,8 +1315,9 @@ func checkWasmModuleRootCompatibility(ctx context.Context, wasmConfig valnode.Wa
 		if err != nil {
 			return fmt.Errorf("failed to create machine locator: %w", err)
 		}
-		path := locator.GetMachinePath(moduleRoot)
+		path := locator.GetMachinePath(moduleRootHash)
 		if _, err := os.Stat(path); err != nil {
+			log.Warn("Validator machine directory for on-chain WASM module root not found", "moduleRoot", moduleRootHash.Hex(), "rootPath", locator.RootPath(), "machinePath", path, "err", err)
 			return fmt.Errorf("unable to find validator machine directory for the on-chain WASM module root: %w", err)
 		}
 	}

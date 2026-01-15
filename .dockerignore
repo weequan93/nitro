@@ -6,6 +6,9 @@
 **/.git
 **/.gitmodules
 go-ethereum/tests
+erigon/execution/tests
+!erigon/execution/tests/chaos_monkey
+!erigon/execution/tests/chaos_monkey/**
 **/*.yml
 contracts/build
 contracts/cache/

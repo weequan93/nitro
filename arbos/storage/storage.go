@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/erigontech/erigon-lib/common/dbg"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -64,6 +65,37 @@ const storageKeyCacheSize = 1024
 
 var storageHashCache = lru.NewCache[string, []byte](storageKeyCacheSize)
 var cacheFullLogged atomic.Bool
+var storageDebug = dbg.EnvBool("ERIGON_BAD_ROOT_STORAGE_DEBUG", false)
+var storageDebugMax = uint64(dbg.EnvInt("ERIGON_BAD_ROOT_STORAGE_DEBUG_MAX", 200))
+var storageDebugCount atomic.Uint64
+
+var l1PricingSubspaceKey = crypto.Keccak256([]byte{0})
+var l1PricingBatchPosterSubspaceKey = crypto.Keccak256(l1PricingSubspaceKey, []byte{0})
+
+func storageKeyLabel(storageKey []byte) string {
+	if len(storageKey) == 0 {
+		return "root"
+	}
+	if bytes.Equal(storageKey, l1PricingSubspaceKey) {
+		return "l1pricing"
+	}
+	if bytes.Equal(storageKey, l1PricingBatchPosterSubspaceKey) {
+		return "l1pricing_batchposters"
+	}
+	return fmt.Sprintf("0x%x", storageKey)
+}
+
+func shouldLogStorageWrite(storageKey []byte) bool {
+	if !storageDebug {
+		return false
+	}
+	if len(storageKey) != 0 &&
+		!bytes.Equal(storageKey, l1PricingSubspaceKey) &&
+		!bytes.Equal(storageKey, l1PricingBatchPosterSubspaceKey) {
+		return false
+	}
+	return storageDebugCount.Add(1) <= storageDebugMax
+}
 
 // NewGeth uses a Geth database to create an evm key-value store
 func NewGeth(statedb vm.StateDB, burner burn.Burner) *Storage {
@@ -169,7 +201,20 @@ func (s *Storage) Set(key common.Hash, value common.Hash) error {
 	if info := s.burner.TracingInfo(); info != nil {
 		info.RecordStorageSet(key, value)
 	}
-	s.db.SetState(s.account, s.mapAddress(key), value)
+	mappedKey := s.mapAddress(key)
+	s.db.SetState(s.account, mappedKey, value)
+	if shouldLogStorageWrite(s.storageKey) {
+		fields := []interface{}{
+			"storage_key", storageKeyLabel(s.storageKey),
+			"key", key,
+			"slot", mappedKey,
+			"value", value,
+		}
+		if key.Big().IsUint64() {
+			fields = append(fields, "key_u64", key.Big().Uint64())
+		}
+		log.Warn("arbos storage set", fields...)
+	}
 	return nil
 }
 
@@ -361,14 +406,24 @@ func (s *Storage) cachedKeccak(data ...[]byte) []byte {
 }
 
 type StorageSlot struct {
-	account common.Address
-	db      vm.StateDB
-	slot    common.Hash
-	burner  burn.Burner
+	account    common.Address
+	db         vm.StateDB
+	slot       common.Hash
+	key        common.Hash
+	burner     burn.Burner
+	storageKey []byte
 }
 
 func (s *Storage) NewSlot(offset uint64) StorageSlot {
-	return StorageSlot{s.account, s.db, s.mapAddress(util.UintToHash(offset)), s.burner}
+	key := util.UintToHash(offset)
+	return StorageSlot{
+		account:    s.account,
+		db:         s.db,
+		slot:       s.mapAddress(key),
+		key:        key,
+		burner:     s.burner,
+		storageKey: s.storageKey,
+	}
 }
 
 func (ss *StorageSlot) Get() (common.Hash, error) {
@@ -395,6 +450,20 @@ func (ss *StorageSlot) Set(value common.Hash) error {
 		info.RecordStorageSet(ss.slot, value)
 	}
 	ss.db.SetState(ss.account, ss.slot, value)
+	if shouldLogStorageWrite(ss.storageKey) {
+		fields := []interface{}{
+			"storage_key", storageKeyLabel(ss.storageKey),
+			"slot", ss.slot,
+			"value", value,
+		}
+		if ss.key != (common.Hash{}) {
+			fields = append(fields, "key", ss.key)
+			if ss.key.Big().IsUint64() {
+				fields = append(fields, "key_u64", ss.key.Big().Uint64())
+			}
+		}
+		log.Warn("arbos storage set", fields...)
+	}
 	return nil
 }
 

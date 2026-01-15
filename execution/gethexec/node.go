@@ -84,31 +84,62 @@ func StylusTargetConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.StringSlice(prefix+".extra-archs", DefaultStylusTargetConfig.ExtraArchs, fmt.Sprintf("Comma separated list of extra architectures to cross-compile stylus program to and cache in wasm store (additionally to local target). Currently must include at least %s. (supported targets: %s, %s, %s, %s)", rawdb.TargetWavm, rawdb.TargetWavm, rawdb.TargetArm64, rawdb.TargetAmd64, rawdb.TargetHost))
 }
 
+type ErigonConfig struct {
+	PruneMode string `koanf:"prune-mode"`
+}
+
+var ErigonConfigDefault = ErigonConfig{
+	PruneMode: "archive",
+}
+
+func (c *ErigonConfig) Validate() error {
+	switch c.PruneMode {
+	case "", "auto", "archive", "full", "minimal", "blocks":
+		return nil
+	default:
+		return fmt.Errorf("invalid execution.erigon.prune-mode: %q", c.PruneMode)
+	}
+}
+
+func ErigonConfigAddOptions(prefix string, f *flag.FlagSet) {
+	f.String(prefix+".prune-mode", ErigonConfigDefault.PruneMode, "erigon pruning mode (archive, full, minimal, blocks)")
+}
+
 type Config struct {
-	ParentChainReader           headerreader.Config `koanf:"parent-chain-reader" reload:"hot"`
-	Sequencer                   SequencerConfig     `koanf:"sequencer" reload:"hot"`
-	RecordingDatabase           BlockRecorderConfig `koanf:"recording-database"`
-	TxPreChecker                TxPreCheckerConfig  `koanf:"tx-pre-checker" reload:"hot"`
-	Forwarder                   ForwarderConfig     `koanf:"forwarder"`
-	ForwardingTarget            string              `koanf:"forwarding-target"`
-	SecondaryForwardingTarget   []string            `koanf:"secondary-forwarding-target"`
-	Caching                     CachingConfig       `koanf:"caching"`
-	RPC                         arbitrum.Config     `koanf:"rpc"`
-	TxLookupLimit               uint64              `koanf:"tx-lookup-limit"`
-	EnablePrefetchBlock         bool                `koanf:"enable-prefetch-block"`
-	SyncMonitor                 SyncMonitorConfig   `koanf:"sync-monitor"`
-	StylusTarget                StylusTargetConfig  `koanf:"stylus-target"`
-	BlockMetadataApiCacheSize   uint64              `koanf:"block-metadata-api-cache-size"`
-	BlockMetadataApiBlocksLimit uint64              `koanf:"block-metadata-api-blocks-limit"`
+	Backend                    string              `koanf:"backend"`
+	ParentChainReader          headerreader.Config `koanf:"parent-chain-reader" reload:"hot"`
+	Sequencer                  SequencerConfig     `koanf:"sequencer" reload:"hot"`
+	RecordingDatabase          BlockRecorderConfig `koanf:"recording-database"`
+	TxPreChecker               TxPreCheckerConfig  `koanf:"tx-pre-checker" reload:"hot"`
+	Forwarder                  ForwarderConfig     `koanf:"forwarder"`
+	ForwardingTarget           string              `koanf:"forwarding-target"`
+	SecondaryForwardingTarget  []string            `koanf:"secondary-forwarding-target"`
+	Caching                    CachingConfig       `koanf:"caching"`
+	RPC                        arbitrum.Config     `koanf:"rpc"`
+	TxLookupLimit              uint64              `koanf:"tx-lookup-limit"`
+	EnablePrefetchBlock        bool                `koanf:"enable-prefetch-block"`
+	SyncMonitor                SyncMonitorConfig   `koanf:"sync-monitor"`
+	StylusTarget               StylusTargetConfig  `koanf:"stylus-target"`
+	Erigon                     ErigonConfig        `koanf:"erigon"`
+	BlockMetadataApiCacheSize  uint64              `koanf:"block-metadata-api-cache-size"`
+	BlockMetadataApiBlocksLimit uint64             `koanf:"block-metadata-api-blocks-limit"`
 
 	forwardingTarget string
 }
 
 func (c *Config) Validate() error {
+	switch c.Backend {
+	case "", "auto", "geth", "erigon":
+	default:
+		return fmt.Errorf("invalid execution.backend: %q", c.Backend)
+	}
 	if err := c.Caching.Validate(); err != nil {
 		return err
 	}
 	if err := c.Sequencer.Validate(); err != nil {
+		return err
+	}
+	if err := c.Erigon.Validate(); err != nil {
 		return err
 	}
 	if !c.Sequencer.Enable && c.ForwardingTarget == "" {
@@ -129,6 +160,7 @@ func (c *Config) Validate() error {
 }
 
 func ConfigAddOptions(prefix string, f *flag.FlagSet) {
+	f.String(prefix+".backend", ConfigDefault.Backend, "execution backend (auto, geth, erigon)")
 	arbitrum.ConfigAddOptions(prefix+".rpc", f)
 	SequencerConfigAddOptions(prefix+".sequencer", f)
 	headerreader.AddOptions(prefix+".parent-chain-reader", f)
@@ -142,11 +174,13 @@ func ConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.Uint64(prefix+".tx-lookup-limit", ConfigDefault.TxLookupLimit, "retain the ability to lookup transactions by hash for the past N blocks (0 = all blocks)")
 	f.Bool(prefix+".enable-prefetch-block", ConfigDefault.EnablePrefetchBlock, "enable prefetching of blocks")
 	StylusTargetConfigAddOptions(prefix+".stylus-target", f)
+	ErigonConfigAddOptions(prefix+".erigon", f)
 	f.Uint64(prefix+".block-metadata-api-cache-size", ConfigDefault.BlockMetadataApiCacheSize, "size (in bytes) of lru cache storing the blockMetadata to service arb_getRawBlockMetadata")
 	f.Uint64(prefix+".block-metadata-api-blocks-limit", ConfigDefault.BlockMetadataApiBlocksLimit, "maximum number of blocks allowed to be queried for blockMetadata per arb_getRawBlockMetadata query. Enabled by default, set 0 to disable the limit")
 }
 
 var ConfigDefault = Config{
+	Backend:                     "auto",
 	RPC:                         arbitrum.DefaultConfig,
 	Sequencer:                   DefaultSequencerConfig,
 	ParentChainReader:           headerreader.DefaultConfig,
@@ -159,6 +193,7 @@ var ConfigDefault = Config{
 	Forwarder:                   DefaultNodeForwarderConfig,
 	EnablePrefetchBlock:         true,
 	StylusTarget:                DefaultStylusTargetConfig,
+	Erigon:                      ErigonConfigDefault,
 	BlockMetadataApiCacheSize:   100 * 1024 * 1024,
 	BlockMetadataApiBlocksLimit: 100,
 }

@@ -61,6 +61,8 @@ wrap! {
         filesize: u32
     ) -> Errno;
 
+    fn fd_tell(fd: u32, offset_ptr: GuestPtr) -> Errno;
+
     fn fd_datasync(_fd: u32) -> Errno;
 
     fn path_open(

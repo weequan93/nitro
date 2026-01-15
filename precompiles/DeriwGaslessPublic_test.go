@@ -27,8 +27,13 @@ func TestGaslessOwnerPublic(t *testing.T) {
 	// gasInfo := &ArbGasInfo{}
 	callCtx := testContext(caller, evm)
 
-	// the zero address is an owner by default
-	Require(t, prec.RemoveGaslessOwner(callCtx, evm, common.Address{}))
+	zero := common.Address{}
+	zeroMember, err := prec.IsGaslessOwner(callCtx, evm, zero)
+	Require(t, err)
+	if zeroMember {
+		Require(t, prec.RemoveGaslessOwner(callCtx, evm, zero))
+	}
+	Require(t, prec.AddGaslessOwner(callCtx, evm, caller))
 
 	Require(t, prec.AddGaslessOwner(callCtx, evm, addr1))
 	Require(t, prec.AddGaslessOwner(callCtx, evm, addr2))

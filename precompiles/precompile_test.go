@@ -181,12 +181,12 @@ func TestEventCosts(t *testing.T) {
 
 func TestPrecompilesPerArbosVersion(t *testing.T) {
 	expectedNewMethodsPerArbosVersion := map[uint64]int{
-		0:                      89,
+		0:                      159,
 		params.ArbosVersion_5:  3,
 		params.ArbosVersion_10: 2,
 		params.ArbosVersion_11: 4,
 		params.ArbosVersion_20: 8,
-		params.ArbosVersion_30: 38,
+		params.ArbosVersion_30: 37,
 		params.ArbosVersion_31: 1,
 	}
 

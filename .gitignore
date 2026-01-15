@@ -24,3 +24,10 @@ system_tests/test-data/*
 system_tests/testdata/*
 arbos/testdata/*
 fastcache
+.gocache
+.cache
+.tmp
+.mdbx-flow-test
+.mdbx-arbitrum-tx-matrix
+.gomodcache
+.modcache

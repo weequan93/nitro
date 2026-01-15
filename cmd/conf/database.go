@@ -25,6 +25,7 @@ type PersistentConfig struct {
 	Ancient      string       `koanf:"ancient"`
 	DBEngine     string       `koanf:"db-engine"`
 	Pebble       PebbleConfig `koanf:"pebble"`
+	Mdbx         MdbxConfig   `koanf:"mdbx"`
 }
 
 var PersistentConfigDefault = PersistentConfig{
@@ -35,6 +36,7 @@ var PersistentConfigDefault = PersistentConfig{
 	Ancient:      "",
 	DBEngine:     "", // auto-detect database type based on the db dir contents
 	Pebble:       PebbleConfigDefault,
+	Mdbx:         MdbxConfigDefault,
 }
 
 func PersistentConfigAddOptions(prefix string, f *flag.FlagSet) {
@@ -43,8 +45,9 @@ func PersistentConfigAddOptions(prefix string, f *flag.FlagSet) {
 	f.String(prefix+".log-dir", PersistentConfigDefault.LogDir, "directory to store log file")
 	f.Int(prefix+".handles", PersistentConfigDefault.Handles, "number of file descriptor handles to use for the database")
 	f.String(prefix+".ancient", PersistentConfigDefault.Ancient, "directory of ancient where the chain freezer can be opened")
-	f.String(prefix+".db-engine", PersistentConfigDefault.DBEngine, "backing database implementation to use. If set to empty string the database type will be autodetected and if no pre-existing database is found it will default to creating new pebble database ('leveldb', 'pebble' or '' = auto-detect)")
+	f.String(prefix+".db-engine", PersistentConfigDefault.DBEngine, "backing database implementation to use. If set to empty string or \"auto\" the database type will be autodetected and if no pre-existing database is found it will default to creating new pebble database ('leveldb', 'pebble', 'mdbx', 'auto' or '' = auto-detect)")
 	PebbleConfigAddOptions(prefix+".pebble", f, &PersistentConfigDefault.Pebble)
+	MdbxConfigAddOptions(prefix+".mdbx", f, &PersistentConfigDefault.Mdbx)
 }
 
 func (c *PersistentConfig) ResolveDirectoryNames() error {
@@ -91,20 +94,30 @@ func (c *PersistentConfig) ResolveDirectoryNames() error {
 }
 
 func DatabaseInDirectory(path string) bool {
-	// Consider database present if file `CURRENT` in directory
-	_, err := os.Stat(path + "/CURRENT")
-
-	return err == nil
+	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err == nil {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(path, "mdbx.dat")); err == nil {
+		return true
+	}
+	return false
 }
 
 func (c *PersistentConfig) Validate() error {
-	if c.DBEngine != "leveldb" && c.DBEngine != "pebble" && c.DBEngine != "" {
-		return fmt.Errorf(`invalid .db-engine choice: %q, allowed "leveldb", "pebble" or ""`, c.DBEngine)
+	switch c.DBEngine {
+	case "", "auto", "leveldb", "pebble", "mdbx":
+	default:
+		return fmt.Errorf(`invalid .db-engine choice: %q, allowed "leveldb", "pebble", "mdbx", "auto" or ""`, c.DBEngine)
 	}
 	// if DBEngine == "" then we may end up opening pebble database, so we want to validate the Pebble config
 	// if pre-existing database is leveldb backed, then user shouldn't change the Pebble config defaults => this check should also succeed
-	if c.DBEngine == "pebble" || c.DBEngine == "" {
+	if c.DBEngine == "pebble" || c.DBEngine == "" || c.DBEngine == "auto" {
 		if err := c.Pebble.Validate(); err != nil {
+			return err
+		}
+	}
+	if c.DBEngine == "mdbx" || c.DBEngine == "" || c.DBEngine == "auto" {
+		if err := c.Mdbx.Validate(); err != nil {
 			return err
 		}
 	}
@@ -216,6 +229,49 @@ func PebbleExperimentalConfigAddOptions(prefix string, f *flag.FlagSet, defaultC
 	f.Int64(prefix+".read-sampling-multiplier", defaultConfig.ReadSamplingMultiplier, "a multiplier for the readSamplingPeriod in iterator.maybeSampleRead() to control the frequency of read sampling to trigger a read triggered compaction. A value of -1 prevents sampling and disables read triggered compactions. Geth default is -1. The pebble default is 1 << 4. which gets multiplied with a constant of 1 << 16 to yield 1 << 20 (1MB).")
 	f.Int(prefix+".max-writer-concurrency", defaultConfig.MaxWriterConcurrency, "maximum number of compression workers the compression queue is allowed to use. If max-writer-concurrency > 0, then the Writer will use parallelism, to compress and write blocks to disk. Otherwise, the writer will compress and write blocks to disk synchronously.")
 	f.Bool(prefix+".force-writer-parallelism", defaultConfig.ForceWriterParallelism, "force parallelism in the sstable Writer for the metamorphic tests. Even with the MaxWriterConcurrency option set, pebble only enables parallelism in the sstable Writer if there is enough CPU available, and this option bypasses that.")
+}
+
+type MdbxConfig struct {
+	PageSize   int   `koanf:"page-size"`
+	MapSize    int64 `koanf:"map-size"`
+	GrowthStep int64 `koanf:"growth-step"`
+	WriteMap   bool  `koanf:"write-map"`
+	NoSync     bool  `koanf:"no-sync"`
+	MaxReaders int   `koanf:"max-readers"`
+}
+
+var MdbxConfigDefault = MdbxConfig{
+	PageSize:   0,
+	MapSize:    0,
+	GrowthStep: 0,
+	WriteMap:   false,
+	NoSync:     false,
+	MaxReaders: 0,
+}
+
+func MdbxConfigAddOptions(prefix string, f *flag.FlagSet, defaultConfig *MdbxConfig) {
+	f.Int(prefix+".page-size", defaultConfig.PageSize, "mdbx page size in bytes (0 = default)")
+	f.Int64(prefix+".map-size", defaultConfig.MapSize, "mdbx map size in bytes (0 = default)")
+	f.Int64(prefix+".growth-step", defaultConfig.GrowthStep, "mdbx growth step in bytes (0 = default)")
+	f.Bool(prefix+".write-map", defaultConfig.WriteMap, "mdbx writemap option")
+	f.Bool(prefix+".no-sync", defaultConfig.NoSync, "mdbx no-sync mode (unsafe, for testing)")
+	f.Int(prefix+".max-readers", defaultConfig.MaxReaders, "mdbx max readers (0 = default)")
+}
+
+func (c *MdbxConfig) Validate() error {
+	if c.PageSize < 0 {
+		return fmt.Errorf("invalid .page-size value: %d, has to be >= 0", c.PageSize)
+	}
+	if c.MapSize < 0 {
+		return fmt.Errorf("invalid .map-size value: %d, has to be >= 0", c.MapSize)
+	}
+	if c.GrowthStep < 0 {
+		return fmt.Errorf("invalid .growth-step value: %d, has to be >= 0", c.GrowthStep)
+	}
+	if c.MaxReaders < 0 {
+		return fmt.Errorf("invalid .max-readers value: %d, has to be >= 0", c.MaxReaders)
+	}
+	return nil
 }
 
 func (c *PebbleExperimentalConfig) Validate() error {

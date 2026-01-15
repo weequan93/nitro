@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/erigontech/erigon-lib/common/dbg"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/offchainlabs/nitro/arbcompress"
@@ -52,6 +54,7 @@ var (
 	L1PricerFundsPoolAddress = common.HexToAddress("0xA4B00000000000000000000000000000000000f6")
 
 	ErrInvalidTime = errors.New("invalid timestamp")
+	l1PricingDebug = dbg.EnvBool("ERIGON_BAD_ROOT_DEBUG", false)
 )
 
 const (
@@ -190,6 +193,13 @@ func (ps *L1PricingState) UnitsSinceUpdate() (uint64, error) {
 }
 
 func (ps *L1PricingState) SetUnitsSinceUpdate(units uint64) error {
+	if l1PricingDebug {
+		if oldUnits, err := ps.unitsSinceUpdate.Get(); err == nil {
+			log.Warn("l1pricing units since update set", "old", oldUnits, "new", units)
+		} else {
+			log.Warn("l1pricing units since update set (read failed)", "new", units, "err", err)
+		}
+	}
 	return ps.unitsSinceUpdate.Set(units)
 }
 
@@ -226,7 +236,11 @@ func (ps *L1PricingState) AddToUnitsSinceUpdate(units uint64) error {
 	if err != nil {
 		return err
 	}
-	return ps.unitsSinceUpdate.Set(oldUnits + units)
+	newUnits := oldUnits + units
+	if l1PricingDebug {
+		log.Warn("l1pricing units since update add", "old", oldUnits, "delta", units, "new", newUnits)
+	}
+	return ps.unitsSinceUpdate.Set(newUnits)
 }
 
 func (ps *L1PricingState) PricePerUnit() (*big.Int, error) {
@@ -258,6 +272,13 @@ func (ps *L1PricingState) L1FeesAvailable() (*big.Int, error) {
 }
 
 func (ps *L1PricingState) SetL1FeesAvailable(val *big.Int) error {
+	if l1PricingDebug {
+		if old, err := ps.l1FeesAvailable.Get(); err == nil {
+			log.Warn("l1pricing l1 fees available set", "old", old, "new", val)
+		} else {
+			log.Warn("l1pricing l1 fees available set (read failed)", "new", val, "err", err)
+		}
+	}
 	return ps.l1FeesAvailable.SetChecked(val)
 }
 
@@ -267,6 +288,9 @@ func (ps *L1PricingState) AddToL1FeesAvailable(delta *big.Int) (*big.Int, error)
 		return nil, err
 	}
 	new := new(big.Int).Add(old, delta)
+	if l1PricingDebug {
+		log.Warn("l1pricing l1 fees available add", "old", old, "delta", delta, "new", new)
+	}
 	if err := ps.SetL1FeesAvailable(new); err != nil {
 		return nil, err
 	}
@@ -291,6 +315,9 @@ func (ps *L1PricingState) TransferFromL1FeesAvailable(
 	if updated.Sign() < 0 {
 		return nil, core.ErrInsufficientFunds
 	}
+	if l1PricingDebug {
+		log.Warn("l1pricing l1 fees available transfer", "old", old, "amount", amount, "new", updated, "recipient", recipient, "purpose", purpose)
+	}
 	if err := ps.SetL1FeesAvailable(updated); err != nil {
 		return nil, err
 	}
@@ -308,6 +335,16 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 	l1Basefee *big.Int,
 	scenario util.TracingScenario,
 ) error {
+	if l1PricingDebug {
+		log.Warn("l1pricing batch poster input",
+			"arbos_version", arbosVersion,
+			"update_time", updateTime,
+			"current_time", currentTime,
+			"batch_poster", batchPoster,
+			"wei_spent", weiSpent,
+			"l1_base_fee", l1Basefee,
+		)
+	}
 	if arbosVersion < params.ArbosVersion_10 {
 		return ps._preversion10_UpdateForBatchPosterSpending(statedb, evm, arbosVersion, updateTime, currentTime, batchPoster, weiSpent, l1Basefee, scenario)
 	}
@@ -339,6 +376,70 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 	if updateTime > currentTime || updateTime < lastUpdateTime {
 		return ErrInvalidTime
 	}
+	if l1PricingDebug {
+		logBatchPosterState := func(phase string) {
+			fields := []interface{}{
+				"phase", phase,
+				"batch_poster", batchPoster,
+			}
+			addUint64 := func(key string, val uint64, err error) {
+				if err != nil {
+					fields = append(fields, key+"_err", err)
+					return
+				}
+				fields = append(fields, key, val)
+			}
+			addBig := func(key string, val *big.Int, err error) {
+				if err != nil {
+					fields = append(fields, key+"_err", err)
+					return
+				}
+				fields = append(fields, key, val)
+			}
+			addAddr := func(key string, val common.Address, err error) {
+				if err != nil {
+					fields = append(fields, key+"_err", err)
+					return
+				}
+				fields = append(fields, key, val)
+			}
+			unitsSinceUpdate, unitsSinceUpdateErr := ps.UnitsSinceUpdate()
+			addUint64("units_since_update", unitsSinceUpdate, unitsSinceUpdateErr)
+			lastUpdateTime, lastUpdateTimeErr := ps.LastUpdateTime()
+			addUint64("last_update_time", lastUpdateTime, lastUpdateTimeErr)
+			fundsDueForRewards, fundsDueForRewardsErr := ps.FundsDueForRewards()
+			addBig("funds_due_for_rewards", fundsDueForRewards, fundsDueForRewardsErr)
+			l1FeesAvailable, l1FeesAvailableErr := ps.L1FeesAvailable()
+			addBig("l1_fees_available", l1FeesAvailable, l1FeesAvailableErr)
+			pricePerUnit, pricePerUnitErr := ps.PricePerUnit()
+			addBig("price_per_unit", pricePerUnit, pricePerUnitErr)
+			totalFundsDue, totalFundsDueErr := batchPosterTable.TotalFundsDue()
+			addBig("total_funds_due", totalFundsDue, totalFundsDueErr)
+			posterFundsDue, posterFundsDueErr := posterState.FundsDue()
+			addBig("poster_funds_due", posterFundsDue, posterFundsDueErr)
+
+			payRewardsTo, payRewardsErr := ps.PayRewardsTo()
+			addAddr("pay_rewards_to", payRewardsTo, payRewardsErr)
+			posterPayTo, posterPayToErr := posterState.PayTo()
+			addAddr("poster_pay_to", posterPayTo, posterPayToErr)
+
+			if evm != nil && evm.StateDB != nil {
+				fields = append(fields,
+					"l1_pricer_balance", evm.StateDB.GetBalance(L1PricerFundsPoolAddress).String(),
+					"poster_balance", evm.StateDB.GetBalance(batchPoster).String(),
+				)
+				if payRewardsErr == nil {
+					fields = append(fields, "pay_rewards_balance", evm.StateDB.GetBalance(payRewardsTo).String())
+				}
+				if posterPayToErr == nil {
+					fields = append(fields, "poster_pay_to_balance", evm.StateDB.GetBalance(posterPayTo).String())
+				}
+			}
+			log.Warn("l1pricing batch poster state", fields...)
+		}
+		logBatchPosterState("pre")
+		defer logBatchPosterState("post")
+	}
 	allocationNumerator := updateTime - lastUpdateTime
 	allocationDenominator := currentTime - lastUpdateTime
 	if allocationDenominator == 0 {
@@ -353,6 +454,15 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 	}
 	unitsAllocated := am.SaturatingUMul(unitsSinceUpdate, allocationNumerator) / allocationDenominator
 	unitsSinceUpdate -= unitsAllocated
+	if l1PricingDebug {
+		log.Warn("l1pricing batch poster allocation",
+			"last_update_time", lastUpdateTime,
+			"units_since_update", unitsSinceUpdate,
+			"units_allocated", unitsAllocated,
+			"allocation_numerator", allocationNumerator,
+			"allocation_denominator", allocationDenominator,
+		)
+	}
 	if err := ps.SetUnitsSinceUpdate(unitsSinceUpdate); err != nil {
 		return err
 	}
@@ -372,6 +482,13 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 				// apply the cap on assignment of amortized cost;
 				// the difference will be a loss for the batch poster
 				weiSpent = weiSpentCap
+				if l1PricingDebug {
+					log.Warn("l1pricing batch poster cap applied",
+						"cap_bips", amortizedCostCapBips,
+						"wei_spent_cap", weiSpentCap,
+						"wei_spent", weiSpent,
+					)
+				}
 			}
 		}
 	}
@@ -392,6 +509,13 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 	if err := ps.SetFundsDueForRewards(fundsDueForRewards); err != nil {
 		return err
 	}
+	if l1PricingDebug {
+		log.Warn("l1pricing batch poster due",
+			"poster_funds_due", dueToPoster,
+			"funds_due_for_rewards", fundsDueForRewards,
+			"per_unit_reward", perUnitReward,
+		)
+	}
 
 	// pay rewards, as much as possible
 	paymentForRewards := am.BigMulByUint(am.UintToBig(perUnitReward), unitsAllocated)
@@ -405,6 +529,12 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 	payRewardsTo, err := ps.PayRewardsTo()
 	if err != nil {
 		return err
+	}
+	if l1PricingDebug {
+		log.Warn("l1pricing batch poster rewards",
+			"payment_for_rewards", paymentForRewards,
+			"pay_rewards_to", payRewardsTo,
+		)
 	}
 	l1FeesAvailable, err = ps.TransferFromL1FeesAvailable(
 		payRewardsTo, paymentForRewards, evm, scenario, "batchPosterReward",
@@ -426,6 +556,12 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 		addrToPay, err := posterState.PayTo()
 		if err != nil {
 			return err
+		}
+		if l1PricingDebug {
+			log.Warn("l1pricing batch poster refund",
+				"balance_to_transfer", balanceToTransfer,
+				"poster_pay_to", addrToPay,
+			)
 		}
 		l1FeesAvailable, err = ps.TransferFromL1FeesAvailable(
 			addrToPay, balanceToTransfer, evm, scenario, "batchPosterRefund",
@@ -488,6 +624,16 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 		newPrice := am.BigAdd(price, priceChange)
 		if newPrice.Sign() < 0 {
 			newPrice = common.Big0
+		}
+		if l1PricingDebug {
+			log.Warn("l1pricing batch poster price",
+				"surplus", surplus,
+				"old_surplus", oldSurplus,
+				"price", price,
+				"new_price", newPrice,
+				"equil_units", equilUnits,
+				"inertia", inertia,
+			)
 		}
 		if err := ps.SetPricePerUnit(newPrice); err != nil {
 			return err

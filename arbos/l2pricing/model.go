@@ -6,6 +6,8 @@ package l2pricing
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/offchainlabs/nitro/util/arbmath"
@@ -30,11 +32,17 @@ func (ps *L2PricingState) AddToGasPool(gas int64) error {
 	if err != nil {
 		return err
 	}
+	if l2PricingDebug {
+		log.Warn("l2pricing add to gas pool", "gas_delta", gas, "backlog_before", backlog)
+	}
 	// pay off some of the backlog with the added gas, stopping at 0
 	if gas > 0 {
 		backlog = arbmath.SaturatingUSub(backlog, uint64(gas))
 	} else {
 		backlog = arbmath.SaturatingUAdd(backlog, uint64(-gas))
+	}
+	if l2PricingDebug {
+		log.Warn("l2pricing add to gas pool result", "backlog_after", backlog)
 	}
 	return ps.SetGasBacklog(backlog)
 }

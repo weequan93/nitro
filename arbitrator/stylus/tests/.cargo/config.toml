@@ -1,11 +1,20 @@
 [build]
 target = "wasm32-unknown-unknown"
+rustflags = [
+  "-Z", "unstable-options",
+  "-C", "panic=immediate-abort",
+]
 
 [target.wasm32-unknown-unknown]
 rustflags = [
   "-C", "target-cpu=mvp",
   "-C", "link-arg=-zstack-size=8192",
   "-C", "target-feature=-reference-types",
+  "-Z", "unstable-options",
+  "-C", "panic=immediate-abort",
 #  "-C", "link-arg=--export=__heap_base",
 #  "-C", "link-arg=--export=__data_end",
 ]
+
+[profile.release]
+panic = "immediate-abort"

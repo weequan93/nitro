@@ -559,16 +559,41 @@ impl Module {
             };
 
             let mut contents = vec![];
-            let ElementItems::Functions(item_reader) = elem.items.clone() else {
-                bail!("Non-constant element initializers are not supported");
-            };
-            for func in item_reader.into_iter() {
-                let index = func?;
-                let func_ty = func_types[index as usize].clone();
-                contents.push(TableElement {
-                    val: Value::FuncRef(index),
-                    func_ty,
-                })
+            match elem.items.clone() {
+                ElementItems::Functions(item_reader) => {
+                    for func in item_reader.into_iter() {
+                        let index = func?;
+                        let func_ty = func_types[index as usize].clone();
+                        contents.push(TableElement {
+                            val: Value::FuncRef(index),
+                            func_ty,
+                        });
+                    }
+                }
+                ElementItems::Expressions(ref_ty, item_reader) => {
+                    ensure!(
+                        ref_ty == RefType::FUNCREF,
+                        "unsupported element ref type {ref_ty}"
+                    );
+                    for expr in item_reader.into_iter() {
+                        let expr = expr?;
+                        let mut ops = expr.get_operators_reader();
+                        let element = match (ops.read()?, ops.read()?, ops.eof()) {
+                            (Operator::RefFunc { function_index }, Operator::End, true) => {
+                                let func_ty = func_types[function_index as usize].clone();
+                                TableElement {
+                                    val: Value::FuncRef(function_index),
+                                    func_ty,
+                                }
+                            }
+                            (Operator::RefNull { .. }, Operator::End, true) => {
+                                TableElement::default()
+                            }
+                            x => bail!("Non-constant element initializers are not supported {x:?}"),
+                        };
+                        contents.push(element);
+                    }
+                }
             }
 
             let len = contents.len();

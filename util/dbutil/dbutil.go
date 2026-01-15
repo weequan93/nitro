@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/cockroachdb/pebble"
@@ -38,6 +40,8 @@ func IsNotExistError(err error) bool {
 
 var unfinishedConversionCanaryKey = []byte("unfinished-conversion-canary-key")
 
+const unfinishedConversionCanaryFile = "UNFINISHED_MDBX_CONVERSION"
+
 func PutUnfinishedConversionCanary(db ethdb.KeyValueStore) error {
 	return db.Put(unfinishedConversionCanaryKey, []byte{1})
 }
@@ -55,4 +59,37 @@ func UnfinishedConversionCheck(db ethdb.KeyValueStore) error {
 		return errors.New("Unfinished conversion canary key detected")
 	}
 	return nil
+}
+
+func UnfinishedConversionCanaryPath(dir string) string {
+	return filepath.Join(dir, unfinishedConversionCanaryFile)
+}
+
+func PutUnfinishedConversionCanaryFile(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	path := UnfinishedConversionCanaryPath(dir)
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return os.WriteFile(path, []byte("in-progress"), 0o644)
+}
+
+func DeleteUnfinishedConversionCanaryFile(dir string) error {
+	path := UnfinishedConversionCanaryPath(dir)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func HasUnfinishedConversionCanaryFile(dir string) bool {
+	info, err := os.Stat(UnfinishedConversionCanaryPath(dir))
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
 }

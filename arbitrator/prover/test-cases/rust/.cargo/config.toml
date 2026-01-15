@@ -1,9 +1,16 @@
 [build]
-target = "wasm32-wasi"
+target = "wasm32-wasip1"
+
+[target.wasm32-wasip1]
+rustflags = [
+  "-C", "target-cpu=mvp",
+  "-C", "target-feature=-reference-types",
+]
 
 [target.wasm32-wasi]
 rustflags = [
   "-C", "target-cpu=mvp",
+  "-C", "target-feature=-reference-types",
 ]
 
 [unstable]

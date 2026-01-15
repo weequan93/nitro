@@ -305,7 +305,7 @@ pub fn parse<'a>(input: &'a [u8], path: &'_ Path) -> Result<WasmBinary<'a>> {
         mutable_global: true,
         saturating_float_to_int: true,
         sign_extension: true,
-        reference_types: false,
+        reference_types: true,
         multi_value: true,
         bulk_memory: true, // not all ops supported yet
         simd: false,

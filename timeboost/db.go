@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 const sqliteFileName = "validated_bids.db?_journal_mode=WAL"
@@ -28,7 +27,7 @@ func NewDatabase(path string) (*SqliteDatabase, error) {
 		}
 	}
 	filePath := filepath.Join(path, sqliteFileName)
-	db, err := sqlx.Open("sqlite3", filePath)
+	db, err := sqlx.Open(sqliteDriverName, filePath)
 	if err != nil {
 		return nil, err
 	}

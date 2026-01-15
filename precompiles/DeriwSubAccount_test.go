@@ -26,8 +26,13 @@ func TestDeriwSubAccount(t *testing.T) {
 	// gasInfo := &ArbGasInfo{}
 	callCtx := testContext(caller, evm)
 
-	// the zero address is an owner by default
-	Require(t, prec.RemoveSubAccountOwner(callCtx, evm, common.Address{}))
+	zero := common.Address{}
+	zeroMember, err := prec.IsSubAccountOwner(callCtx, evm, zero)
+	Require(t, err)
+	if zeroMember {
+		Require(t, prec.RemoveSubAccountOwner(callCtx, evm, zero))
+	}
+	Require(t, prec.AddSubAccountOwner(callCtx, evm, caller))
 
 	Require(t, prec.AddSubAccountOwner(callCtx, evm, addr1))
 	Require(t, prec.AddSubAccountOwner(callCtx, evm, addr2))
@@ -125,8 +130,12 @@ func TestDeriwAllowedAddress(t *testing.T) {
 	// gasInfo := &ArbGasInfo{}
 	callCtx := testContext(caller, evm)
 
-	// the zero address is an owner by default
-	Require(t, prec.RemoveAllowedAddress(callCtx, evm, common.Address{}))
+	zero := common.Address{}
+	zeroMember, err := prec.IsAllowedAddress(callCtx, evm, zero)
+	Require(t, err)
+	if zeroMember {
+		Require(t, prec.RemoveAllowedAddress(callCtx, evm, zero))
+	}
 
 	Require(t, prec.AddAllowedAddress(callCtx, evm, addr1))
 	Require(t, prec.AddAllowedAddress(callCtx, evm, addr2))
@@ -162,7 +171,8 @@ func TestDeriwAllowedAddress(t *testing.T) {
 		Fail(t)
 	}
 
-	Require(t, prec.AddSubAccountOwner(callCtx, evm, addr1))
+	Require(t, prec.AddAllowedAddress(callCtx, evm, addr1))
+	Require(t, prec.AddAllowedAddress(callCtx, evm, caller))
 	all, err := prec.GetAllAllowedAddress(callCtx, evm)
 	Require(t, err)
 	if len(all) != 3 {

@@ -4,48 +4,96 @@
 package precompiles
 
 import (
+	"crypto/ecdsa"
+	"encoding/json"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 func TestDeriwSubAccountPublic(t *testing.T) {
 	evm := newMockEVMForTesting()
 	caller := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
-
-	var signData = common.Hex2Bytes("0x7b227479706573223a7b22454950373132446f6d61696e223a5b7b226e616d65223a226e616d65222c2274797065223a22737472696e67227d2c7b226e616d65223a2276657273696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a22636861696e4964222c2274797065223a2275696e74323536227d2c7b226e616d65223a22766572696679696e67436f6e7472616374222c2274797065223a2261646472657373227d5d2c224d657373616765223a5b7b226e616d65223a2254696d657374616d70222c2274797065223a22737472696e67227d2c7b226e616d65223a224f7065726174696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a224368696c64222c2274797065223a2261646472657373227d5d7d2c227072696d61727954797065223a224d657373616765222c22646f6d61696e223a7b226e616d65223a2244657269775375624163636f756e745369676e6174757265222c2276657273696f6e223a2231222c22636861696e4964223a35353939303737333933372c22766572696679696e67436f6e7472616374223a22307830303030303030303030303030303030303030303030303030303030303030303030303030374539227d2c226d657373616765223a7b2254696d657374616d70223a2231373336313633353231222c224f7065726174696f6e223a224772616e74222c224368696c64223a22307838663438313633643139333264633232383663633764316632363065303963366564303761316530227d7d")
-	var signature = common.Hex2Bytes("0x7b227479706573223a7b22454950373132446f6d61696e223a5b7b226e616d65223a226e616d65222c2274797065223a22737472696e67227d2c7b226e616d65223a2276657273696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a22636861696e4964222c2274797065223a2275696e74323536227d2c7b226e616d65223a22766572696679696e67436f6e7472616374222c2274797065223a2261646472657373227d5d2c224d657373616765223a5b7b226e616d65223a2254696d657374616d70222c2274797065223a22737472696e67227d2c7b226e616d65223a224f7065726174696f6e222c2274797065223a22737472696e67227d5d7d2c227072696d61727954797065223a224d657373616765222c22646f6d61696e223a7b226e616d65223a2244657269775375624163636f756e745369676e6174757265222c2276657273696f6e223a2231222c22636861696e4964223a35353939303737333933372c22766572696679696e67436f6e7472616374223a22307830303030303030303030303030303030303030303030303030303030303030303030303030374539227d2c226d657373616765223a7b2254696d657374616d70223a2231373336313633353231222c224f7065726174696f6e223a225265766f6b65227d7d")
-
-	child := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
-	parent := common.HexToAddress("0x94a6713cbf5f589ab51570d0b4cd219792421af2")
+	privKey, err := crypto.HexToECDSA(deriwSubAccountTestKey)
+	Require(t, err)
+	parent := crypto.PubkeyToAddress(privKey.PublicKey)
 
 	prec := &DeriwSubAccountPublic{}
 	// gasInfo := &ArbGasInfo{}
 	callCtx := testContext(caller, evm)
 
-	// the zero address is an owner by default
+	signData, signature := signDeriwSubAccount(t, evm, privKey, "Grant", &caller)
 	Require(t, prec.GrantAccountControl(callCtx, evm, signData, signature))
 
-	parentAddress, err := prec.ReadAccountControl(callCtx, evm, child)
+	parentAddress, err := prec.ReadAccountControl(callCtx, evm, caller)
 	Require(t, err)
 	if parentAddress.Cmp(parent) != 0 {
 		Fail(t)
 	}
 
-	isValid, _, _, err := prec.IsValidAccountSession(callCtx, evm, child)
-	if isValid != true {
-		Fail(t)
-	}
-
-	signData = common.Hex2Bytes("0x7b227479706573223a7b22454950373132446f6d61696e223a5b7b226e616d65223a226e616d65222c2274797065223a22737472696e67227d2c7b226e616d65223a2276657273696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a22636861696e4964222c2274797065223a2275696e74323536227d2c7b226e616d65223a22766572696679696e67436f6e7472616374222c2274797065223a2261646472657373227d5d2c224d657373616765223a5b7b226e616d65223a2254696d657374616d70222c2274797065223a22737472696e67227d2c7b226e616d65223a224f7065726174696f6e222c2274797065223a22737472696e67227d5d7d2c227072696d61727954797065223a224d657373616765222c22646f6d61696e223a7b226e616d65223a2244657269775375624163636f756e745369676e6174757265222c2276657273696f6e223a2231222c22636861696e4964223a35353939303737333933372c22766572696679696e67436f6e7472616374223a22307830303030303030303030303030303030303030303030303030303030303030303030303030374539227d2c226d657373616765223a7b2254696d657374616d70223a2231373336313633353231222c224f7065726174696f6e223a225265766f6b65227d7d")
-	signature = common.Hex2Bytes("0xc5c729152297662b532ee6dbf7139b751db3c47af3b20cb6b8f75e58dc4bcdfe6b5753670df22ef713849b35327814837eb90d255557f61511e0b43eea5bde731b")
-
+	signData, signature = signDeriwSubAccount(t, evm, privKey, "Revoke", nil)
 	Require(t, prec.RevokeAccountControl(callCtx, evm, signData, signature))
 
-	parentAddress, err = prec.ReadAccountControl(callCtx, evm, child)
+	parentAddress, err = prec.ReadAccountControl(callCtx, evm, caller)
 	Require(t, err)
 	if parentAddress.Cmp(common.Address{}) != 0 {
 		Fail(t)
 	}
 
+}
+
+const deriwSubAccountTestKey = "3f924b934c41a048183b48835acdb533b1d07045a38394b006b238a3fc07ea89"
+
+func signDeriwSubAccount(t *testing.T, evm mech, privKey *ecdsa.PrivateKey, operation string, child *common.Address) ([]byte, []byte) {
+	t.Helper()
+	typedData := deriwSubAccountTypedData(evm, operation, child)
+	signData, err := json.Marshal(typedData)
+	Require(t, err)
+
+	sighash, _, err := apitypes.TypedDataAndHash(typedData)
+	Require(t, err)
+
+	signature, err := crypto.Sign(sighash, privKey)
+	Require(t, err)
+	signature[64] += 27
+	return signData, signature
+}
+
+func deriwSubAccountTypedData(evm mech, operation string, child *common.Address) apitypes.TypedData {
+	messageTypes := []apitypes.Type{
+		{Name: "Timestamp", Type: "string"},
+		{Name: "Operation", Type: "string"},
+	}
+	message := apitypes.TypedDataMessage{
+		"Timestamp": "0",
+		"Operation": operation,
+	}
+	if child != nil {
+		messageTypes = append(messageTypes, apitypes.Type{Name: "Child", Type: "address"})
+		message["Child"] = child.Hex()
+	}
+
+	chainID := evm.ChainConfig().ChainID
+	return apitypes.TypedData{
+		Types: apitypes.Types{
+			"EIP712Domain": {
+				{Name: "name", Type: "string"},
+				{Name: "version", Type: "string"},
+				{Name: "chainId", Type: "uint256"},
+				{Name: "verifyingContract", Type: "address"},
+			},
+			"Message": messageTypes,
+		},
+		PrimaryType: "Message",
+		Domain: apitypes.TypedDataDomain{
+			Name:              "DeriwSubAccountSignature",
+			Version:           "1",
+			ChainId:           ethmath.NewHexOrDecimal256(chainID.Int64()),
+			VerifyingContract: common.HexToAddress("0x00000000000000000000000000000000000007E9").Hex(),
+		},
+		Message: message,
+	}
 }

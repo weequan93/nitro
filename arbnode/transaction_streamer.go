@@ -205,6 +205,63 @@ func (s *TransactionStreamer) cleanupInconsistentState() error {
 	return nil
 }
 
+func (s *TransactionStreamer) reconcileMessageCount() error {
+	msgCount, err := s.GetMessageCount()
+	if err != nil {
+		return err
+	}
+	headMsg, err := s.exec.HeadMessageNumber()
+	if err != nil {
+		return err
+	}
+	expected := headMsg + 1
+	if msgCount > expected {
+		log.Warn(
+			"TransactionStreamer: message count ahead of execution head; rewinding",
+			"messageCount", msgCount,
+			"expected", expected,
+			"head", headMsg,
+		)
+		if err := s.ReorgTo(expected); err != nil {
+			return err
+		}
+	}
+	if msgCount < expected {
+		log.Warn(
+			"TransactionStreamer: message count behind execution head",
+			"messageCount", msgCount,
+			"expected", expected,
+			"head", headMsg,
+		)
+		if expected > 0 {
+			hasMsg, err := s.db.Has(dbKey(messagePrefix, uint64(expected-1)))
+			if err != nil {
+				return err
+			}
+			if hasMsg {
+				log.Warn(
+					"TransactionStreamer: fast-forwarding message count to execution head",
+					"messageCount", msgCount,
+					"expected", expected,
+				)
+				if err := setMessageCount(s.db, expected); err != nil {
+					return err
+				}
+			} else if msgCount > 0 {
+				log.Warn(
+					"TransactionStreamer: message count behind execution head; reorging to message count",
+					"messageCount", msgCount,
+					"expected", expected,
+				)
+				if err := s.ReorgTo(msgCount); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (s *TransactionStreamer) ReorgTo(count arbutil.MessageIndex) error {
 	return s.ReorgToAndEndBatch(s.db.NewBatch(), count)
 }
@@ -1322,5 +1379,8 @@ func (s *TransactionStreamer) executeMessages(ctx context.Context, ignored struc
 
 func (s *TransactionStreamer) Start(ctxIn context.Context) error {
 	s.StopWaiter.Start(ctxIn, s)
+	if err := s.reconcileMessageCount(); err != nil {
+		return err
+	}
 	return stopwaiter.CallIterativelyWith[struct{}](&s.StopWaiterSafe, s.executeMessages, s.newMessageNotifier)
 }

@@ -268,15 +268,20 @@ func (v *L1Validator) generateNodeAction(
 			BatchNumber: startState.GlobalState.Batch,
 			PosInBatch:  startState.GlobalState.PosInBatch,
 		}
-		var current staker.GlobalStatePosition
-		head, err := v.txStreamer.GetProcessedMessageCount()
-		if err != nil {
-			_, current, err = v.blockValidator.GlobalStatePositionsAtCount(head)
+		processedCount, processedErr := v.txStreamer.GetProcessedMessageCount()
+		if processedErr != nil {
+			log.Info("catching up to chain messages", "target", target, "processedCountErr", processedErr)
+			return nil, false, nil
 		}
+		if v.blockValidator == nil {
+			log.Info("catching up to chain messages", "target", target, "processedCount", processedCount)
+			return nil, false, nil
+		}
+		_, current, err := v.blockValidator.GlobalStatePositionsAtCount(processedCount)
 		if err != nil {
-			log.Info("catching up to chain messages", "target", target)
+			log.Info("catching up to chain messages", "target", target, "processedCount", processedCount, "positionErr", err)
 		} else {
-			log.Info("catching up to chain blocks", "target", target, "current", current)
+			log.Info("catching up to chain blocks", "target", target, "current", current, "processedCount", processedCount)
 		}
 		return nil, false, nil
 	}

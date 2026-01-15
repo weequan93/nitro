@@ -1,3 +1,5 @@
+cargo-features = ["panic-immediate-abort"]
+
 [package]
 name = "sdk-storage"
 version = "0.1.0"
@@ -13,7 +15,7 @@ wee_alloc = "0.4.5"
 codegen-units = 1
 strip = true
 lto = true
-panic = "abort"
+panic = "immediate-abort"
 opt-level = "s"
 
 [workspace]

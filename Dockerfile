@@ -27,7 +27,9 @@ COPY --from=brotli-library-builder /workspace/install/ /
 FROM node:18-bookworm-slim AS contracts-builder
 RUN apt-get update && \
     apt-get install -y git python3 make g++ curl
-RUN curl -L https://foundry.paradigm.xyz | bash && . ~/.bashrc && ~/.foundry/bin/foundryup
+RUN curl -L https://foundry.paradigm.xyz | bash && \
+    . ~/.bashrc && \
+    ~/.foundry/bin/foundryup --install 1.2.3
 WORKDIR /workspace
 COPY contracts/package.json contracts/yarn.lock contracts/
 RUN cd contracts && yarn install
@@ -35,7 +37,8 @@ COPY contracts contracts/
 COPY safe-smart-account safe-smart-account/
 RUN cd safe-smart-account && yarn install
 COPY Makefile .
-RUN . ~/.bashrc && NITRO_BUILD_IGNORE_TIMESTAMPS=1 make build-solidity
+ARG SKIP_FORGE_YUL=0
+RUN . ~/.bashrc && NITRO_BUILD_IGNORE_TIMESTAMPS=1 SKIP_FORGE_YUL=$SKIP_FORGE_YUL make build-solidity
 
 FROM debian:bookworm-20231218 AS wasm-base
 WORKDIR /workspace
@@ -46,7 +49,7 @@ FROM wasm-base AS wasm-libs-builder
 RUN apt-get update && \
     apt-get install -y clang=1:14.0-55.7~deb12u1 lld=1:14.0-55.7~deb12u1 wabt
     # pinned rust 1.80.1
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.80.1 --target x86_64-unknown-linux-gnu,wasm32-unknown-unknown,wasm32-wasi
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.80.1 --target x86_64-unknown-linux-gnu,wasm32-unknown-unknown,wasm32-wasi,wasm32-wasip1
 COPY ./Makefile ./
 COPY arbitrator/Cargo.* arbitrator/
 COPY arbitrator/arbutil arbitrator/arbutil
@@ -64,9 +67,37 @@ RUN . ~/.cargo/env && NITRO_BUILD_IGNORE_TIMESTAMPS=1 RUSTFLAGS='-C symbol-mangl
 FROM scratch AS wasm-libs-export
 COPY --from=wasm-libs-builder /workspace/ /
 
+FROM golang:1.24.0-bookworm AS gomod-cache
+WORKDIR /workspace
+ARG GOFLAGS="-mod=mod"
+ARG GO_BUILD_TAGS=""
+ARG GOPROXY
+ARG GOSUMDB
+COPY go.mod go.sum ./
+COPY go-ethereum/go.mod go-ethereum/go.sum go-ethereum/
+COPY fastcache/go.mod fastcache/go.sum fastcache/
+COPY bold/go.mod bold/go.sum bold/
+COPY erigon/go.mod erigon/go.sum erigon/
+COPY erigon/erigon-lib/go.mod erigon/erigon-lib/go.sum erigon/erigon-lib/
+RUN mkdir -p /go/pkg/sumdb
+RUN GOPROXY="${GOPROXY:-}" GOSUMDB="${GOSUMDB:-}" GOFLAGS="${GOFLAGS}${GO_BUILD_TAGS:+ -tags=${GO_BUILD_TAGS}}" go mod download
+WORKDIR /workspace/go-ethereum
+RUN GOPROXY="${GOPROXY:-}" GOSUMDB="${GOSUMDB:-}" GOFLAGS="${GOFLAGS}${GO_BUILD_TAGS:+ -tags=${GO_BUILD_TAGS}}" go mod download
+WORKDIR /workspace/erigon
+RUN GOPROXY="${GOPROXY:-}" GOSUMDB="${GOSUMDB:-}" GOFLAGS="${GOFLAGS}${GO_BUILD_TAGS:+ -tags=${GO_BUILD_TAGS}}" go mod download
+WORKDIR /workspace/fastcache
+RUN GOPROXY="${GOPROXY:-}" GOSUMDB="${GOSUMDB:-}" GOFLAGS="${GOFLAGS}${GO_BUILD_TAGS:+ -tags=${GO_BUILD_TAGS}}" go mod download
+WORKDIR /workspace/bold
+RUN GOPROXY="${GOPROXY:-}" GOSUMDB="${GOSUMDB:-}" GOFLAGS="${GOFLAGS}${GO_BUILD_TAGS:+ -tags=${GO_BUILD_TAGS}}" go mod download
+
 FROM wasm-base AS wasm-bin-builder
+ARG GOFLAGS="-mod=mod"
+ARG GO_BUILD_TAGS=""
+ARG GO_BUILD_TAGS_WASM=""
 # pinned go version
 RUN curl -L https://golang.org/dl/go1.23.1.linux-`dpkg --print-architecture`.tar.gz | tar -C /usr/local -xzf -
+COPY --from=gomod-cache /go/pkg/mod /root/go/pkg/mod
+COPY --from=gomod-cache /go/pkg/sumdb /root/go/pkg/sumdb
 COPY ./Makefile ./go.mod ./go.sum ./
 COPY ./arbcompress ./arbcompress
 COPY ./arbos ./arbos
@@ -87,20 +118,22 @@ COPY ./contracts/package.json ./contracts/yarn.lock ./contracts/
 COPY ./safe-smart-account ./safe-smart-account
 COPY ./solgen/gen.go ./solgen/
 COPY ./fastcache ./fastcache
+COPY ./execution ./execution
 COPY ./go-ethereum ./go-ethereum
+COPY ./erigon ./erigon
 COPY ./bold ./bold
 COPY --from=brotli-wasm-export / target/
 COPY --from=contracts-builder workspace/contracts/build/contracts/src/precompiles/ contracts/build/contracts/src/precompiles/
 COPY --from=contracts-builder workspace/contracts/node_modules/@offchainlabs/upgrade-executor/build/contracts/src/UpgradeExecutor.sol/UpgradeExecutor.json contracts/
 COPY --from=contracts-builder workspace/.make/ .make/
-RUN PATH="$PATH:/usr/local/go/bin" NITRO_BUILD_IGNORE_TIMESTAMPS=1 make build-wasm-bin
+RUN PATH="$PATH:/usr/local/go/bin" GOFLAGS="${GOFLAGS}${GO_BUILD_TAGS_WASM:+ -tags=${GO_BUILD_TAGS_WASM}}" NITRO_BUILD_IGNORE_TIMESTAMPS=1 make build-wasm-bin
 
 FROM rust:1.80.1-slim-bookworm AS prover-header-builder
 WORKDIR /workspace
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
     apt-get install -y make clang wabt && \
-    cargo install --force cbindgen
+    cargo install --force --locked cbindgen
 COPY arbitrator/Cargo.* arbitrator/
 COPY ./Makefile ./
 COPY arbitrator/arbutil arbitrator/arbutil
@@ -233,7 +266,9 @@ RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw7 0x98e9dd9c183a903a89b
 RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw8 0x9078685c07cc54deb8e6b7086015abba0ddef072c22122aba28debbb929d097c
 RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw9 0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f
 
-FROM golang:1.23.1-bookworm AS node-builder
+FROM golang:1.24.0-bookworm AS node-builder
+ARG GOFLAGS="-mod=mod"
+ARG GO_BUILD_TAGS=""
 WORKDIR /workspace
 ARG version=""
 ARG datetime=""
@@ -248,6 +283,8 @@ COPY go.mod go.sum ./
 COPY go-ethereum/go.mod go-ethereum/go.sum go-ethereum/
 COPY fastcache/go.mod fastcache/go.sum fastcache/
 COPY bold/go.mod bold/go.sum bold/
+COPY erigon/go.mod erigon/go.sum erigon/
+COPY erigon/erigon-lib/go.mod erigon/erigon-lib/go.sum erigon/erigon-lib/
 RUN go mod download
 COPY . ./
 COPY --from=contracts-builder workspace/contracts/build/ contracts/build/
@@ -260,7 +297,7 @@ COPY --from=brotli-library-export / target/
 COPY --from=prover-export / target/
 RUN mkdir -p target/bin
 COPY .nitro-tag.txt /nitro-tag.txt
-RUN NITRO_BUILD_IGNORE_TIMESTAMPS=1 make build
+RUN GOFLAGS="${GOFLAGS}${GO_BUILD_TAGS:+ -tags=${GO_BUILD_TAGS}}" NITRO_BUILD_IGNORE_TIMESTAMPS=1 make build
 
 FROM node-builder AS fuzz-builder
 RUN mkdir fuzzers/

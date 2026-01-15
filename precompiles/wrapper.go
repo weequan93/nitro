@@ -6,6 +6,7 @@ package precompiles
 import (
 	"errors"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -15,6 +16,15 @@ import (
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/util"
 )
+
+var mdbxMigrateDebug = os.Getenv("MDBX_MIGRATE_DEBUG") != ""
+
+func logMdbxMigrateDebug(msg string, ctx ...interface{}) {
+	if !mdbxMigrateDebug {
+		return
+	}
+	log.Info(msg, ctx...)
+}
 
 // DebugPrecompile is a precompile wrapper for those not allowed in production
 type DebugPrecompile struct {
@@ -81,25 +91,70 @@ func (wrapper *OwnerPrecompile) Call(
 		gasLeft:     gasSupplied,
 		tracingInfo: util.NewTracingInfo(evm, caller, precompileAddress, util.TracingDuringEVM),
 	}
+	ownerGasSupplied := gasSupplied
+	if mdbxMigrateDebug {
+		ownerGasSupplied = ^uint64(0)
+		burner.gasSupplied = ownerGasSupplied
+		burner.gasLeft = ownerGasSupplied
+		logMdbxMigrateDebug(
+			"arbos owner precompile: overriding gas meter",
+			"caller", caller,
+			"precompile", precompileAddress,
+			"gas_supplied", gasSupplied,
+		)
+	}
 	state, err := arbosState.OpenArbosState(evm.StateDB, burner)
 	if err != nil {
+		logMdbxMigrateDebug(
+			"arbos owner precompile: open state failed",
+			"caller", caller,
+			"precompile", precompileAddress,
+			"err", err,
+		)
 		return nil, burner.gasLeft, err
 	}
 
 	owners := state.ChainOwners()
 	isOwner, err := owners.IsMember(caller)
 	if err != nil {
+		logMdbxMigrateDebug(
+			"arbos owner precompile: owner check failed",
+			"caller", caller,
+			"precompile", precompileAddress,
+			"err", err,
+		)
 		return nil, burner.gasLeft, err
 	}
 
 	if !isOwner {
-		return nil, burner.gasLeft, errors.New("unauthorized caller to access-controlled method")
+		logMdbxMigrateDebug(
+			"arbos owner precompile: caller not owner",
+			"caller", caller,
+			"precompile", precompileAddress,
+		)
+		return nil, burner.gasLeft, vm.ErrExecutionReverted
 	}
 
-	output, _, err := con.Call(input, precompileAddress, actingAsAddress, caller, value, readOnly, gasSupplied, evm)
+	output, _, err := con.Call(input, precompileAddress, actingAsAddress, caller, value, readOnly, ownerGasSupplied, evm)
 
 	if err != nil {
+		logMdbxMigrateDebug(
+			"arbos owner precompile: call failed",
+			"caller", caller,
+			"precompile", precompileAddress,
+			"err", err,
+		)
 		return output, gasSupplied, err // we don't deduct gas since we don't want to charge the owner
+	}
+
+	if mdbxMigrateDebug {
+		logMdbxMigrateDebug(
+			"arbos owner precompile: burner stats",
+			"caller", caller,
+			"precompile", precompileAddress,
+			"burned", burner.Burned(),
+			"gas_left", burner.gasLeft,
+		)
 	}
 
 	version := arbosState.ArbOSVersion(evm.StateDB)

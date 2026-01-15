@@ -1,3 +1,5 @@
+cargo-features = ["panic-immediate-abort"]
+
 [package]
 name = "erc20"
 version = "0.1.0"
@@ -17,7 +19,7 @@ export-abi = ["stylus-sdk/export-abi"]
 codegen-units = 1
 strip = true
 lto = true
-panic = "abort"
+panic = "immediate-abort"
 opt-level = "s"
 
 [workspace]

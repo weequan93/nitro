@@ -1,3 +1,5 @@
+cargo-features = ["panic-immediate-abort"]
+
 [package]
 name = "keccak"
 version = "0.1.0"
@@ -11,7 +13,7 @@ stylus-sdk = { path = "../../../langs/rust/stylus-sdk" }
 codegen-units = 1
 strip = true
 lto = true
-panic = "abort"
+panic = "immediate-abort"
 
 # uncomment to optimize for size
 #   opt-level = "z"

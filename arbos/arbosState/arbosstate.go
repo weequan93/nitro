@@ -6,16 +6,15 @@ package arbosState
 import (
 	"errors"
 	"fmt"
-	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"math/big"
 
-	"github.com/offchainlabs/nitro/arbos/subAccount"
-
+	"github.com/erigontech/erigon-lib/common/dbg"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
@@ -25,6 +24,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/addressSet"
 	"github.com/offchainlabs/nitro/arbos/addressTable"
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
+	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"github.com/offchainlabs/nitro/arbos/blockhash"
 	"github.com/offchainlabs/nitro/arbos/burn"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
@@ -34,6 +34,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/programs"
 	"github.com/offchainlabs/nitro/arbos/retryables"
 	"github.com/offchainlabs/nitro/arbos/storage"
+	"github.com/offchainlabs/nitro/arbos/subAccount"
 	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/cmd/chaininfo"
 	"github.com/offchainlabs/nitro/util/testhelpers/env"
@@ -72,6 +73,7 @@ type ArbosState struct {
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
 var ErrAlreadyInitialized = errors.New("ArbOS is already initialized")
+var infraFeeAccountDebug = dbg.EnvBool("ERIGON_BAD_ROOT_DEBUG", false)
 
 func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error) {
 	backingStorage := storage.NewGeth(stateDB, burner)
@@ -514,10 +516,21 @@ func (state *ArbosState) SetNetworkFeeAccount(account common.Address) error {
 }
 
 func (state *ArbosState) InfraFeeAccount() (common.Address, error) {
-	return state.infraFeeAccount.Get()
+	account, err := state.infraFeeAccount.Get()
+	if infraFeeAccountDebug {
+		if err != nil {
+			log.Warn("arbos infra fee account get failed", "err", err)
+		} else {
+			log.Warn("arbos infra fee account get", "account", account)
+		}
+	}
+	return account, err
 }
 
 func (state *ArbosState) SetInfraFeeAccount(account common.Address) error {
+	if infraFeeAccountDebug {
+		log.Warn("arbos infra fee account set", "account", account)
+	}
 	return state.infraFeeAccount.Set(account)
 }
 

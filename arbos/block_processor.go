@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 
 	"github.com/offchainlabs/nitro/arbutil"
 
@@ -202,6 +203,22 @@ func ProduceBlockAdvanced(
 
 	// Prepend a tx before all others to touch up the state (update the L1 block num, pricing pools, etc)
 	startTx := InternalTxStartBlock(chainConfig.ChainID, l1Header.L1BaseFee, l1BlockNum, header, lastBlockHeader)
+	if os.Getenv("MDBX_MIGRATE_DEBUG") != "" {
+		prevTime := uint64(0)
+		if lastBlockHeader != nil {
+			prevTime = lastBlockHeader.Time
+		}
+		log.Info("mdbx-migrate internal start tx",
+			"l1_base_fee", l1Header.L1BaseFee,
+			"l1_block_number", l1Header.BlockNumber,
+			"l1_timestamp", l1Header.Timestamp,
+			"poster", poster,
+			"header_number", header.Number,
+			"header_base_fee", header.BaseFee,
+			"header_time", header.Time,
+			"prev_header_time", prevTime,
+		)
+	}
 	txes = append(types.Transactions{types.NewTx(startTx)}, txes...)
 
 	complete := types.Transactions{}

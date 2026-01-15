@@ -1,0 +1,84 @@
+
+## Deriw-Erigon
+
+
+docker build --no-cache . \
+  --target nitro-node-dev \
+  --tag quanquanah/nitro-node:erigon-mac \
+  --build-arg GO_BUILD_TAGS=erigon \
+  --build-arg SKIP_FORGE_YUL=1
+
+go build -tags erigon -o target/bin/mdbx-migrate ./cmd/mdbx-migrate                                                         
+go build -tags erigon -o target/bin/mdbx-storage-diff ./cmd/mdbx-storage-diff   
+
+
+
+
+
+### Migration
+
+rm -rf /tmp/mdbx-debug10
+rm -rf /tmp/nitro-src
+cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+ERIGON_MDBX_MIGRATE_ACCOUNTTRACE=1 \
+ERIGON_MDBX_MIGRATE_ACCOUNTTRACE_ADDRS=0x1820a4b7618bde71dce8cdc73aab6c95905fad24 \
+ERIGON_MDBX_MIGRATE_DEBUG=1 \
+ERIGON_MDBX_MIGRATE_DEBUG_BLOCK=32 \
+ERIGON_MDBX_MIGRATE_DEBUG_TX_INDEX=1 \
+ERIGON_MDBX_MIGRATE_DEBUG_TX_DATA=1 \
+ERIGON_MDBX_MIGRATE_DEBUG_WRITESET=1 \
+ERIGON_MDBX_MIGRATE_DEBUG_WRITESET_MAX=400 \
+ERIGON_MDBX_MIGRATE_STORAGETRACE=true \
+ERIGON_MDBX_MIGRATE_STORAGETRACE_BLOCK=32 \
+ERIGON_MDBX_MIGRATE_STORAGETRACE_TX_INDEX=1 \
+ERIGON_BAD_ROOT_DEBUG=1 \
+ERIGON_MDBX_MIGRATE_KEEP_EMPTY_ACCOUNTS=false \
+ERIGON_MDBX_MIGRATE_SKIP_UNWIND_ON_BAD_ROOT=false  \
+ERIGON_MDBX_MIGRATE_FLUSH_ON_BAD_ROOT=false \
+ERIGON_MDBX_MIGRATE_ZOMBIE_DEBUG=true \
+GOCACHE=$PWD/.gocache/build GOMODCACHE=/tmp/go-mod-cache GOPROXY=off \
+  target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug10 \
+  --mode full --verify extended --start-block 0 --end-block 32
+
+
+### Diff
+
+
+DB_PATH=/tmp/mdbx-debug10/l2chaindata go run -tags erigon /tmp/list_keys.go | awk 'NF>=1{print $1}' > /tmp/dest_keys13.keys
+  target/bin/mdbx-storage-diff --source /tmp/nitro-src --dest /tmp/mdbx-debug10 \
+    --keys /tmp/dest_keys13.keys --block 14 --compare-accounts --compare-storage-root
+
+go run -tags erigon /tmp/account_probe.go \
+    --source /tmp/nitro-src --dest /tmp/mdbx-debug10 \
+    --addr 0x502FFdAfd660AEDf4Ea7DB3D758999e154102a6c --block 10
+
+  go run ./cmd/compare-nodes --a http://127.0.0.1:8547 --b http://127.0.0.1:8549
+
+  Examples:
+
+  # Range + step
+  go run ./cmd/compare-nodes --a http://127.0.0.1:8449 --b http://127.0.0.1:8450 --from 0 --to 32 --step 1
+
+  # Include account checks
+  go run ./cmd/compare-nodes --a http://127.0.0.1:8449 --b http://127.0.0.1:8450 \
+    --addr 0x28c18bc63069e3581870904f32Dd34D9e3332cce \
+    --storage-key 0x0
+
+### Run
+
+./nitro \
+  --persistent.chain=/path/to/mdbx/datadir \
+  --execution.backend=erigon \
+  --persistent.db-engine=mdbx \
+  --node.sequencer=false \
+  --execution.sequencer.enable=false \
+  --node.staker.enable=true \
+  --node.staker.strategy=watchtower \
+  --node.staker.parent-chain-wallet.pathname=/path/to/keystore \
+  --node.staker.parent-chain-wallet.password=<pass> \
+  --parent-chain.connection.url=<L1_RPC> \
+  --execution.forwarding-target="null"
+
+
+## Pending
+- init flag all not supported

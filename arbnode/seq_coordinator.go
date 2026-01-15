@@ -392,7 +392,11 @@ func (c *SeqCoordinator) getRemoteMsgCountImpl(ctx context.Context, r redis.Cmda
 }
 
 func (c *SeqCoordinator) GetRemoteMsgCount() (arbutil.MessageIndex, error) {
-	return c.getRemoteMsgCountImpl(c.GetContext(), c.RedisCoordinator().Client)
+	ctx, err := c.GetContextSafe()
+	if err != nil {
+		return 0, err
+	}
+	return c.getRemoteMsgCountImpl(ctx, c.RedisCoordinator().Client)
 }
 
 func (c *SeqCoordinator) wantsLockoutUpdate(ctx context.Context, client redis.UniversalClient) error {

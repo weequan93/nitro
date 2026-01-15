@@ -43,6 +43,7 @@ import (
 	"github.com/offchainlabs/nitro/cmd/conf"
 	"github.com/offchainlabs/nitro/cmd/pruning"
 	"github.com/offchainlabs/nitro/cmd/staterecovery"
+	"github.com/offchainlabs/nitro/execution/erigonexec"
 	"github.com/offchainlabs/nitro/execution/gethexec"
 	"github.com/offchainlabs/nitro/statetransfer"
 	"github.com/offchainlabs/nitro/util/arbmath"
@@ -556,7 +557,12 @@ func openInitializeChainDb(ctx context.Context, stack *node.Node, config *NodeCo
 				if err := dbutil.UnfinishedConversionCheck(chainData); err != nil {
 					return nil, nil, fmt.Errorf("l2chaindata unfinished database conversion check error: %w", err)
 				}
-				wasmDb, err := stack.OpenDatabaseWithExtraOptions("wasm", config.Execution.Caching.DatabaseCache, config.Persistent.Handles, "wasm/", false, persistentConfig.Pebble.ExtraOptions("wasm"))
+				var wasmDb ethdb.Database
+				if persistentConfig.DBEngine == "mdbx" {
+					wasmDb, err = erigonexec.OpenWasmDB(config.Persistent.Chain, erigonexec.MdbxOptionsFromConfig(persistentConfig.Mdbx))
+				} else {
+					wasmDb, err = stack.OpenDatabaseWithExtraOptions("wasm", config.Execution.Caching.DatabaseCache, config.Persistent.Handles, "wasm/", false, persistentConfig.Pebble.ExtraOptions("wasm"))
+				}
 				if err != nil {
 					return nil, nil, err
 				}
@@ -634,7 +640,12 @@ func openInitializeChainDb(ctx context.Context, stack *node.Node, config *NodeCo
 	if err != nil {
 		return nil, nil, err
 	}
-	wasmDb, err := stack.OpenDatabaseWithExtraOptions("wasm", config.Execution.Caching.DatabaseCache, config.Persistent.Handles, "wasm/", false, persistentConfig.Pebble.ExtraOptions("wasm"))
+	var wasmDb ethdb.Database
+	if persistentConfig.DBEngine == "mdbx" {
+		wasmDb, err = erigonexec.OpenWasmDB(config.Persistent.Chain, erigonexec.MdbxOptionsFromConfig(persistentConfig.Mdbx))
+	} else {
+		wasmDb, err = stack.OpenDatabaseWithExtraOptions("wasm", config.Execution.Caching.DatabaseCache, config.Persistent.Handles, "wasm/", false, persistentConfig.Pebble.ExtraOptions("wasm"))
+	}
 	if err != nil {
 		return nil, nil, err
 	}

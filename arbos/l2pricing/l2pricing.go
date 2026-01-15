@@ -6,6 +6,9 @@ package l2pricing
 import (
 	"math/big"
 
+	"github.com/erigontech/erigon-lib/common/dbg"
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/offchainlabs/nitro/arbos/storage"
 )
 
@@ -19,6 +22,8 @@ type L2PricingState struct {
 	pricingInertia      storage.StorageBackedUint64
 	backlogTolerance    storage.StorageBackedUint64
 }
+
+var l2PricingDebug = dbg.EnvBool("ERIGON_BAD_ROOT_DEBUG", false)
 
 const (
 	speedLimitPerSecondOffset uint64 = iota
@@ -95,6 +100,9 @@ func (ps *L2PricingState) GasBacklog() (uint64, error) {
 }
 
 func (ps *L2PricingState) SetGasBacklog(backlog uint64) error {
+	if l2PricingDebug {
+		log.Warn("l2pricing set backlog", "value", backlog)
+	}
 	return ps.gasBacklog.Set(backlog)
 }
 

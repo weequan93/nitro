@@ -937,8 +937,10 @@ func (n *Node) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error starting geth stack: %w", err)
 	}
-	if execClient != nil {
-		execClient.SetConsensusClient(n)
+	if setter, ok := n.Execution.(interface {
+		SetConsensusClient(execution.FullConsensusClient)
+	}); ok {
+		setter.SetConsensusClient(n)
 	}
 	err = n.Execution.Start(ctx)
 	if err != nil {
