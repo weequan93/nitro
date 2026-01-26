@@ -16,9 +16,10 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 
 	ecommon "github.com/erigontech/erigon-lib/common"
+	estate "github.com/erigontech/erigon/core/state"
 	"github.com/erigontech/erigon/db/kv"
 	"github.com/erigontech/erigon/db/kv/rawdbv3"
-	"github.com/erigontech/erigon/rpc/rpchelper"
+	"github.com/erigontech/erigon/db/kv/order"
 
 	"github.com/offchainlabs/nitro/arbos/util"
 )
@@ -30,6 +31,7 @@ type slotRef struct {
 }
 
 var arbosStorageAccount = common.HexToAddress("0xA4B05FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+var arbosL2GasBacklogSlot = slotForOffset(storageKeyForSubspace([]byte{1}), 4)
 
 func storageKeyForSubspace(id []byte) []byte {
 	if len(id) == 0 {
@@ -92,20 +94,120 @@ type erigonSlotReader struct {
 }
 
 func (r *erigonSlotReader) StorageAt(blockNum uint64, addr common.Address, slot common.Hash) (common.Hash, error) {
-	reader, err := rpchelper.CreateHistoryStateReader(r.tx, blockNum+1, 0, r.txNumReader)
+	nextMinTxNum, err := r.txNumReader.Min(r.tx, blockNum+1)
 	if err != nil {
 		return common.Hash{}, err
 	}
+	txNum := nextMinTxNum
+	reader := estate.NewHistoryReaderV3()
+	reader.SetTx(r.tx)
 	eaddr := ecommon.BytesToAddress(addr.Bytes())
 	eslot := ecommon.BytesToHash(slot.Bytes())
-	val, ok, err := reader.ReadAccountStorage(eaddr, eslot)
+	readAt := func(txNum uint64) (common.Hash, bool, error) {
+		reader.SetTxNum(txNum)
+		val, ok, err := reader.ReadAccountStorage(eaddr, eslot)
+		if err != nil {
+			return common.Hash{}, false, err
+		}
+		if !ok {
+			return common.Hash{}, false, nil
+		}
+		return common.BytesToHash(val.Bytes()), true, nil
+	}
+
+	val, ok, err := readAt(txNum)
 	if err != nil {
 		return common.Hash{}, err
+	}
+	if arbosSlotsDebug && addr == arbosStorageAccount && slot == arbosL2GasBacklogSlot {
+		blockMin, minErr := r.txNumReader.Min(r.tx, blockNum)
+		if minErr != nil {
+			return common.Hash{}, minErr
+		}
+		blockMax, maxErr := r.txNumReader.Max(r.tx, blockNum)
+		if maxErr != nil {
+			return common.Hash{}, maxErr
+		}
+		composite := make([]byte, 0, 20+32)
+		composite = append(composite, eaddr.Bytes()...)
+		composite = append(composite, eslot.Bytes()...)
+		histVal, histOk, histErr := r.tx.HistorySeek(kv.StorageDomain, composite, txNum)
+		if histErr != nil {
+			return common.Hash{}, histErr
+		}
+		var histHash common.Hash
+		if histOk && len(histVal) > 0 {
+			histHash = common.BytesToHash(histVal)
+		}
+		latestVal, _, latestErr := r.tx.GetLatest(kv.StorageDomain, composite)
+		if latestErr != nil {
+			return common.Hash{}, latestErr
+		}
+		var latestHash common.Hash
+		if len(latestVal) > 0 {
+			latestHash = common.BytesToHash(latestVal)
+		}
+		histIt, histErr := r.tx.IndexRange(kv.StorageHistoryIdx, composite, -1, -1, order.Asc, 10)
+		if histErr != nil {
+			return common.Hash{}, histErr
+		}
+		var histTxs []uint64
+		for histIt.HasNext() {
+			htx, err := histIt.Next()
+			if err != nil {
+				histIt.Close()
+				return common.Hash{}, err
+			}
+			histTxs = append(histTxs, htx)
+		}
+		histIt.Close()
+		logKV(
+			"verify",
+			"section", "arbos_slots_dest_read",
+			"block", blockNum,
+			"block_min", blockMin,
+			"block_max", blockMax,
+			"next_min", nextMinTxNum,
+			"txnum", txNum,
+			"ok", ok,
+			"val", val,
+			"hist_ok", histOk,
+			"hist_len", len(histVal),
+			"hist_val", histHash,
+			"latest", latestHash,
+			"hist_txs", histTxs,
+		)
+		if blockNum <= 1 {
+			var scan []uint64
+			for delta := int64(-2); delta <= 2; delta++ {
+				if delta == 0 {
+					continue
+				}
+				if delta < 0 && txNum < uint64(-delta) {
+					continue
+				}
+				scan = append(scan, uint64(int64(txNum)+delta))
+			}
+			for _, probe := range scan {
+				pval, pok, perr := readAt(probe)
+				if perr != nil {
+					return common.Hash{}, perr
+				}
+				logKV(
+					"verify",
+					"section", "arbos_slots_dest_scan",
+					"block", blockNum,
+					"txnum", probe,
+					"ok", pok,
+					"val", pval,
+				)
+			}
+		}
 	}
 	if !ok {
 		return common.Hash{}, nil
 	}
-	return common.BytesToHash(val.Bytes()), nil
+	return val, nil
 }
 
 func readOffsets(reader slotReader, blockNum uint64, refs []slotRef) (map[string]common.Hash, error) {

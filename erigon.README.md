@@ -35,7 +35,8 @@ ERIGON_BAD_ROOT_DEBUG=1 \
 ERIGON_MDBX_MIGRATE_KEEP_EMPTY_ACCOUNTS=false \
 ERIGON_MDBX_MIGRATE_SKIP_UNWIND_ON_BAD_ROOT=false  \
 ERIGON_MDBX_MIGRATE_FLUSH_ON_BAD_ROOT=false \
-ERIGON_MDBX_MIGRATE_ZOMBIE_DEBUG=true \
+ERIGON_MDBX_MIGRATE_ZOMBIE_DEBUG=false \
+ERIGON_BAD_ROOT_DEBUG=false \
 GOCACHE=$PWD/.gocache/build GOMODCACHE=/tmp/go-mod-cache GOPROXY=off \
   target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug10 \
   --mode full --verify extended --start-block 0 --end-block 32
@@ -63,6 +64,23 @@ go run -tags erigon /tmp/account_probe.go \
   go run ./cmd/compare-nodes --a http://127.0.0.1:8449 --b http://127.0.0.1:8450 \
     --addr 0x28c18bc63069e3581870904f32Dd34D9e3332cce \
     --storage-key 0x0
+
+
+rm -rf /tmp/mdbx-debug1 /tmp/nitro-src
+  cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+
+  ERIGON_BAD_ROOT_DEBUG=1 \
+  ERIGON_MDBX_MIGRATE_DEBUG=1 \
+  ERIGON_MDBX_MIGRATE_DEBUG_BLOCK=1 \
+  ERIGON_MDBX_MIGRATE_DEBUG_TX_INDEX=1 \
+  ERIGON_MDBX_MIGRATE_DEBUG_TX_DATA=1 \
+  target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug1 \
+    --mode full --verify none --start-block 0 --end-block 1 \
+
+   rg "internal tx startblock|pricing update|l2pricing add to gas pool|arbos: l2 gas pool|gas_backlog" /tmp/mdbx-orig.log > /tmp/orig.filtered
+  rg "internal tx startblock|pricing update|l2pricing add to gas pool|arbos: l2 gas pool|gas_backlog" /tmp/mdbx-mod.log  > /tmp/mod.filtered
+  diff -u /tmp/orig.filtered /tmp/mod.filtered
+
 
 ### Run
 

@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/c2h5oh/datasize"
@@ -26,6 +27,8 @@ import (
 
 	"github.com/offchainlabs/nitro/cmd/conf"
 )
+
+var arbosSlotsDebug = os.Getenv("ERIGON_MDBX_MIGRATE_DEBUG") != "" || os.Getenv("ERIGON_BAD_ROOT_DEBUG") != ""
 
 func verifyFull(opts Options) error {
 	if opts.Verify != "basic" && opts.Verify != "extended" && opts.Verify != "strict" {
@@ -193,7 +196,16 @@ func verifyArbosSlots(src ethdb.Database, dst kv.RoDB, head uint64, startBlock u
 			delete(left, "l1FeesAvailable")
 			delete(right, "l1FeesAvailable")
 		}
+		logKV("verify", "block", blockNum)
 		if err := compareSlotMaps(blockNum, left, right); err != nil {
+			logKV(
+				"verify",
+				"dataset", "l2chaindata",
+				"section", "arbos_slots_mismatch",
+				"block", blockNum,
+				"left", left,
+				"right", right,
+			)
 			return err
 		}
 	}
@@ -220,9 +232,28 @@ func compareSlotMaps(blockNum uint64, left, right map[string]common.Hash) error 
 	}
 	for name, lval := range left {
 		rval, ok := right[name]
+		logKV(
+			"verify",
+			"name", name,
+			"left", lval,
+			"right", rval,
+		)
+
 		if !ok {
+			if arbosSlotsDebug {
+				logKV(
+					"verify",
+					"dataset", "l2chaindata",
+					"section", "arbos_slots_compare",
+					"block", blockNum,
+					"key", name,
+					"left", lval,
+					"right", "<missing>",
+				)
+			}
 			return fmt.Errorf("missing slot %q at block %d", name, blockNum)
 		}
+
 		if lval != rval {
 			return fmt.Errorf("slot mismatch %q at block %d: source=%x dest=%x", name, blockNum, lval, rval)
 		}
