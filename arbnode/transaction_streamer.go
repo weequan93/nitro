@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,11 +23,13 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 
+	"github.com/offchainlabs/nitro/arbos"
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
 	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/broadcaster"
@@ -69,6 +73,192 @@ type TransactionStreamer struct {
 	delayedBridge   *DelayedBridge
 
 	trackBlockMetadataFrom arbutil.MessageIndex
+}
+
+var (
+	debugMsgPosOnce sync.Once
+	debugMsgPosAll  bool
+	debugMsgPosSet  map[arbutil.MessageIndex]struct{}
+	debugMsgStatusMu   sync.Mutex
+	debugMsgStatusNext time.Time
+	debugMsgHeadersOnce sync.Once
+	debugMsgHeadersAll  bool
+	debugMsgParseAll    bool
+	debugStreamerOnce   sync.Once
+	debugStreamerEnabled bool
+)
+
+func shouldDebugMsgPos(pos arbutil.MessageIndex) bool {
+	debugMsgPosOnce.Do(func() {
+		val := strings.TrimSpace(os.Getenv("NITRO_DEBUG_MESSAGE_POS"))
+		if val == "" {
+			if all := strings.TrimSpace(os.Getenv("NITRO_DEBUG_MESSAGE_ALL")); all != "" {
+				debugMsgPosAll = true
+			}
+			return
+		}
+		if val == "*" {
+			debugMsgPosAll = true
+			return
+		}
+		debugMsgPosSet = make(map[arbutil.MessageIndex]struct{})
+		for _, part := range strings.Split(val, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			n, err := strconv.ParseUint(part, 10, 64)
+			if err != nil {
+				continue
+			}
+			debugMsgPosSet[arbutil.MessageIndex(n)] = struct{}{}
+		}
+	})
+	if debugMsgPosAll {
+		return true
+	}
+	if len(debugMsgPosSet) == 0 {
+		return false
+	}
+	_, ok := debugMsgPosSet[pos]
+	return ok
+}
+
+func debugMessageHeadersEnabled() bool {
+	debugMsgHeadersOnce.Do(func() {
+		if v := strings.TrimSpace(os.Getenv("NITRO_DEBUG_MESSAGE_HEADERS")); v != "" {
+			debugMsgHeadersAll = true
+		}
+		if v := strings.TrimSpace(os.Getenv("NITRO_DEBUG_MESSAGE_PARSE_ALL")); v != "" {
+			debugMsgParseAll = true
+			debugMsgHeadersAll = true
+		}
+	})
+	return debugMsgHeadersAll
+}
+
+func parseAllMessagesEnabled() bool {
+	debugMsgHeadersOnce.Do(func() {
+		if v := strings.TrimSpace(os.Getenv("NITRO_DEBUG_MESSAGE_HEADERS")); v != "" {
+			debugMsgHeadersAll = true
+		}
+		if v := strings.TrimSpace(os.Getenv("NITRO_DEBUG_MESSAGE_PARSE_ALL")); v != "" {
+			debugMsgParseAll = true
+			debugMsgHeadersAll = true
+		}
+	})
+	return debugMsgParseAll
+}
+
+func streamerDebugEnabled() bool {
+	debugStreamerOnce.Do(func() {
+		if v := strings.TrimSpace(os.Getenv("NITRO_DEBUG_STREAMER")); v != "" {
+			debugStreamerEnabled = true
+		}
+	})
+	return debugStreamerEnabled
+}
+
+func logMessageDetails(logger func(string, ...interface{}), pos arbutil.MessageIndex, msgAndBlockInfo *arbostypes.MessageWithMetadataAndBlockInfo, chainID *big.Int, parseTxs bool) {
+	if msgAndBlockInfo == nil {
+		logger("feedOneMsg message details missing", "pos", pos)
+		return
+	}
+	msg := msgAndBlockInfo.MessageWithMeta.Message
+	if msg == nil || msg.Header == nil {
+		logger("feedOneMsg message details missing header", "pos", pos)
+		return
+	}
+	logger(
+		"feedOneMsg message details",
+		"pos", pos,
+		"kind", msg.Header.Kind,
+		"poster", msg.Header.Poster,
+		"l1_block", msg.Header.BlockNumber,
+		"l1_time", msg.Header.Timestamp,
+		"l1_base_fee", msg.Header.L1BaseFee,
+		"request_id", msg.Header.RequestId,
+		"delayed_read", msgAndBlockInfo.MessageWithMeta.DelayedMessagesRead,
+		"l2msg_len", len(msg.L2msg),
+	)
+	if !parseTxs {
+		return
+	}
+	if msg.Header.Kind == arbostypes.L1MessageType_L2Message && chainID != nil {
+		if len(msg.L2msg) > 0 {
+			logger("feedOneMsg L2 message kind", "pos", pos, "l2_kind", msg.L2msg[0])
+		}
+		txs, parseErr := arbos.ParseL2Transactions(msg, chainID)
+		if parseErr != nil {
+			logger("feedOneMsg failed to parse L2 txs", "pos", pos, "err", parseErr, "l2msg_len", len(msg.L2msg))
+			return
+		}
+		logger("feedOneMsg parsed L2 txs", "pos", pos, "txs", len(txs))
+		maxLog := len(txs)
+		if maxLog > 20 {
+			maxLog = 20
+		}
+		getSender := func(tx *types.Transaction) (common.Address, bool, string) {
+			switch inner := tx.GetInner().(type) {
+			case *types.ArbitrumUnsignedTx:
+				return inner.From, true, "arb_unsigned"
+			case *types.ArbitrumContractTx:
+				return inner.From, true, "arb_contract"
+			case *types.ArbitrumRetryTx:
+				return inner.From, true, "arb_retry"
+			case *types.ArbitrumSubmitRetryableTx:
+				return inner.From, true, "arb_submit_retry"
+			case *types.ArbitrumDepositTx:
+				return inner.From, true, "arb_deposit"
+			case *types.ArbitrumInternalTx:
+				return common.Address{}, false, "arb_internal"
+			default:
+				signer := types.LatestSignerForChainID(chainID)
+				if from, err := types.Sender(signer, tx); err == nil {
+					return from, true, "signed"
+				}
+			}
+			return common.Address{}, false, ""
+		}
+		for i := 0; i < maxLog; i++ {
+			tx := txs[i]
+			from, ok, fromType := getSender(tx)
+			logger(
+				"feedOneMsg L2 tx",
+				"pos", pos,
+				"idx", i,
+				"type", tx.Type(),
+				"from", from,
+				"from_ok", ok,
+				"from_type", fromType,
+				"nonce", tx.Nonce(),
+				"to", tx.To(),
+				"hash", tx.Hash(),
+			)
+		}
+		if len(txs) > maxLog {
+			logger("feedOneMsg L2 txs truncated", "pos", pos, "logged", maxLog, "total", len(txs))
+		}
+	}
+}
+
+func logDebugMsgStatus(pos, msgCount arbutil.MessageIndex, exec execution.ExecutionClient) {
+	if !streamerDebugEnabled() && !debugMsgPosAll && len(debugMsgPosSet) == 0 {
+		return
+	}
+	now := time.Now()
+	debugMsgStatusMu.Lock()
+	defer debugMsgStatusMu.Unlock()
+	if now.Before(debugMsgStatusNext) {
+		return
+	}
+	debugMsgStatusNext = now.Add(2 * time.Second)
+	execHead := int64(pos) - 1
+	var l2Head uint64
+	if exec != nil && execHead >= 0 {
+		l2Head = exec.MessageIndexToBlockNumber(arbutil.MessageIndex(execHead))
+	}
+	log.Info("debug message pos status", "exec_head", execHead, "next_pos", pos, "msg_count", msgCount, "l2_head_block", l2Head)
 }
 
 type TransactionStreamerConfig struct {
@@ -1319,13 +1509,43 @@ func (s *TransactionStreamer) ExecuteNextMsg(ctx context.Context) bool {
 		return false
 	}
 	pos++
+	logDebugMsgStatus(pos, msgCount, s.exec)
 	if pos >= msgCount {
+		if streamerDebugEnabled() {
+			execHead := pos - 1
+			l2Head := s.exec.MessageIndexToBlockNumber(execHead)
+			log.Info("debug streamer: no new messages", "exec_head", execHead, "msg_count", msgCount, "l2_head_block", l2Head)
+		}
 		return false
 	}
 	msgAndBlockInfo, err := s.getMessageWithMetadataAndBlockInfo(pos)
 	if err != nil {
 		log.Error("feedOneMsg failed to readMessage", "err", err, "pos", pos)
 		return false
+	}
+	if shouldDebugMsgPos(pos) {
+		logMessageDetails(log.Info, pos, msgAndBlockInfo, s.chainConfig.ChainID, true)
+	} else if debugMessageHeadersEnabled() {
+		logMessageDetails(log.Info, pos, msgAndBlockInfo, s.chainConfig.ChainID, parseAllMessagesEnabled())
+	}
+	if msg := msgAndBlockInfo.MessageWithMeta.Message; msg != nil && msg.Header != nil && msg.Header.Kind == arbostypes.L1MessageType_BatchPostingReport {
+		batchTimestamp, batchPosterAddr, dataHash, batchNum, l1BaseFee, extraGas, parseErr := arbostypes.ParseBatchPostingReportMessageFields(bytes.NewReader(msg.L2msg))
+		if parseErr != nil {
+			log.Warn("received batch posting report (failed to parse)", "err", parseErr, "pos", pos, "l2msg_len", len(msg.L2msg))
+		} else {
+			log.Info(
+				"received batch posting report",
+				"pos", pos,
+				"batch_num", batchNum,
+				"batch_ts", batchTimestamp,
+				"poster", batchPosterAddr,
+				"data_hash", dataHash,
+				"l1_base_fee", l1BaseFee,
+				"extra_gas", extraGas,
+				"l1_block", msg.Header.BlockNumber,
+				"l1_time", msg.Header.Timestamp,
+			)
+		}
 	}
 	var msgForPrefetch *arbostypes.MessageWithMetadata
 	if pos+1 < msgCount {
@@ -1343,6 +1563,7 @@ func (s *TransactionStreamer) ExecuteNextMsg(ctx context.Context) bool {
 			logger = log.Debug
 		}
 		logger("feedOneMsg failed to send message to execEngine", "err", err, "pos", pos)
+		logMessageDetails(logger, pos, msgAndBlockInfo, s.chainConfig.ChainID, true)
 		return false
 	}
 

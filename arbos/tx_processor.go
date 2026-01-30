@@ -551,7 +551,7 @@ func (p *TxProcessor) StartTxHook() (endTxNow bool, gasUsed uint64, err error, r
 		}
 
 		// The redeemer has pre-paid for this tx's gas
-	prepaid := arbmath.BigMulByUint(p.resolvedBaseFee(), tx.Gas)
+		prepaid := arbmath.BigMulByUint(p.resolvedBaseFee(), tx.Gas)
 		util.MintBalance(&tx.From, prepaid, evm, scenario, "prepaid")
 		ticketId := tx.TicketId
 		refundTo := tx.RefundTo
@@ -803,7 +803,30 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, success bool) {
 			}
 			if (inner.Value == nil || inner.Value.Sign() == 0) && p.evm != nil && p.evm.StateDB != nil {
 				if remover, ok := p.evm.StateDB.(interface{ RemoveEscrowProtection(common.Address) }); ok {
+					if mdbxMigrateDebug {
+						valStr := "<nil>"
+						if inner.Value != nil {
+							valStr = inner.Value.String()
+						}
+						log.Warn(
+							"arbos retryable remove escrow protection",
+							"block_number", p.evm.Context.BlockNumber,
+							"tx_hash", underlyingTx.Hash(),
+							"ticket_id", inner.TicketId,
+							"from", inner.From,
+							"escrow", escrow,
+							"value", valStr,
+						)
+					}
 					remover.RemoveEscrowProtection(escrow)
+				} else if mdbxMigrateDebug {
+					log.Warn(
+						"arbos retryable remove escrow protection skipped (no statedb hook)",
+						"block_number", p.evm.Context.BlockNumber,
+						"tx_hash", underlyingTx.Hash(),
+						"ticket_id", inner.TicketId,
+						"escrow", escrow,
+					)
 				}
 			}
 		}

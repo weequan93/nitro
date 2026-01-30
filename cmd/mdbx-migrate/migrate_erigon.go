@@ -80,6 +80,17 @@ func verify(opts Options) error {
 	if opts.Verify == "none" {
 		return nil
 	}
+	if opts.Verify == "consensus" {
+		if opts.Mode != "full" {
+			return ExitError{Code: ExitVerification, Err: fmt.Errorf("mdbx-migrate: consensus verify requires --mode full")}
+		}
+		verifyOpts := opts
+		verifyOpts.Verify = "extended"
+		if err := verifyFull(verifyOpts); err != nil {
+			return err
+		}
+		return verifyConsensus(opts)
+	}
 	switch opts.Mode {
 	case "state":
 		return verifyState(opts)

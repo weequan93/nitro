@@ -1,5 +1,34 @@
 # MDBX Migration and Erigon Storage Plan
 
+## Implementation Plan Summary (Official Nitro Upgrade -> Erigon-style MDBX)
+- Add MDBX as a supported `persistent.db-engine` with a dedicated `persistent.mdbx.*` config block; keep Pebble/geth untouched. (Complexity: Low, Risk: Low)
+- Introduce `execution.backend=auto|geth|erigon` with strict auto-detect and clear migration-required errors. (Complexity: Low, Risk: Medium)
+- Define the MDBX layout (l2chaindata state/history tables + arbitrumdata/wasm `arb_*` buckets) and finalize prefix-to-bucket mapping. (Complexity: Medium, Risk: Medium)
+- Build `execution/erigonexec` to cover sequencing, recording, and RPC/trace using Erigon state/history + ArbOS IBS adapter. (Complexity: High, Risk: High)
+- Coverage for archive, sequencer, validator, forwarder, and full-node modes in erigonexec + config defaults. (Complexity: Medium, Risk: Medium)
+- Deliver `mdbx-migrate` to replay full history, copy arbitrum/wasm data, and support checkpoint/resume. (Complexity: High, Risk: High)
+- Define snapshot/fast-sync strategy (if required) consistent with Erigon history/pruning behavior. (Complexity: Medium, Risk: High)
+- Implement verification and parity checks (head hash/root, sampled ArbOS slots, arbitrum/wasm key/value parity). (Complexity: Medium, Risk: High)
+- Add integration tests for parity and provide operator cutover/runbook guidance. (Complexity: Medium, Risk: Medium)
+
+## Complexity & Risk Snapshot
+| Workstream | Complexity | Risk | Why it is hard |
+| --- | --- | --- | --- |
+| Erigon execution backend (sequencer/recorder/RPC) | High | High | Tight parity requirements with geth, deep integration with Erigon state/history. |
+| Full-history migration tool | High | High | Long-running replay, resume/verify correctness, sensitive to data volume. |
+| Verification/parity tooling | Medium | High | Need strong guarantees without full reprocessing; sampling design matters. |
+| Snapshot/fast-sync strategy | Medium | High | Must align with history/pruning and operational expectations. |
+| MDBX layout + bucket mapping | Medium | Medium | Must preserve prefix scans and ArbOS data semantics. |
+| Backend selection + config | Low | Medium | Safe auto-detect and sharp error handling to avoid bad cutovers. |
+| Operator cutover/runbook + tests | Medium | Medium | Real-world environments and rollout steps can surface edge cases. |
+
+## Milestone Timeline (relative)
+- M0 (Weeks 0-1): confirm requirements/design, finalize bucket mapping and config/flags.
+- M1 (Weeks 2-4): MDBX plumbing + config + auto-detect; erigonexec read-only wiring.
+- M2 (Weeks 5-7): migration tool end-to-end on test chain; checkpoint/resume + verification.
+- M3 (Weeks 8-10): erigon execution parity (sequencer/recorder/RPC); integration tests.
+- M4 (Weeks 11-12): operator docs, perf/compat checks, release candidate and rollout plan.
+
 ## Goals
 - Add MDBX as a first-class DB engine option for Nitro.
 - Introduce an Erigon-backed execution/storage backend without modifying the existing geth-based path.

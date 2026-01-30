@@ -39,8 +39,44 @@ ERIGON_MDBX_MIGRATE_ZOMBIE_DEBUG=false \
 ERIGON_BAD_ROOT_DEBUG=false \
 GOCACHE=$PWD/.gocache/build GOMODCACHE=/tmp/go-mod-cache GOPROXY=off \
   target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug10 \
-  --mode full --verify extended --start-block 0 --end-block 32
+  --mode full --verify strict --start-block 0 --end-block 32
 
+
+  rm -rf /tmp/mdbx-debug10
+rm -rf /tmp/nitro-src
+cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+
+ERIGON_BAD_ROOT_DEBUG=false \
+GOCACHE=$PWD/.gocache/build GOMODCACHE=/tmp/go-mod-cache GOPROXY=off \
+  target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug10 \
+  --mode full --verify strict --start-block 0 --end-block 32
+
+### Verify Consensus
+
+go build -tags erigon -o target/bin/mdbx-migrate ./cmd/mdbx-migrate
+
+  rm -rf /tmp/mdbx-check /tmp/nitro-src
+  cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+
+  target/bin/mdbx-migrate \
+    --source /tmp/nitro-src \
+    --dest /tmp/mdbx-check \
+    --mode full \
+    --verify consensus \
+    --verify-samples 33 \
+    --start-block 0 --end-block 32
+
+
+    rm -rf /tmp/mdbx-check /tmp/nitro-src
+  cp -R "/Users/super/Documents/coinw/dex/localchain/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+
+  target/bin/mdbx-migrate \
+    --source /tmp/nitro-src \
+    --dest /tmp/mdbx-check \
+    --mode full \
+    --verify consensus \
+    --verify-samples 38 \
+    --start-block 0 --end-block 37
 
 ### Diff
 
@@ -58,7 +94,7 @@ go run -tags erigon /tmp/account_probe.go \
   Examples:
 
   # Range + step
-  go run ./cmd/compare-nodes --a http://127.0.0.1:8449 --b http://127.0.0.1:8450 --from 0 --to 32 --step 1
+  go run ./cmd/compare-nodes --a http://127.0.0.1:8449 --b http://127.0.0.1:8450 --from 0 --to 35 --step 1
 
   # Include account checks
   go run ./cmd/compare-nodes --a http://127.0.0.1:8449 --b http://127.0.0.1:8450 \

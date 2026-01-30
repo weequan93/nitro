@@ -270,6 +270,7 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 	for {
 		config := r.config()
 		currentHeight := big.NewInt(0)
+		var rawHeight *big.Int
 		if readMode != "latest" {
 			var blockNum uint64
 			fetchLatestSafeOrFinalized := func() {
@@ -284,6 +285,7 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 				return fmt.Errorf("inboxreader running in read only %s mode and unable to fetch latest %s block. err: %w", readMode, readMode, err)
 			}
 			currentHeight.SetUint64(blockNum)
+			rawHeight = new(big.Int).Set(currentHeight)
 			// latest block in our db is newer than the latest safe/finalized block hence reset 'from' to match the last safe/finalized block number
 			if from.Uint64() > currentHeight.Uint64()+1 {
 				from.Set(currentHeight)
@@ -307,6 +309,7 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 				return err
 			}
 			currentHeight = latestHeader.Number
+			rawHeight = new(big.Int).Set(currentHeight)
 
 			neededBlockAdvance := config.DelayBlocks + arbmath.SaturatingUSub(config.MinBlocksToRead, 1)
 			neededBlockHeight := arbmath.BigAddByUint(from, neededBlockAdvance)
@@ -410,6 +413,40 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 				}
 			}
 		}
+		if inboxDebugLogAllowed() {
+			trackerBatch, trackerBatchErr := r.tracker.GetBatchCount()
+			trackerDelayed, trackerDelayedErr := r.tracker.GetDelayedCount()
+			args := []interface{}{
+				"mode", readMode,
+				"from", from.String(),
+				"height", currentHeight.String(),
+				"raw_height", rawHeight.String(),
+				"delay_blocks", config.DelayBlocks,
+				"blocks_to_fetch", blocksToFetch,
+				"min_blocks", config.MinBlocksToRead,
+				"max_blocks", config.MaxBlocksToRead,
+				"target_msgs", config.TargetMessagesRead,
+				"seen_batch", seenBatchCount,
+				"checking_batch", checkingBatchCount,
+				"last_seen_batch", r.lastSeenBatchCount.Load(),
+				"last_read_batch", r.lastReadBatchCount.Load(),
+				"missing_delayed", missingDelayed,
+				"missing_sequencer", missingSequencer,
+				"reorging_delayed", reorgingDelayed,
+				"reorging_sequencer", reorgingSequencer,
+			}
+			if trackerBatchErr != nil {
+				args = append(args, "tracker_batch_err", trackerBatchErr)
+			} else {
+				args = append(args, "tracker_batch", trackerBatch)
+			}
+			if trackerDelayedErr != nil {
+				args = append(args, "tracker_delayed_err", trackerDelayedErr)
+			} else {
+				args = append(args, "tracker_delayed", trackerDelayed)
+			}
+			log.Info("inbox debug status", args...)
+		}
 
 		if !missingDelayed && !reorgingDelayed && !missingSequencer && !reorgingSequencer {
 			// There's nothing to do
@@ -457,6 +494,17 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 				"reorgingDelayed", reorgingDelayed,
 				"reorgingSequencer", reorgingSequencer,
 			)
+			if inboxDebugEnabledFunc() {
+				log.Info(
+					"inbox lookup",
+					"from", from.String(),
+					"to", to.String(),
+					"missingDelayed", missingDelayed,
+					"missingSequencer", missingSequencer,
+					"reorgingDelayed", reorgingDelayed,
+					"reorgingSequencer", reorgingSequencer,
+				)
+			}
 			sequencerBatches, err := r.sequencerInbox.LookupBatchesInRange(ctx, from, to)
 			if err != nil {
 				return err
@@ -519,7 +567,11 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 						}
 					}
 				}
-				log.Debug(
+				logger := log.Debug
+				if inboxDebugEnabledFunc() {
+					logger = log.Info
+				}
+				logger(
 					"Found sequencer batches",
 					"firstSequenceNumber", firstBatch.SequenceNumber,
 					"newBatchesCount", len(sequencerBatches),
@@ -530,7 +582,11 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 					"readLastAcc", readLastAcc,
 				)
 			} else if missingSequencer && to.Cmp(currentHeight) >= 0 {
-				log.Debug("Didn't find expected sequencer batches", "from", from, "to", to, "currentHeight", currentHeight)
+				logger := log.Debug
+				if inboxDebugEnabledFunc() {
+					logger = log.Info
+				}
+				logger("Didn't find expected sequencer batches", "from", from, "to", to, "currentHeight", currentHeight)
 				// We were missing sequencer batches but didn't find any.
 				// This must mean that the sequencer batches are in the past.
 				reorgingSequencer = true
@@ -557,7 +613,11 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 					}
 					havePrevAcc = haveAcc
 				}
-				log.Debug(
+				logger := log.Debug
+				if inboxDebugEnabledFunc() {
+					logger = log.Info
+				}
+				logger(
 					"Found delayed messages",
 					"firstSequenceNumber", beforeCount,
 					"count", len(delayedMessages),
@@ -570,13 +630,20 @@ func (r *InboxReader) run(ctx context.Context, hadError bool) error {
 					}},
 				)
 			} else if missingDelayed && to.Cmp(currentHeight) >= 0 {
-				log.Debug("Didn't find expected delayed messages", "from", from, "to", to, "currentHeight", currentHeight)
+				logger := log.Debug
+				if inboxDebugEnabledFunc() {
+					logger = log.Info
+				}
+				logger("Didn't find expected delayed messages", "from", from, "to", to, "currentHeight", currentHeight)
 				// We were missing delayed messages but didn't find any.
 				// This must mean that the delayed messages are in the past.
 				reorgingDelayed = true
 			}
 
 			if !reorgingDelayed && !reorgingSequencer && (len(delayedMessages) != 0 || len(sequencerBatches) != 0) {
+				if inboxDebugEnabledFunc() {
+					log.Info("inbox add messages", "sequencer_batches", len(sequencerBatches), "delayed_messages", len(delayedMessages))
+				}
 				delayedMismatch, err := r.addMessages(ctx, sequencerBatches, delayedMessages)
 				if err != nil {
 					return err

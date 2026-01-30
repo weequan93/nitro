@@ -23,12 +23,13 @@ func main() {
 		"basic":    {},
 		"extended": {},
 		"strict":   {},
+		"consensus": {},
 	}
 
 	flag.StringVar(&opts.Source, "source", "", "path to Pebble chain directory (read-only)")
 	flag.StringVar(&opts.Dest, "dest", "", "path to MDBX chain directory")
 	flag.StringVar(&opts.Mode, "mode", "full", "migration mode (full, state)")
-	flag.StringVar(&opts.Verify, "verify", "extended", "verification level (none, basic, extended, strict)")
+	flag.StringVar(&opts.Verify, "verify", "extended", "verification level (none, basic, extended, strict, consensus)")
 	flag.IntVar(&opts.VerifySamples, "verify-samples", 20, "number of sampled blocks for history checks")
 	flag.BoolVar(&opts.Resume, "resume", false, "resume from last checkpoint")
 	flag.Uint64Var(&opts.StartBlock, "start-block", 0, "start block for replay (testing)")
@@ -46,7 +47,7 @@ func main() {
 		os.Exit(ExitPreflight)
 	}
 	if _, ok := verifyModes[opts.Verify]; !ok {
-		fmt.Fprintf(os.Stderr, "mdbx-migrate: invalid --verify %q (expected basic, extended, or strict)\n", opts.Verify)
+		fmt.Fprintf(os.Stderr, "mdbx-migrate: invalid --verify %q (expected none, basic, extended, strict, or consensus)\n", opts.Verify)
 		os.Exit(ExitPreflight)
 	}
 	if opts.VerifySamples <= 0 {

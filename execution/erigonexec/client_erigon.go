@@ -15,6 +15,7 @@ import (
 	ecommon "github.com/erigontech/erigon-lib/common"
 	elog "github.com/erigontech/erigon-lib/log/v3"
 	"github.com/erigontech/erigon/arb/ethdb/wasmdb"
+	estate "github.com/erigontech/erigon/core/state"
 	"github.com/erigontech/erigon/core/vm"
 	"github.com/erigontech/erigon/db/kv"
 	"github.com/erigontech/erigon/db/kv/dbcfg"
@@ -36,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
@@ -257,6 +259,7 @@ func (c *Client) DigestMessage(num arbutil.MessageIndex, msg *arbostypes.Message
 
 func (c *Client) digestMessageLocked(num arbutil.MessageIndex, msg *arbostypes.MessageWithMetadata, msgForPrefetch *arbostypes.MessageWithMetadata) (*execution.MessageResult, error) {
 	_ = msgForPrefetch
+	debugCommit := debugErigonCommitEnabled()
 	header, err := c.readCurrentHeader()
 	if err != nil {
 		return nil, err
@@ -265,6 +268,15 @@ func (c *Client) digestMessageLocked(num arbutil.MessageIndex, msg *arbostypes.M
 	if err != nil {
 		return nil, err
 	}
+	if debugCommit {
+		log.Info(
+			"erigonexec: digest start",
+			"msg", num,
+			"head", header.Number.Uint64(),
+			"head_hash", header.Hash(),
+			"cur_msg", curMsg,
+		)
+	}
 	if curMsg+1 != num {
 		return nil, fmt.Errorf("wrong message number in digest got %d expected %d", num, curMsg+1)
 	}
@@ -272,8 +284,37 @@ func (c *Client) digestMessageLocked(num arbutil.MessageIndex, msg *arbostypes.M
 	if err != nil {
 		return nil, err
 	}
+	if debugCommit {
+		log.Info(
+			"erigonexec: digest built block",
+			"msg", num,
+			"block", block.NumberU64(),
+			"block_hash", block.Hash(),
+			"txs", len(block.Transactions()),
+			"receipts", len(receipts),
+		)
+	}
 	if err := c.commitBlock(context.Background(), block); err != nil {
 		return nil, err
+	}
+	if debugCommit {
+		headAfter, err := c.readCurrentHeader()
+		if err != nil {
+			log.Warn("erigonexec: digest after commit read failed", "msg", num, "err", err)
+		} else {
+			curMsgAfter, err := c.BlockNumberToMessageIndex(headAfter.Number.Uint64())
+			if err != nil {
+				log.Warn("erigonexec: digest after commit msg calc failed", "msg", num, "err", err)
+			}
+			log.Info(
+				"erigonexec: digest after commit",
+				"msg", num,
+				"head", headAfter.Number.Uint64(),
+				"head_hash", headAfter.Hash(),
+				"cur_msg", curMsgAfter,
+			)
+		}
+		c.logPlainStateNonces(context.Background(), block)
 	}
 	c.cacheL1PriceDataOfMsg(num, receipts, block, false)
 	extra := etypes.DeserializeHeaderExtraInformation(block.Header())
@@ -281,6 +322,61 @@ func (c *Client) digestMessageLocked(num arbutil.MessageIndex, msg *arbostypes.M
 		BlockHash: toGethHash(block.Hash()),
 		SendRoot:  toGethHash(extra.SendRoot),
 	}, nil
+}
+
+func (c *Client) logPlainStateNonces(ctx context.Context, block *etypes.Block) {
+	if block == nil || c.chainDB == nil {
+		return
+	}
+	temporalDB, ok := c.chainDB.(kv.TemporalRoDB)
+	if !ok {
+		log.Warn("erigonexec: state nonce read skipped; chain db missing temporal support")
+		return
+	}
+	tx, err := temporalDB.BeginTemporalRo(ctx)
+	if err != nil {
+		log.Warn("erigonexec: state nonce read failed to open tx", "err", err)
+		return
+	}
+	defer tx.Rollback()
+
+	maxTxNum, err := rawdbv3.TxNums.Max(tx, block.NumberU64())
+	if err != nil {
+		log.Warn("erigonexec: state nonce read failed to get tx num", "block", block.NumberU64(), "err", err)
+		return
+	}
+
+	domains, err := dbstate.NewSharedDomains(tx, c.logger)
+	if err != nil {
+		log.Warn("erigonexec: state nonce read failed to open domains", "err", err)
+		return
+	}
+	defer domains.Close()
+
+	stateReader := estate.NewReaderV3(domains.AsGetter(tx))
+	stateReader.SetTxNum(maxTxNum)
+
+	seen := make(map[ecommon.Address]struct{})
+	for _, txObj := range block.Transactions() {
+		sender, ok := txObj.GetSender()
+		if !ok {
+			continue
+		}
+		if _, exists := seen[sender]; exists {
+			continue
+		}
+		seen[sender] = struct{}{}
+		acc, err := stateReader.ReadAccountData(sender)
+		if err != nil {
+			log.Warn("erigonexec: state nonce read failed", "block", block.NumberU64(), "addr", sender, "err", err)
+			continue
+		}
+		var nonce interface{} = nil
+		if acc != nil {
+			nonce = acc.Nonce
+		}
+		log.Info("erigonexec: state nonce", "block", block.NumberU64(), "addr", sender, "nonce", nonce, "txNum", maxTxNum)
+	}
 }
 
 func (c *Client) Reorg(count arbutil.MessageIndex, newMessages []arbostypes.MessageWithMetadataAndBlockInfo, oldMessages []*arbostypes.MessageWithMetadata) ([]*execution.MessageResult, error) {

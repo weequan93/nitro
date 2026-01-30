@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -16,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/offchainlabs/nitro/arbstate/daprovider"
 	"github.com/offchainlabs/nitro/arbutil"
@@ -206,6 +208,21 @@ func (m *SequencerInboxBatch) Serialize(ctx context.Context, client *ethclient.C
 	return fullData, nil
 }
 
+func batchDataLocationString(loc batchDataLocation) string {
+	switch loc {
+	case batchDataTxInput:
+		return "tx_input"
+	case batchDataSeparateEvent:
+		return "separate_event"
+	case batchDataNone:
+		return "none"
+	case batchDataBlobHashes:
+		return "blob_hashes"
+	default:
+		return fmt.Sprintf("unknown_%d", loc)
+	}
+}
+
 func (i *SequencerInbox) LookupBatchesInRange(ctx context.Context, from, to *big.Int) ([]*SequencerInboxBatch, error) {
 	query := ethereum.FilterQuery{
 		FromBlock: from,
@@ -217,13 +234,23 @@ func (i *SequencerInbox) LookupBatchesInRange(ctx context.Context, from, to *big
 	if err != nil {
 		return nil, err
 	}
+	if inboxDebugEnabledFunc() {
+		log.Info(
+			"inbox sequencer batch logs",
+			"from", from.String(),
+			"to", to.String(),
+			"count", len(logs),
+			"address", i.address,
+			"topics", strings.Join([]string{batchDeliveredID.Hex()}, ","),
+		)
+	}
 	messages := make([]*SequencerInboxBatch, 0, len(logs))
 	var lastSeqNum *uint64
-	for _, log := range logs {
-		if log.Topics[0] != batchDeliveredID {
+	for _, evtLog := range logs {
+		if evtLog.Topics[0] != batchDeliveredID {
 			return nil, errors.New("unexpected log selector")
 		}
-		parsedLog, err := i.con.ParseSequencerBatchDelivered(log)
+		parsedLog, err := i.con.ParseSequencerBatchDelivered(evtLog)
 		if err != nil {
 			return nil, err
 		}
@@ -242,17 +269,36 @@ func (i *SequencerInbox) LookupBatchesInRange(ctx context.Context, from, to *big
 		}
 		lastSeqNum = &seqNum
 		batch := &SequencerInboxBatch{
-			BlockHash:              log.BlockHash,
-			ParentChainBlockNumber: log.BlockNumber,
+			BlockHash:              evtLog.BlockHash,
+			ParentChainBlockNumber: evtLog.BlockNumber,
 			SequenceNumber:         seqNum,
 			BeforeInboxAcc:         parsedLog.BeforeAcc,
 			AfterInboxAcc:          parsedLog.AfterAcc,
 			AfterDelayedAcc:        parsedLog.DelayedAcc,
 			AfterDelayedCount:      parsedLog.AfterDelayedMessagesRead.Uint64(),
-			rawLog:                 log,
+			rawLog:                 evtLog,
 			TimeBounds:             parsedLog.TimeBounds,
 			dataLocation:           batchDataLocation(parsedLog.DataLocation),
-			bridgeAddress:          log.Address,
+			bridgeAddress:          evtLog.Address,
+		}
+		if inboxDebugEnabledFunc() {
+			log.Info(
+				"inbox sequencer batch",
+				"seq_num", batch.SequenceNumber,
+				"parent_block", batch.ParentChainBlockNumber,
+				"block_hash", batch.BlockHash,
+				"tx_hash", evtLog.TxHash,
+				"before_acc", batch.BeforeInboxAcc,
+				"after_acc", batch.AfterInboxAcc,
+				"after_delayed_acc", batch.AfterDelayedAcc,
+				"after_delayed_count", batch.AfterDelayedCount,
+				"time_bounds_min_ts", batch.TimeBounds.MinTimestamp,
+				"time_bounds_max_ts", batch.TimeBounds.MaxTimestamp,
+				"time_bounds_min_block", batch.TimeBounds.MinBlockNumber,
+				"time_bounds_max_block", batch.TimeBounds.MaxBlockNumber,
+				"data_location", batchDataLocationString(batch.dataLocation),
+				"bridge", batch.bridgeAddress,
+			)
 		}
 		messages = append(messages, batch)
 	}

@@ -32,6 +32,7 @@ import (
 	"github.com/erigontech/erigon/execution/stagedsync"
 	"github.com/erigontech/erigon/execution/stagedsync/stages"
 	etypes "github.com/erigontech/erigon/execution/types"
+	gethlog "github.com/ethereum/go-ethereum/log"
 
 	"github.com/offchainlabs/nitro/arbos"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
@@ -350,6 +351,7 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 	if !ok {
 		return errors.New("erigonexec: chain db missing temporal write support")
 	}
+	debugCommit := debugErigonCommitEnabled()
 	tx, err := temporalDB.BeginTemporalRw(ctx)
 	if err != nil {
 		return err
@@ -357,6 +359,14 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 	defer tx.Rollback()
 
 	blockNum := block.NumberU64()
+	var headBefore *etypes.Header
+	var headHeaderHashBefore ecommon.Hash
+	var headBlockHashBefore ecommon.Hash
+	if debugCommit {
+		headBefore = erawdb.ReadCurrentHeader(tx)
+		headHeaderHashBefore = erawdb.ReadHeadHeaderHash(tx)
+		headBlockHashBefore = erawdb.ReadHeadBlockHash(tx)
+	}
 
 	if err := erawdb.WriteHeader(tx, block.Header()); err != nil {
 		return fmt.Errorf("write header: %w", err)
@@ -368,8 +378,12 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 		return fmt.Errorf("write head header hash: %w", err)
 	}
 	erawdb.WriteHeadBlockHash(tx, block.Hash())
-	if _, err := erawdb.WriteRawBodyIfNotExists(tx, block.Hash(), blockNum, block.RawBody()); err != nil {
+	bodyWritten, err := erawdb.WriteRawBodyIfNotExists(tx, block.Hash(), blockNum, block.RawBody())
+	if err != nil {
 		return fmt.Errorf("write body: %w", err)
+	}
+	if debugCommit {
+		gethlog.Info("erigonexec: body exists", "block", blockNum, "already", !bodyWritten)
 	}
 	if err := erawdb.AppendCanonicalTxNums(tx, blockNum); err != nil {
 		return fmt.Errorf("append tx nums: %w", err)
@@ -399,15 +413,136 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 	if err := stagedsync.SpawnRecoverSendersStage(sendersCfg, senderState, nil, tx, blockNum, ctx, c.logger); err != nil {
 		return fmt.Errorf("senders stage: %w", err)
 	}
+	if err := stages.SaveStageProgress(tx, stages.Senders, blockNum); err != nil {
+		return fmt.Errorf("save senders progress: %w", err)
+	}
+	if debugCommit {
+		logExecDebugState(tx, blockNum, "after_senders")
+	}
 
 	execState := &stagedsync.StageState{ID: stages.Execution, BlockNumber: blockNum - 1}
 	txc := wrap.NewTxContainer(tx, nil)
-	if err := stagedsync.ExecBlockV3(execState, nil, txc, blockNum, ctx, execCfg, false, c.logger, false); err != nil {
+	if err := stagedsync.ExecBlockV3(execState, noopUnwinder{}, txc, blockNum, ctx, execCfg, false, c.logger, false); err != nil {
 		return fmt.Errorf("execution stage: %w", err)
+	}
+	if err := stages.SaveStageProgress(tx, stages.Execution, blockNum); err != nil {
+		return fmt.Errorf("save execution progress: %w", err)
+	}
+	if debugCommit {
+		logExecDebugState(tx, blockNum, "after_exec")
+	}
+	if debugCommit && c.logger != nil {
+		headAfter := erawdb.ReadCurrentHeader(tx)
+		headHeaderHashAfter := erawdb.ReadHeadHeaderHash(tx)
+		headBlockHashAfter := erawdb.ReadHeadBlockHash(tx)
+		var headBeforeNum interface{} = nil
+		var headAfterNum interface{} = nil
+		if headBefore != nil {
+			headBeforeNum = headBefore.Number.Uint64()
+		}
+		if headAfter != nil {
+			headAfterNum = headAfter.Number.Uint64()
+		}
+		c.logger.Info(
+			"erigonexec: commit head (tx)",
+			"block", blockNum,
+			"block_hash", block.Hash(),
+			"head_before", headBeforeNum,
+			"head_after", headAfterNum,
+			"head_hash_before", headHeaderHashBefore,
+			"head_hash_after", headHeaderHashAfter,
+			"head_block_hash_before", headBlockHashBefore,
+			"head_block_hash_after", headBlockHashAfter,
+		)
 	}
 
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	if debugCommit && c.logger != nil {
+		head, err := c.readCurrentHeader()
+		if err != nil {
+			c.logger.Warn("erigonexec: commit head (persisted) read failed", "err", err)
+		} else {
+			c.logger.Info("erigonexec: commit head (persisted)", "head", head.Number.Uint64(), "hash", head.Hash())
+		}
+	}
 	return nil
+}
+
+func logExecDebugState(tx kv.TemporalTx, blockNum uint64, stage string) {
+	var (
+		headers uint64
+		bodies  uint64
+		senders uint64
+		exec    uint64
+		txlookup uint64
+		finish  uint64
+	)
+	var err error
+	if headers, err = stages.GetStageProgress(tx, stages.Headers); err != nil {
+		gethlog.Warn("erigonexec: stage progress read failed", "stage", stage, "err", err)
+		return
+	}
+	if bodies, err = stages.GetStageProgress(tx, stages.Bodies); err != nil {
+		gethlog.Warn("erigonexec: stage progress read failed", "stage", stage, "err", err)
+		return
+	}
+	if senders, err = stages.GetStageProgress(tx, stages.Senders); err != nil {
+		gethlog.Warn("erigonexec: stage progress read failed", "stage", stage, "err", err)
+		return
+	}
+	if exec, err = stages.GetStageProgress(tx, stages.Execution); err != nil {
+		gethlog.Warn("erigonexec: stage progress read failed", "stage", stage, "err", err)
+		return
+	}
+	if txlookup, err = stages.GetStageProgress(tx, stages.TxLookup); err != nil {
+		gethlog.Warn("erigonexec: stage progress read failed", "stage", stage, "err", err)
+		return
+	}
+	if finish, err = stages.GetStageProgress(tx, stages.Finish); err != nil {
+		gethlog.Warn("erigonexec: stage progress read failed", "stage", stage, "err", err)
+		return
+	}
+
+	lastBlock, lastTxNum, err := rawdbv3.TxNums.Last(tx)
+	if err != nil {
+		gethlog.Warn("erigonexec: txnums last failed", "stage", stage, "err", err)
+		return
+	}
+	maxTxNum, err := rawdbv3.TxNums.Max(tx, blockNum)
+	if err != nil {
+		gethlog.Warn("erigonexec: txnums max failed", "stage", stage, "block", blockNum, "err", err)
+		return
+	}
+	minTxNum, err := rawdbv3.TxNums.Min(tx, blockNum)
+	if err != nil {
+		gethlog.Warn("erigonexec: txnums min failed", "stage", stage, "block", blockNum, "err", err)
+		return
+	}
+
+	doms, err := dbstate.NewSharedDomains(tx, elog.New("component", "erigonexec"))
+	if err != nil {
+		gethlog.Warn("erigonexec: domains open failed", "stage", stage, "err", err)
+		return
+	}
+	defer doms.Close()
+
+	gethlog.Info(
+		"erigonexec: exec state",
+		"stage", stage,
+		"block", blockNum,
+		"headers", headers,
+		"bodies", bodies,
+		"senders", senders,
+		"execution", exec,
+		"txlookup", txlookup,
+		"finish", finish,
+		"txnums_last_block", lastBlock,
+		"txnums_last", lastTxNum,
+		"txnums_min", minTxNum,
+		"txnums_max", maxTxNum,
+		"doms_block", doms.BlockNum(),
+		"doms_txnum", doms.TxNum(),
+	)
 }
