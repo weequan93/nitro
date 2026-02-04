@@ -378,3 +378,12 @@ go run -tags erigon /tmp/account_probe.go \
     --source /tmp/nitro-src --dest /tmp/mdbx-debug10 \
     --addr 0x6633629b0817d54fF9148218ec4ABb1cb920ea50 --block 7
     
+
+go build -tags erigon -o target/bin/mdbx-migrate ./cmd/mdbx-migrate
+
+rm -rf /tmp/mdbx-debug10
+rm -rf /tmp/nitro-src
+cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+rm -rf /tmp/mdbx-debug10
+target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug10 --mode full --verify extended --verify-samples 33
+

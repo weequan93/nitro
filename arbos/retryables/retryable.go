@@ -7,11 +7,14 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/offchainlabs/nitro/arbos/storage"
 	"github.com/offchainlabs/nitro/arbos/util"
@@ -29,7 +32,19 @@ type RetryableState struct {
 var (
 	timeoutQueueKey = []byte{0}
 	calldataKey     = []byte{1}
+	retryableDebug  = os.Getenv("ERIGON_MDBX_MIGRATE_DEBUG") != "" || os.Getenv("MDBX_MIGRATE_DEBUG") != ""
+	debugTicketEnv  = strings.ToLower(os.Getenv("ERIGON_MDBX_MIGRATE_DEBUG_TICKET"))
 )
+
+func shouldLogRetryable(id common.Hash) bool {
+	if !retryableDebug {
+		return false
+	}
+	if debugTicketEnv == "" {
+		return true
+	}
+	return strings.EqualFold(debugTicketEnv, id.Hex())
+}
 
 func InitializeRetryableState(sto *storage.Storage) error {
 	return storage.InitializeQueue(sto.OpenCachedSubStorage(timeoutQueueKey))
@@ -96,6 +111,24 @@ func (rs *RetryableState) CreateRetryable(
 	_ = ret.timeout.Set(timeout)
 	_ = ret.timeoutWindowsLeft.Set(0)
 
+	if shouldLogRetryable(id) {
+		calldataSlot0 := ret.calldata.GetStorageSlot(util.UintToHash(0))
+		calldataSlot1 := ret.calldata.GetStorageSlot(util.UintToHash(1))
+		timeoutSlot := ret.backingStorage.GetStorageSlot(util.UintToHash(timeoutOffset))
+		log.Warn("arbos retryable create",
+			"ticket_id", id.Hex(),
+			"timeout", timeout,
+			"from", from,
+			"to", to,
+			"callvalue", callvalue,
+			"beneficiary", beneficiary,
+			"calldata_len", len(calldata),
+			"calldata_slot0", calldataSlot0,
+			"calldata_slot1", calldataSlot1,
+			"timeout_slot", timeoutSlot,
+		)
+	}
+
 	// insert the new retryable into the queue so it can be reaped later
 	return ret, rs.TimeoutQueue.Put(id)
 }
@@ -104,6 +137,16 @@ func (rs *RetryableState) OpenRetryable(id common.Hash, currentTimestamp uint64)
 	sto := rs.retryables.OpenSubStorage(id.Bytes())
 	timeoutStorage := sto.OpenStorageBackedUint64(timeoutOffset)
 	timeout, err := timeoutStorage.Get()
+	if shouldLogRetryable(id) {
+		timeoutSlot := sto.GetStorageSlot(util.UintToHash(timeoutOffset))
+		log.Warn("arbos retryable open",
+			"ticket_id", id.Hex(),
+			"current_time", currentTimestamp,
+			"timeout", timeout,
+			"timeout_slot", timeoutSlot,
+			"err", err,
+		)
+	}
 	if timeout == 0 || timeout < currentTimestamp || err != nil {
 		// Either no retryable here (real retryable never has a zero timeout),
 		// Or the timeout has expired and the retryable will soon be reaped,
@@ -139,6 +182,16 @@ func (rs *RetryableState) DeleteRetryable(id common.Hash, evm *vm.EVM, scenario 
 	timeout, err := retStorage.GetByUint64(timeoutOffset)
 	if timeout == (common.Hash{}) || err != nil {
 		return false, err
+	}
+
+	if shouldLogRetryable(id) {
+		calldataSize, calldataErr := retStorage.OpenSubStorage(calldataKey).GetBytesSize()
+		log.Warn("arbos retryable delete",
+			"ticket_id", id.Hex(),
+			"timeout", timeout.Big().Uint64(),
+			"calldata_size", calldataSize,
+			"calldata_err", calldataErr,
+		)
 	}
 
 	// move any funds in escrow to the beneficiary (should be none if the retry succeeded -- see EndTxHook)
@@ -293,6 +346,12 @@ func (rs *RetryableState) TryToReapOneRetryable(currentTimestamp uint64, evm *vm
 	if err != nil || id == nil {
 		return err
 	}
+	if shouldLogRetryable(*id) {
+		log.Warn("arbos retryable reap peek",
+			"ticket_id", id.Hex(),
+			"current_time", currentTimestamp,
+		)
+	}
 	retryableStorage := rs.retryables.OpenSubStorage(id.Bytes())
 	timeoutStorage := retryableStorage.OpenStorageBackedUint64(timeoutOffset)
 	timeout, err := timeoutStorage.Get()
@@ -309,6 +368,14 @@ func (rs *RetryableState) TryToReapOneRetryable(currentTimestamp uint64, evm *vm
 	windowsLeft, err := windowsLeftStorage.Get()
 	if err != nil || timeout >= currentTimestamp {
 		return err
+	}
+	if shouldLogRetryable(*id) {
+		log.Warn("arbos retryable reap check",
+			"ticket_id", id.Hex(),
+			"current_time", currentTimestamp,
+			"timeout", timeout,
+			"windows_left", windowsLeft,
+		)
 	}
 
 	// Either the retryable has expired, or it's lost a lifetime's worth of time

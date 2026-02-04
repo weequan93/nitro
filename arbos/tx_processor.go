@@ -15,7 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -83,23 +82,6 @@ func NewTxProcessor(evm *vm.EVM, msg *core.Message) *TxProcessor {
 		cachedL1BlockNumber: nil,
 		cachedL1BlockHashes: make(map[uint64]common.Hash),
 	}
-}
-
-func (p *TxProcessor) resolvedBaseFee() *big.Int {
-	baseFee := p.evm.Context.BaseFeeInBlock
-	if baseFee == nil {
-		baseFee = p.evm.Context.BaseFee
-	}
-	if baseFee == nil {
-		baseFee = common.Big0
-	}
-	if baseFee.Sign() == 0 && p.msg != nil && p.msg.TxRunMode.ExecutedOnChain() {
-		if l2BaseFee, err := p.state.L2PricingState().BaseFeeWei(); err == nil && l2BaseFee.Sign() > 0 {
-			// Fall back to ArbOS pricing state when the header base fee is zero.
-			baseFee = l2BaseFee
-		}
-	}
-	return new(big.Int).Set(baseFee)
 }
 
 func (p *TxProcessor) PushContract(contract *vm.Contract) {
@@ -345,7 +327,7 @@ func (p *TxProcessor) StartTxHook() (endTxNow bool, gasUsed uint64, err error, r
 		}
 
 		// move the callvalue into escrow
-		if callValueErr := util.TransferBalance(&tx.From, &escrow, tx.RetryValue, evm, scenario, "escrow-in"); callValueErr != nil {
+		if callValueErr := transfer(&tx.From, &escrow, tx.RetryValue); callValueErr != nil {
 			// The sender doesn't have enough balance to pay for the retryable's callvalue.
 			// Since we can't create the retryable, we should refund the submission fee.
 			// First, we give the submission fee back to the transaction sender:
@@ -385,18 +367,14 @@ func (p *TxProcessor) StartTxHook() (endTxNow bool, gasUsed uint64, err error, r
 		)
 		p.state.Restrict(err)
 
-		if EmitTicketCreatedEvent != nil {
-			err = EmitTicketCreatedEvent(evm, ticketId)
-		} else {
-			err = nil
-		}
+		err = EmitTicketCreatedEvent(evm, ticketId)
 		if err != nil {
 			glog.Error("failed to emit TicketCreated event", "err", err)
 		}
 
 		balance := statedb.GetBalance(tx.From)
 		// evm.Context.BaseFee is already lowered to 0 when vm runs with NoBaseFee flag and 0 gas price
-		effectiveBaseFee := p.resolvedBaseFee()
+		effectiveBaseFee := evm.Context.BaseFee
 		usergas := p.msg.GasLimit
 
 		maxGasCost := arbmath.BigMulByUint(tx.GasFeeCap, usergas)
@@ -541,17 +519,12 @@ func (p *TxProcessor) StartTxHook() (endTxNow bool, gasUsed uint64, err error, r
 		// Transfer callvalue from escrow
 		escrow := retryables.RetryableEscrowAddress(tx.TicketId)
 		scenario := util.TracingBeforeEVM
-		if tx.Value.Sign() == 0 && evm != nil && evm.StateDB != nil {
-			// Keep zero-value escrow-from transfers from pruning the escrow account.
-			var zero uint256.Int
-			evm.StateDB.AddBalance(escrow, &zero, tracing.BalanceIncreaseEscrow)
-		}
 		if err := util.TransferBalance(&escrow, &tx.From, tx.Value, evm, scenario, "escrow"); err != nil {
 			return true, 0, err, nil
 		}
 
 		// The redeemer has pre-paid for this tx's gas
-		prepaid := arbmath.BigMulByUint(p.resolvedBaseFee(), tx.Gas)
+		prepaid := arbmath.BigMulByUint(evm.Context.BaseFee, tx.Gas)
 		util.MintBalance(&tx.From, prepaid, evm, scenario, "prepaid")
 		ticketId := tx.TicketId
 		refundTo := tx.RefundTo
@@ -589,7 +562,12 @@ func (p *TxProcessor) GasChargingHook(gasRemaining *uint64) (common.Address, err
 
 	var gasNeededToStartEVM uint64
 	tipReceipient, _ := p.state.NetworkFeeAccount()
-	basefee := p.resolvedBaseFee()
+	var basefee *big.Int
+	if p.evm.Context.BaseFeeInBlock != nil {
+		basefee = p.evm.Context.BaseFeeInBlock
+	} else {
+		basefee = p.evm.Context.BaseFee
+	}
 
 	var poster common.Address
 	if !p.msg.TxRunMode.ExecutedOnChain() {
@@ -707,16 +685,15 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, success bool) {
 	if underlyingTx != nil && underlyingTx.Type() == types.ArbitrumRetryTxType {
 		inner, _ := underlyingTx.GetInner().(*types.ArbitrumRetryTx)
 		effectiveBaseFee := inner.GasFeeCap
-		baseFee := p.resolvedBaseFee()
-		if p.msg.TxRunMode.ExecutedOnChain() && !arbmath.BigEquals(effectiveBaseFee, baseFee) {
+		if p.msg.TxRunMode.ExecutedOnChain() && !arbmath.BigEquals(effectiveBaseFee, p.evm.Context.BaseFee) {
 			log.Error(
 				"ArbitrumRetryTx GasFeeCap doesn't match basefee in commit mode",
 				"txHash", underlyingTx.Hash(),
 				"gasFeeCap", inner.GasFeeCap,
-				"baseFee", baseFee,
+				"baseFee", p.evm.Context.BaseFee,
 			)
 			// revert to the old behavior to avoid diverging from older nodes
-			effectiveBaseFee = baseFee
+			effectiveBaseFee = p.evm.Context.BaseFee
 		}
 
 		// undo Geth's refund to the From address
@@ -795,39 +772,11 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, success bool) {
 		} else {
 			// return the Callvalue to escrow
 			escrow := retryables.RetryableEscrowAddress(inner.TicketId)
-			err := util.TransferBalance(&inner.From, &escrow, inner.Value, p.evm, scenario, "escrow-in")
+			err := util.TransferBalance(&inner.From, &escrow, inner.Value, p.evm, scenario, "escrow")
 			if err != nil {
 				// should be impossible because geth credited the inner.Value to inner.From before the transaction
 				// and the transaction reverted
 				panic(err)
-			}
-			if (inner.Value == nil || inner.Value.Sign() == 0) && p.evm != nil && p.evm.StateDB != nil {
-				if remover, ok := p.evm.StateDB.(interface{ RemoveEscrowProtection(common.Address) }); ok {
-					if mdbxMigrateDebug {
-						valStr := "<nil>"
-						if inner.Value != nil {
-							valStr = inner.Value.String()
-						}
-						log.Warn(
-							"arbos retryable remove escrow protection",
-							"block_number", p.evm.Context.BlockNumber,
-							"tx_hash", underlyingTx.Hash(),
-							"ticket_id", inner.TicketId,
-							"from", inner.From,
-							"escrow", escrow,
-							"value", valStr,
-						)
-					}
-					remover.RemoveEscrowProtection(escrow)
-				} else if mdbxMigrateDebug {
-					log.Warn(
-						"arbos retryable remove escrow protection skipped (no statedb hook)",
-						"block_number", p.evm.Context.BlockNumber,
-						"tx_hash", underlyingTx.Hash(),
-						"ticket_id", inner.TicketId,
-						"escrow", escrow,
-					)
-				}
 			}
 		}
 		if mdbxMigrateDebug {
@@ -863,7 +812,12 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, success bool) {
 		return
 	}
 
-	basefee := p.resolvedBaseFee()
+	var basefee *big.Int
+	if p.evm.Context.BaseFeeInBlock != nil {
+		basefee = p.evm.Context.BaseFeeInBlock
+	} else {
+		basefee = p.evm.Context.BaseFee
+	}
 	totalCost := arbmath.BigMul(basefee, arbmath.UintToBig(gasUsed)) // total cost = price of gas * gas burnt
 	computeCost := arbmath.BigSub(totalCost, p.PosterFee)            // total cost = network's compute + poster's L1 costs
 
@@ -977,7 +931,7 @@ func (p *TxProcessor) ScheduledTxes() types.Transactions {
 	scheduled := types.Transactions{}
 	time := p.evm.Context.Time
 	// p.evm.Context.BaseFee is already lowered to 0 when vm runs with NoBaseFee flag and 0 gas price
-	effectiveBaseFee := p.resolvedBaseFee()
+	effectiveBaseFee := p.evm.Context.BaseFee
 	chainID := p.evm.ChainConfig().ChainID
 
 	logs := p.evm.StateDB.GetCurrentTxLogs()
@@ -1054,7 +1008,7 @@ func (p *TxProcessor) GetPaidGasPrice() *big.Int {
 	version := p.state.ArbOSVersion()
 	if version != params.ArbosVersion_9 {
 		// p.evm.Context.BaseFee is already lowered to 0 when vm runs with NoBaseFee flag and 0 gas price
-		gasPrice = p.resolvedBaseFee()
+		gasPrice = p.evm.Context.BaseFee
 	}
 	return gasPrice
 }

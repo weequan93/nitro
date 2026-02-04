@@ -159,7 +159,23 @@ func (s *stateDBAdapter) CreateZombieIfDeleted(addr gcommon.Address) {
 	if s.ibs == nil {
 		return
 	}
-	if err := s.ibs.CreateZombieAccount(toErigonAddress(addr)); err != nil {
+	erigonAddr := toErigonAddress(addr)
+	exists, err := s.ibs.Exist(erigonAddr)
+	if err != nil {
+		panic(err)
+	}
+	if exists {
+		return
+	}
+	destructed, err := s.ibs.HasSelfdestructed(erigonAddr)
+	if err != nil {
+		panic(err)
+	}
+	if !destructed {
+		return
+	}
+	// Mark the account as a zombie touch so empty-removal does not delete it.
+	if err := s.ibs.CreateZombieAccount(erigonAddr); err != nil {
 		panic(err)
 	}
 	if mdbxMigrateDebug {
@@ -221,8 +237,10 @@ func (s *stateDBAdapter) SubBalance(addr gcommon.Address, amount *uint256.Int, r
 	if amount != nil {
 		val.Set(amount)
 	}
-	if s.chainRules != nil && s.chainRules.ArbOSVersion < params.ArbosVersion_Stylus && val.IsZero() {
-		s.CreateZombieIfDeleted(addr)
+	if val.IsZero() {
+		if s.chainRules == nil || s.chainRules.ArbOSVersion < params.ArbosVersion_Stylus {
+			s.CreateZombieIfDeleted(addr)
+		}
 	}
 	if err := s.ibs.SubBalance(toErigonAddress(addr), *val, etracing.BalanceChangeReason(reason)); err != nil {
 		panic(err)

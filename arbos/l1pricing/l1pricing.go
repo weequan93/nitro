@@ -424,15 +424,22 @@ func (ps *L1PricingState) UpdateForBatchPosterSpending(
 			addAddr("poster_pay_to", posterPayTo, posterPayToErr)
 
 			if evm != nil && evm.StateDB != nil {
-				fields = append(fields,
-					"l1_pricer_balance", evm.StateDB.GetBalance(L1PricerFundsPoolAddress).String(),
-					"poster_balance", evm.StateDB.GetBalance(batchPoster).String(),
-				)
+				addAccountState := func(label string, addr common.Address) {
+					fields = append(fields,
+						label+"_addr", addr,
+						label+"_balance", evm.StateDB.GetBalance(addr).String(),
+						label+"_nonce", evm.StateDB.GetNonce(addr),
+						label+"_codehash", evm.StateDB.GetCodeHash(addr).Hex(),
+						label+"_codesize", evm.StateDB.GetCodeSize(addr),
+					)
+				}
+				addAccountState("l1_pricer_pool", L1PricerFundsPoolAddress)
+				addAccountState("batch_poster", batchPoster)
 				if payRewardsErr == nil {
-					fields = append(fields, "pay_rewards_balance", evm.StateDB.GetBalance(payRewardsTo).String())
+					addAccountState("pay_rewards_to", payRewardsTo)
 				}
 				if posterPayToErr == nil {
-					fields = append(fields, "poster_pay_to_balance", evm.StateDB.GetBalance(posterPayTo).String())
+					addAccountState("poster_pay_to", posterPayTo)
 				}
 			}
 			log.Warn("l1pricing batch poster state", fields...)

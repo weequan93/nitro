@@ -118,7 +118,7 @@ func verifyConsensus(opts Options) error {
 		return ExitError{Code: ExitVerification, Err: fmt.Errorf("mdbx-migrate: write genesis: %w", err)}
 	}
 	exec3.SetArbitrumInitMessage(initMsg)
-	if err := ensureArbosInitialized(ctx, execDB, chainCfg, initMsg, genesis.Timestamp, expectedGenesisRoot, logger); err != nil {
+	if err := ensureArbosInitialized(ctx, execDB, chainCfg, initMsg, genesis.Timestamp, expectedGenesisRoot, logger, srcChain, endBlock); err != nil {
 		return ExitError{Code: ExitVerification, Err: fmt.Errorf("mdbx-migrate: init arbos: %w", err)}
 	}
 	if sweepPlainAccountTombstonesEnv {

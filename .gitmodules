@@ -45,3 +45,6 @@
 [submodule "erigon"]
 	path = erigon
 	url = https://github.com/weequan93/erigon.git
+[submodule "nitro-original"]
+	path = nitro-original
+	url = https://github.com/weequan93/nitro.git

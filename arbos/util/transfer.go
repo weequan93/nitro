@@ -88,12 +88,8 @@ func TransferBalance(
 		}
 		evm.StateDB.SubBalance(*from, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
 	}
-	toReason := tracing.BalanceChangeTransfer
-	if purpose == "escrow-in" {
-		toReason = tracing.BalanceIncreaseEscrow
-	}
 	if to != nil {
-		evm.StateDB.AddBalance(*to, uint256.MustFromBig(amount), toReason)
+		evm.StateDB.AddBalance(*to, uint256.MustFromBig(amount), tracing.BalanceChangeTransfer)
 	}
 	return nil
 }

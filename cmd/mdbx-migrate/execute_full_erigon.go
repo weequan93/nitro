@@ -429,7 +429,7 @@ func runExecutionStage(ctx context.Context, srcChain ethdb.Database, dst kv.RwDB
 		return fmt.Errorf("write genesis: %w", err)
 	}
 	exec3.SetArbitrumInitMessage(initMsg)
-	if err := ensureArbosInitialized(ctx, execDB, chainCfg, initMsg, genesis.Timestamp, expectedGenesisRoot, logger); err != nil {
+	if err := ensureArbosInitialized(ctx, execDB, chainCfg, initMsg, genesis.Timestamp, expectedGenesisRoot, logger, srcChain, toBlock); err != nil {
 		return fmt.Errorf("init arbos: %w", err)
 	}
 	if sweepPlainAccountTombstonesEnv {
@@ -530,7 +530,7 @@ func runTxLookupStage(ctx context.Context, dst kv.RwDB, chainCfg *chain.Config, 
 	return err
 }
 
-func ensureArbosInitialized(ctx context.Context, db kv.RwDB, chainCfg *chain.Config, initMsg *arbostypes.ParsedInitMessage, timestamp uint64, expectedGenesisRoot *gethcommon.Hash, logger elog.Logger) error {
+func ensureArbosInitialized(ctx context.Context, db kv.RwDB, chainCfg *chain.Config, initMsg *arbostypes.ParsedInitMessage, timestamp uint64, expectedGenesisRoot *gethcommon.Hash, logger elog.Logger, srcChain ethdb.Database, addrTableBlock uint64) error {
 	chainID := "<nil>"
 	if chainCfg != nil && chainCfg.ChainID != nil {
 		chainID = chainCfg.ChainID.String()
@@ -600,6 +600,12 @@ func ensureArbosInitialized(ctx context.Context, db kv.RwDB, chainCfg *chain.Con
 		}
 		if initData.ChainOwner == (gethcommon.Address{}) && chainCfg != nil {
 			initData.ChainOwner = gethcommon.BytesToAddress(chainCfg.ArbitrumChainParams.InitialChainOwner.Bytes())
+		}
+		if err := maybeFillAccountsFromSource(&initData, srcChain, genesisBlockNum); err != nil {
+			return err
+		}
+		if err := maybeFillAddressTableFromSource(&initData, srcChain, addrTableBlock); err != nil {
+			return err
 		}
 		initReader := statetransfer.NewMemoryInitDataReader(&initData)
 		root, err := arbos.InitializeArbosInDatabase(ibsArb, domains, domains.AsPutDel(tx), initReader, chainCfg, initMsg, timestamp, 100000)

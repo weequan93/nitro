@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
+	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/util/arbmath"
 )
@@ -194,6 +195,70 @@ func ApplyInternalTxUpdate(tx *types.ArbitrumInternalTx, state *arbosState.Arbos
 				"l1_fees_available_before", l1FeesAvailableBefore,
 				"arbos_version", state.ArbOSVersion(),
 			)
+
+			logBatchPosterAccounts := func(phase string) {
+				if evm == nil {
+					log.Warn("arbos internal tx batch posting accounts",
+						"phase", phase,
+						"poster", batchPosterAddress,
+						"evm_nil", true,
+					)
+					return
+				}
+				if evm.StateDB == nil {
+					log.Warn("arbos internal tx batch posting accounts",
+						"phase", phase,
+						"block_number", evm.Context.BlockNumber,
+						"poster", batchPosterAddress,
+						"state_db_nil", true,
+					)
+					return
+				}
+
+				fields := []interface{}{
+					"phase", phase,
+					"block_number", evm.Context.BlockNumber,
+					"poster", batchPosterAddress,
+				}
+				addAccountState := func(label string, addr common.Address) {
+					fields = append(fields,
+						label+"_addr", addr,
+						label+"_balance", evm.StateDB.GetBalance(addr).String(),
+						label+"_nonce", evm.StateDB.GetNonce(addr),
+						label+"_codehash", evm.StateDB.GetCodeHash(addr).Hex(),
+						label+"_codesize", evm.StateDB.GetCodeSize(addr),
+					)
+				}
+
+				addAccountState("l1_pricer_pool", l1pricing.L1PricerFundsPoolAddress)
+				addAccountState("batch_poster", batchPosterAddress)
+
+				payRewardsTo, payRewardsErr := l1p.PayRewardsTo()
+				if payRewardsErr != nil {
+					fields = append(fields, "pay_rewards_to_err", payRewardsErr)
+				} else {
+					addAccountState("pay_rewards_to", payRewardsTo)
+				}
+
+				posterPayTo, posterPayToErr := func() (common.Address, error) {
+					batchPosterTable := l1p.BatchPosterTable()
+					posterState, err := batchPosterTable.OpenPoster(batchPosterAddress, false)
+					if err != nil {
+						return common.Address{}, err
+					}
+					return posterState.PayTo()
+				}()
+				if posterPayToErr != nil {
+					fields = append(fields, "poster_pay_to_err", posterPayToErr)
+				} else {
+					addAccountState("poster_pay_to", posterPayTo)
+				}
+
+				log.Warn("arbos internal tx batch posting accounts", fields...)
+			}
+
+			logBatchPosterAccounts("pre")
+			defer logBatchPosterAccounts("post")
 		}
 		err = l1p.UpdateForBatchPosterSpending(
 			evm.StateDB,
