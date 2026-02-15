@@ -160,6 +160,19 @@ func (p *txProcessorIBS) SetMessage(msg *etypes.Message, ibs evmtypes.IntraBlock
 		p.arbosTx = nil
 		return
 	}
+	txHash := gcommon.Hash{}
+	txType := uint8(0)
+	runMode := ""
+	if msg != nil {
+		runMode = fmt.Sprintf("%v", msg.TxRunMode)
+		if msg.Tx != nil {
+			txHash = toGethHash(msg.Tx.Hash())
+			txType = msg.Tx.Type()
+		}
+	}
+	if p.gethState != nil {
+		p.gethState.SetDebugContext(p.evm.Context.BlockNumber, txHash, txType, runMode)
+	}
 	if gethMsg == nil {
 		p.arbosTx = nil
 		return
@@ -441,8 +454,10 @@ func buildGethEVM(evmInstance *evm.EVM, stateDB gvm.StateDB, chainCfg *gparams.C
 		BlobHashes: toGethHashes(evmInstance.TxContext.BlobHashes),
 		BlobFeeCap: toBig(evmInstance.TxContext.BlobFee),
 	}
+	// Keep geth hook execution on canonical base-fee semantics so ArbOS system
+	// tx state updates (e.g. blockhash/l1 pricing) match geth-based execution.
 	cfg := gvm.Config{
-		NoBaseFee: evmInstance.Config().NoBaseFee,
+		NoBaseFee: false,
 		ExtraEips: evmInstance.Config().ExtraEips,
 	}
 	return gvm.NewEVM(blockCtx, txCtx, stateDB, chainCfg, cfg)

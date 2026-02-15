@@ -5,7 +5,11 @@ package arbos
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
+	"os"
+	"runtime"
+	"strings"
 	"unsafe"
 
 	"github.com/holiman/uint256"
@@ -37,6 +41,84 @@ type stateDBAdapter struct {
 	ibs        estate.IntraBlockStateArbitrum
 	chainRules *echain.Rules
 	db         *stateDatabaseAdapter
+	debugCtx   setStateDebugContext
+}
+
+type setStateDebugContext struct {
+	blockNum uint64
+	txHash   gcommon.Hash
+	txType   uint8
+	runMode  string
+}
+
+var badRootSetStateTraceEnabled = strings.EqualFold(os.Getenv("ERIGON_BAD_ROOT_SETSTATE_TRACE"), "true") ||
+	strings.EqualFold(os.Getenv("ERIGON_BAD_ROOT_DEBUG"), "true")
+var badRootSetStateTraceAddr = gcommon.HexToAddress(strings.TrimSpace(defaultEnv(
+	"ERIGON_BAD_ROOT_SETSTATE_ADDR",
+	"0xA4b05FffffFffFFFFfFFfffFfffFFfffFfFfFFFf",
+)))
+var badRootSetStateTraceSlot = parseOptionalHash(strings.TrimSpace(os.Getenv("ERIGON_BAD_ROOT_SETSTATE_SLOT")))
+
+func defaultEnv(key, fallback string) string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	return raw
+}
+
+func parseOptionalHash(raw string) *gcommon.Hash {
+	if raw == "" {
+		return nil
+	}
+	if !isHexHash(raw) {
+		log.Warn("arbos setstate trace slot ignored: invalid hash", "value", raw)
+		return nil
+	}
+	hash := gcommon.HexToHash(raw)
+	return &hash
+}
+
+func isHexHash(raw string) bool {
+	if len(raw) != 66 || !(strings.HasPrefix(raw, "0x") || strings.HasPrefix(raw, "0X")) {
+		return false
+	}
+	for _, c := range raw[2:] {
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		case c >= 'A' && c <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func traceSetStateCallers(skip, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	pcs := make([]uintptr, max+skip+2)
+	n := runtime.Callers(skip, pcs)
+	if n <= 0 {
+		return ""
+	}
+	frames := runtime.CallersFrames(pcs[:n])
+	parts := make([]string, 0, max)
+	for {
+		frame, more := frames.Next()
+		if frame.Function != "" {
+			parts = append(parts, fmt.Sprintf("%s:%d", frame.Function, frame.Line))
+			if len(parts) >= max {
+				break
+			}
+		}
+		if !more {
+			break
+		}
+	}
+	return strings.Join(parts, " <- ")
 }
 
 func newStateDBAdapter(ibs estate.IntraBlockStateArbitrum, rules *echain.Rules) *stateDBAdapter {
@@ -229,6 +311,15 @@ func (s *stateDBAdapter) CreateContract(addr gcommon.Address) {
 	}
 }
 
+func (s *stateDBAdapter) SetDebugContext(blockNum uint64, txHash gcommon.Hash, txType uint8, runMode string) {
+	s.debugCtx = setStateDebugContext{
+		blockNum: blockNum,
+		txHash:   txHash,
+		txType:   txType,
+		runMode:  runMode,
+	}
+}
+
 func (s *stateDBAdapter) SubBalance(addr gcommon.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	if s.ibs == nil {
 		return
@@ -391,9 +482,48 @@ func (s *stateDBAdapter) SetState(addr gcommon.Address, key gcommon.Hash, value 
 	if s.ibs == nil {
 		return
 	}
+	traceThisWrite := badRootSetStateTraceEnabled && addr == badRootSetStateTraceAddr
+	if traceThisWrite && badRootSetStateTraceSlot != nil && key != *badRootSetStateTraceSlot {
+		traceThisWrite = false
+	}
+
+	var (
+		prevVal uint256.Int
+		prevErr error
+	)
+	if traceThisWrite {
+		prevErr = s.ibs.GetState(toErigonAddress(addr), toErigonHash(key), &prevVal)
+	}
+
 	val := uint256.MustFromBig(value.Big())
 	if err := s.ibs.SetState(toErigonAddress(addr), toErigonHash(key), *val); err != nil {
 		panic(err)
+	}
+
+	if traceThisWrite {
+		var (
+			afterVal uint256.Int
+			afterErr error
+			txIndex  int
+		)
+		afterErr = s.ibs.GetState(toErigonAddress(addr), toErigonHash(key), &afterVal)
+		txIndex = s.ibs.TxnIndex()
+		log.Warn(
+			"arbos setstate trace",
+			"block", s.debugCtx.blockNum,
+			"tx_index", txIndex,
+			"tx_hash", s.debugCtx.txHash,
+			"tx_type", s.debugCtx.txType,
+			"run_mode", s.debugCtx.runMode,
+			"addr", addr.Hex(),
+			"slot", key.Hex(),
+			"prev", gcommon.Hash(prevVal.Bytes32()).Hex(),
+			"new", value.Hex(),
+			"after", gcommon.Hash(afterVal.Bytes32()).Hex(),
+			"prev_err", prevErr,
+			"after_err", afterErr,
+			"callers", traceSetStateCallers(3, 6),
+		)
 	}
 }
 

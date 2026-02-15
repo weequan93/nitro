@@ -2,7 +2,7 @@
 ## Deriw-Erigon
 
 
-docker build --no-cache . \
+docker build . \
   --target nitro-node-dev \
   --tag quanquanah/nitro-node:erigon-mac \
   --build-arg GO_BUILD_TAGS=erigon \
@@ -136,3 +136,59 @@ rm -rf /tmp/mdbx-debug1 /tmp/nitro-src
 
 ## Pending
 - init flag all not supported
+
+
+rm -rf /tmp/mdbx-debug1 /tmp/nitro-src
+cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+ERIGON_MDBX_MIGRATE_SKIP_UNWIND_ON_BAD_ROOT=true \
+ERIGON_MDBX_MIGRATE_FLUSH_ON_BAD_ROOT=true \
+target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug10 --mode full --verify extended --verify-samples 33
+
+
+
+rm -rf /tmp/mdbx-debug /tmp/nitro-src
+cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+target/bin/mdbx-migrate --source /tmp/nitro-src --dest /tmp/mdbx-debug \
+  --mode full --verify strict --verify-samples 33
+
+
+
+rm -rf /tmp/mdbx-debug-latest /tmp/nitro-src-latest
+cp -R "/Users/super/Documents/coinw/dex/localchain/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src-latest
+target/bin/mdbx-migrate --source /tmp/nitro-src-latest --dest /tmp/mdbx-debug-latest \
+  --mode full --verify strict --verify-samples 40
+
+
+cat > /tmp/badroot_addrs.txt <<'EOF'
+0x28c18bc63069e3581870904f32Dd34D9e3332cce
+0xa4B00000000000000000000000000000000000F6
+0xA4b000000000000000000073657175656e636572
+0xA4b05FffffFffFFFFfFFfffFfffFFfffFfFfFFFf
+0xca04397772A801928f07C6EE77cf14f2b56513a3
+EOF
+
+target/bin/mdbx-storage-diff \
+  --source "/Users/super/Documents/coinw/dex/localchain/config/My Arbitrum L3 Chain/nitro" \
+  --dest "/Users/super/Documents/coinw/dex/localchain-test/config-v1/My Arbitrum L3 Chain/nitro" \
+  --block 34 \
+  --compare-accounts \
+  --compare-storage-root \
+  --keys /tmp/badroot_addrs.txt
+
+
+
+
+
+  rm -rf /tmp/mdbx-debug10 /tmp/nitro-src
+cp -R "/Users/super/Documents/coinw/dex/localchain-test/config/My Arbitrum L3 Chain/nitro" /tmp/nitro-src
+
+ERIGON_MDBX_MIGRATE_FIX_EMPTY_ROOT=true \
+target/bin/mdbx-migrate \
+  --source /tmp/nitro-src \
+  --dest /tmp/mdbx-debug10 \
+  --mode full \
+  --verify strict \
+  --verify-samples 33
+
+rm -rf "/Users/super/Documents/coinw/dex/localchain-test/config-v1/My Arbitrum L3 Chain/nitro"
+cp -R /tmp/mdbx-debug10 "/Users/super/Documents/coinw/dex/localchain-test/config-v1/My Arbitrum L3 Chain/nitro"

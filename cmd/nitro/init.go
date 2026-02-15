@@ -542,6 +542,19 @@ func rebuildLocalWasm(ctx context.Context, config *gethexec.Config, l2BlockChain
 	return chainDb, l2BlockChain, nil
 }
 
+func logChainHead(chainDir string, l2BlockChain *core.BlockChain) {
+	if l2BlockChain == nil {
+		log.Info("Opened chain database", "path", chainDir, "head", "<nil>")
+		return
+	}
+	head := l2BlockChain.CurrentBlock()
+	if head == nil {
+		log.Info("Opened chain database", "path", chainDir, "head", "<nil>")
+		return
+	}
+	log.Info("Opened chain database", "path", chainDir, "head", head.Number.Uint64(), "hash", head.Hash())
+}
+
 func openInitializeChainDb(ctx context.Context, stack *node.Node, config *NodeConfig, chainId *big.Int, cacheConfig *core.CacheConfig, targetConfig *gethexec.StylusTargetConfig, persistentConfig *conf.PersistentConfig, l1Client *ethclient.Client, rollupAddrs chaininfo.RollupAddresses) (ethdb.Database, *core.BlockChain, error) {
 	if !config.Init.Force {
 		if readOnlyDb, err := stack.OpenDatabaseWithFreezerWithExtraOptions("l2chaindata", 0, 0, config.Persistent.Ancient, "l2chaindata/", true, persistentConfig.Pebble.ExtraOptions("l2chaindata")); err == nil {
@@ -589,6 +602,7 @@ func openInitializeChainDb(ctx context.Context, stack *node.Node, config *NodeCo
 				if err != nil {
 					return chainDb, l2BlockChain, err
 				}
+				logChainHead(config.Persistent.Chain, l2BlockChain)
 				if config.Init.RecreateMissingStateFrom > 0 {
 					err = staterecovery.RecreateMissingStates(chainDb, l2BlockChain, cacheConfig, config.Init.RecreateMissingStateFrom)
 					if err != nil {
@@ -856,6 +870,7 @@ func openInitializeChainDb(ctx context.Context, stack *node.Node, config *NodeCo
 	if err != nil {
 		return chainDb, l2BlockChain, err
 	}
+	logChainHead(config.Persistent.Chain, l2BlockChain)
 
 	return rebuildLocalWasm(ctx, &config.Execution, l2BlockChain, chainDb, wasmDb, config.Init.RebuildLocalWasm)
 }

@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/c2h5oh/datasize"
 	"github.com/holiman/uint256"
@@ -41,6 +42,134 @@ import (
 )
 
 const execBatchSize = 64 * datasize.MB
+
+var (
+	pathProbeAddr = func() ecommon.Address {
+		raw := strings.TrimSpace(os.Getenv("ERIGON_PATH_PROBE_ADDR"))
+		if raw == "" {
+			raw = "0xA4b05FffffFffFFFFfFFfffFfffFFfffFfFfFFFf"
+		}
+		return ecommon.HexToAddress(raw)
+	}()
+	accountProbeAddr = func() ecommon.Address {
+		raw := strings.TrimSpace(os.Getenv("ERIGON_ACCOUNT_PROBE_ADDR"))
+		if raw == "" {
+			raw = "0xA4b000000000000000000073657175656e636572"
+		}
+		return ecommon.HexToAddress(raw)
+	}()
+	pathProbeSlot = func() ecommon.Hash {
+		raw := strings.TrimSpace(os.Getenv("ERIGON_PATH_PROBE_SLOT"))
+		if raw == "" {
+			raw = "0x3c79da47f96b0f39664f73c0a1f350580be90742947dddfa21ba64d578dfe623"
+		}
+		return ecommon.HexToHash(raw)
+	}()
+)
+
+func logBuilderPathProbe(logger elog.Logger, blockNum, txNum uint64, txIndex int, txHash ecommon.Hash, stateReader *estate.ReaderV3) {
+	if logger == nil || stateReader == nil {
+		return
+	}
+	if !strings.EqualFold(os.Getenv("ERIGON_BAD_ROOT_DEBUG"), "true") || blockNum < 33 {
+		return
+	}
+
+	probeVal, probeOK, err := stateReader.ReadAccountStorage(pathProbeAddr, pathProbeSlot)
+	if err != nil {
+		logger.Warn(
+			"erigonexec: path probe read failed",
+			"phase", "builder",
+			"block", blockNum,
+			"txnum", txNum,
+			"tx_index", txIndex,
+			"tx_hash", txHash,
+			"probe_addr", pathProbeAddr,
+			"probe_slot", pathProbeSlot,
+			"err", err,
+		)
+		return
+	}
+
+	probeValHex := "0x"
+	if probeOK {
+		probeValHex = fmt.Sprintf("0x%x", probeVal.Bytes())
+	}
+	logger.Warn(
+		"erigonexec: path probe",
+		"phase", "builder",
+		"block", blockNum,
+		"txnum", txNum,
+		"tx_index", txIndex,
+		"tx_hash", txHash,
+		"probe_addr", pathProbeAddr,
+		"probe_slot", pathProbeSlot,
+		"probe_ok", probeOK,
+		"probe_val", probeValHex,
+	)
+
+	accountData, accErr := stateReader.ReadAccountDataForDebug(accountProbeAddr)
+	if accErr != nil {
+		logger.Warn(
+			"erigonexec: account probe read failed",
+			"phase", "builder",
+			"block", blockNum,
+			"txnum", txNum,
+			"tx_index", txIndex,
+			"tx_hash", txHash,
+			"probe_addr", accountProbeAddr,
+			"err", accErr,
+		)
+		return
+	}
+	exists := accountData != nil
+	nonce := uint64(0)
+	balance := "0"
+	incarnation := uint64(0)
+	codeHash := "0x"
+	root := "0x"
+	if accountData != nil {
+		nonce = accountData.Nonce
+		balance = accountData.Balance.ToBig().String()
+		incarnation = accountData.Incarnation
+		codeHash = accountData.CodeHash.Hex()
+		root = accountData.Root.Hex()
+	}
+	logger.Warn(
+		"erigonexec: account probe",
+		"phase", "builder",
+		"block", blockNum,
+		"txnum", txNum,
+		"tx_index", txIndex,
+		"tx_hash", txHash,
+		"probe_addr", accountProbeAddr,
+		"exists", exists,
+		"nonce", nonce,
+		"balance", balance,
+		"incarnation", incarnation,
+		"code_hash", codeHash,
+		"root", root,
+	)
+}
+
+func composeStorageDomainKey(addr ecommon.Address, slot ecommon.Hash) []byte {
+	addrBytes := addr.Bytes()
+	slotBytes := slot.Bytes()
+	key := make([]byte, len(addrBytes)+len(slotBytes))
+	copy(key, addrBytes)
+	copy(key[len(addrBytes):], slotBytes)
+	return key
+}
+
+func logHexPreview(v []byte, max int) string {
+	if len(v) == 0 {
+		return "0x"
+	}
+	if max <= 0 || len(v) <= max {
+		return fmt.Sprintf("0x%x", v)
+	}
+	return fmt.Sprintf("0x%x...(+%d bytes)", v[:max], len(v)-max)
+}
 
 func buildExecDirs(chainDir string) (datadir.Dirs, error) {
 	dirs := datadir.Dirs{
@@ -138,6 +267,23 @@ func buildInternalStartTx(chainID *big.Int, l1BaseFee *big.Int, l1BlockNum uint6
 	}, nil
 }
 
+func deriveBlockStartTxNum(tx kv.Tx, prevHeader *etypes.Header) (uint64, error) {
+	if tx == nil {
+		return 0, errors.New("erigonexec: missing tx for txnum derivation")
+	}
+	if prevHeader == nil || prevHeader.Number == nil {
+		return 0, errors.New("erigonexec: missing previous header for txnum derivation")
+	}
+	prevMaxTxNum, err := rawdbv3.TxNums.Max(tx, prevHeader.Number.Uint64())
+	if err != nil {
+		return 0, err
+	}
+	if prevMaxTxNum == ^uint64(0) {
+		return 0, fmt.Errorf("erigonexec: previous block txnum overflow block=%d", prevHeader.Number.Uint64())
+	}
+	return prevMaxTxNum + 1, nil
+}
+
 func (c *Client) buildBlockFromMessage(ctx context.Context, msg *arbostypes.MessageWithMetadata, prevHeader *etypes.Header) (*etypes.Block, etypes.Receipts, error) {
 	if msg == nil || msg.Message == nil {
 		return nil, nil, errors.New("erigonexec: missing message")
@@ -202,13 +348,19 @@ func (c *Client) buildBlockFromMessage(ctx context.Context, msg *arbostypes.Mess
 
 	signer := *etypes.MakeSigner(c.chainConfig, header.Number.Uint64(), header.Time)
 	gasPool := new(core.GasPool).AddGas(header.GasLimit)
-	stateWriter := estate.NewWriter(domains.AsPutDel(tx), nil, domains.TxNum())
+	txNum, err := deriveBlockStartTxNum(tx, prevHeader)
+	if err != nil {
+		return nil, nil, err
+	}
+	stateWriter := estate.NewWriter(domains.AsPutDel(tx), nil, txNum)
 
 	complete := make(etypes.Transactions, 0, len(allTxs))
 	receipts := make(etypes.Receipts, 0, len(allTxs))
 	var scheduled etypes.Transactions
 
-	txNum := domains.TxNum()
+	startTxNum := txNum
+	rootDebug := strings.EqualFold(os.Getenv("ERIGON_BAD_ROOT_DEBUG"), "true")
+	logRootDebug := rootDebug && c.logger != nil && header.Number != nil && header.Number.Uint64() >= 33
 
 	for len(allTxs) > 0 || len(scheduled) > 0 {
 		var txToApply etypes.Transaction
@@ -254,18 +406,123 @@ func (c *Client) buildBlockFromMessage(ctx context.Context, msg *arbostypes.Mess
 		}
 		receipts = append(receipts, receipt)
 		complete = append(complete, txToApply)
+		logBuilderPathProbe(
+			c.logger,
+			header.Number.Uint64(),
+			txNum,
+			len(complete)-1,
+			txToApply.Hash(),
+			stateReader,
+		)
 		if execResult != nil && len(execResult.ScheduledTxes) > 0 {
 			scheduled = append(scheduled, execResult.ScheduledTxes...)
 		}
 	}
 
+	touchedAddrs := make(map[ecommon.Address]struct{}, len(complete)*2+1)
+	touchedAddrs[header.Coinbase] = struct{}{}
+	for _, txApplied := range complete {
+		if sender, ok := txApplied.GetSender(); ok {
+			touchedAddrs[sender] = struct{}{}
+		}
+		if to := txApplied.GetTo(); to != nil {
+			touchedAddrs[*to] = struct{}{}
+		}
+	}
+
+	// Flush block-level state object changes before computing the state root.
+	// FinalizeTx runs per transaction, but CommitBlock writes the final block
+	// write-set (including deferred account updates) into SharedDomains.
+	if err := ibs.CommitBlock(rules, stateWriter); err != nil {
+		return nil, nil, err
+	}
+
+	commitTxNum := txNum
+
+	commitmentCtx := domains.GetCommitmentContext()
+	restoredState := false
+	restoredStateBlock := uint64(0)
+	restoredStateTxNum := uint64(0)
+	restoredStateRoot := ecommon.Hash{}
+	if commitmentCtx != nil {
+		restoredBlock, restoredTxNum, restoredRoot, restored, restoreErr := commitmentCtx.RestoreLatestCommitmentStateFromTx(tx)
+		if restoreErr != nil {
+			return nil, nil, fmt.Errorf("erigonexec: restore latest commitment state from tx: %w", restoreErr)
+		}
+		restoredState = restored
+		restoredStateBlock = restoredBlock
+		restoredStateTxNum = restoredTxNum
+		if len(restoredRoot) > 0 {
+			restoredStateRoot = ecommon.BytesToHash(restoredRoot)
+		}
+	}
+
+	domsTxNumBefore := domains.TxNum()
+	ctxTxNumBefore := uint64(0)
+	ctxReadable := false
+	if commitmentCtx != nil {
+		ctxTxNumBefore, _, _, ctxReadable = commitmentCtx.DebugReadContext()
+	}
+	ctxAdjusted := false
+	if commitmentCtx != nil && ctxReadable && ctxTxNumBefore != commitTxNum {
+		commitmentCtx.SetTxNum(commitTxNum)
+		ctxAdjusted = true
+	}
+	domsAdjusted := false
+	if domsTxNumBefore != commitTxNum {
+		domains.SetTxNum(commitTxNum)
+		domsAdjusted = true
+	}
+
 	domains.SetBlockNum(header.Number.Uint64())
-	domains.SetTxNum(txNum)
-	root, err := domains.ComputeCommitment(ctx, true, header.Number.Uint64(), txNum, "erigonexec")
+	root, err := domains.ComputeCommitment(ctx, true, header.Number.Uint64(), commitTxNum, "erigonexec")
+	if domsAdjusted {
+		domains.SetTxNum(domsTxNumBefore)
+	}
+	if ctxAdjusted && commitmentCtx != nil {
+		commitmentCtx.SetTxNum(ctxTxNumBefore)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 	header.Root = ecommon.BytesToHash(root)
+	if logRootDebug {
+		c.logger.Warn("erigonexec: build root debug",
+			"block", header.Number.Uint64(),
+			"start_txnum", startTxNum,
+			"final_txnum", txNum,
+			"commit_txnum", commitTxNum,
+			"state_restored", restoredState,
+			"state_restored_block", restoredStateBlock,
+			"state_restored_txnum", restoredStateTxNum,
+			"state_restored_root", restoredStateRoot,
+			"ctx_txnum_before", ctxTxNumBefore,
+			"ctx_adjusted", ctxAdjusted,
+			"domains_txnum_before", domsTxNumBefore,
+			"domains_adjusted", domsAdjusted,
+			"root_final", header.Root,
+			"txs", len(complete),
+		)
+		for delta := uint64(1); delta <= 3; delta++ {
+			altTxNum := commitTxNum + delta
+			altRoot, altErr := domains.ComputeCommitment(ctx, true, header.Number.Uint64(), altTxNum, "erigonexec")
+			if altErr != nil {
+				c.logger.Warn("erigonexec: build root alt failed",
+					"block", header.Number.Uint64(),
+					"txnum", altTxNum,
+					"delta", delta,
+					"err", altErr,
+				)
+				continue
+			}
+			c.logger.Warn("erigonexec: build root alt",
+				"block", header.Number.Uint64(),
+				"txnum", altTxNum,
+				"delta", delta,
+				"root", ecommon.BytesToHash(altRoot),
+			)
+		}
+	}
 
 	stateAdapter := arbos.NewStateDBAdapter(ibsArb, evm.ChainRules())
 	arbState, err := arbosState.OpenSystemArbosState(stateAdapter, nil, true)
@@ -326,6 +583,8 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 
 	syncCfg := ethconfig.Defaults.Sync
 	syncCfg.ExecWorkerCount = 1
+	// Keep receipt persistence aligned with migration execution path.
+	syncCfg.PersistReceiptsCacheV2 = true
 
 	execCfg := stagedsync.StageExecuteBlocksCfg(
 		c.chainDB,
@@ -352,6 +611,7 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 		return errors.New("erigonexec: chain db missing temporal write support")
 	}
 	debugCommit := debugErigonCommitEnabled()
+	rootDebug := strings.EqualFold(os.Getenv("ERIGON_BAD_ROOT_DEBUG"), "true")
 	tx, err := temporalDB.BeginTemporalRw(ctx)
 	if err != nil {
 		return err
@@ -359,6 +619,53 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 	defer tx.Rollback()
 
 	blockNum := block.NumberU64()
+	if rootDebug && c.logger != nil {
+		c.logger.Warn("erigonexec: commit block header",
+			"block", blockNum,
+			"hash", block.Hash(),
+			"parent_hash", block.ParentHash(),
+			"state_root", block.Root(),
+			"tx_root", block.TxHash(),
+			"receipt_root", block.ReceiptHash(),
+			"txs", len(block.Transactions()),
+		)
+	}
+	var canonicalHashBefore ecommon.Hash
+	var canonicalHeaderBefore *etypes.Header
+	if rootDebug && c.logger != nil {
+		var canonicalErr error
+		canonicalHashBefore, canonicalErr = erawdb.ReadCanonicalHash(tx, blockNum)
+		if canonicalErr != nil {
+			c.logger.Warn("erigonexec: canonical before read failed", "block", blockNum, "err", canonicalErr)
+		} else if canonicalHashBefore == (ecommon.Hash{}) {
+			c.logger.Warn("erigonexec: canonical before missing", "block", blockNum)
+		} else {
+			canonicalHeaderBefore = erawdb.ReadHeader(tx, canonicalHashBefore, blockNum)
+			if canonicalHeaderBefore == nil {
+				c.logger.Warn(
+					"erigonexec: canonical before header missing",
+					"block", blockNum,
+					"canonical_hash_before", canonicalHashBefore,
+				)
+			} else {
+				c.logger.Warn(
+					"erigonexec: canonical before",
+					"block", blockNum,
+					"canonical_hash_before", canonicalHashBefore,
+					"canonical_parent_before", canonicalHeaderBefore.ParentHash,
+					"canonical_state_root_before", canonicalHeaderBefore.Root,
+					"canonical_tx_root_before", canonicalHeaderBefore.TxHash,
+					"canonical_receipt_root_before", canonicalHeaderBefore.ReceiptHash,
+					"incoming_hash", block.Hash(),
+					"incoming_parent", block.ParentHash(),
+					"incoming_state_root", block.Root(),
+					"incoming_tx_root", block.TxHash(),
+					"incoming_receipt_root", block.ReceiptHash(),
+					"hash_changed", canonicalHashBefore != block.Hash(),
+				)
+			}
+		}
+	}
 	var headBefore *etypes.Header
 	var headHeaderHashBefore ecommon.Hash
 	var headBlockHashBefore ecommon.Hash
@@ -373,6 +680,21 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 	}
 	if err := erawdb.WriteCanonicalHash(tx, block.Hash(), blockNum); err != nil {
 		return fmt.Errorf("write canonical hash: %w", err)
+	}
+	if rootDebug && c.logger != nil && canonicalHashBefore != (ecommon.Hash{}) && canonicalHashBefore != block.Hash() {
+		c.logger.Warn(
+			"erigonexec: canonical overwrite",
+			"block", blockNum,
+			"canonical_hash_before", canonicalHashBefore,
+			"incoming_hash", block.Hash(),
+			"canonical_state_root_before", func() interface{} {
+				if canonicalHeaderBefore == nil {
+					return nil
+				}
+				return canonicalHeaderBefore.Root
+			}(),
+			"incoming_state_root", block.Root(),
+		)
 	}
 	if err := erawdb.WriteHeadHeaderHash(tx, block.Hash()); err != nil {
 		return fmt.Errorf("write head header hash: %w", err)
@@ -459,6 +781,107 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	if rootDebug && c.logger != nil {
+		temporalDB, ok := c.chainDB.(kv.TemporalRoDB)
+		if !ok {
+			c.logger.Warn("erigonexec: persisted root audit skipped (non-temporal db)", "block", blockNum)
+		} else {
+			roTx, err := temporalDB.BeginTemporalRo(ctx)
+			if err != nil {
+				c.logger.Warn("erigonexec: persisted root audit begin failed", "block", blockNum, "err", err)
+				goto persistedAuditDone
+			}
+			defer roTx.Rollback()
+			persistedHeader := erawdb.ReadHeader(roTx, block.Hash(), blockNum)
+			if persistedHeader == nil {
+				c.logger.Warn("erigonexec: persisted root audit header missing", "block", blockNum, "hash", block.Hash())
+			} else {
+				minTxNum, minErr := rawdbv3.TxNums.Min(roTx, blockNum)
+				maxTxNum, maxErr := rawdbv3.TxNums.Max(roTx, blockNum)
+				if minErr != nil || maxErr != nil {
+					c.logger.Warn(
+						"erigonexec: persisted root audit txnums read failed",
+						"block", blockNum,
+						"min_err", minErr,
+						"max_err", maxErr,
+					)
+				} else {
+					domsRo, domsErr := dbstate.NewSharedDomains(roTx, elog.New("component", "erigonexec"))
+					if domsErr != nil {
+						c.logger.Warn("erigonexec: persisted root audit domains open failed", "block", blockNum, "err", domsErr)
+					} else {
+						storageProbeKey := composeStorageDomainKey(pathProbeAddr, pathProbeSlot)
+						accountProbeKey := accountProbeAddr.Bytes()
+						defer domsRo.Close()
+						domsRo.SetBlockNum(blockNum)
+						for _, probeTxNum := range []uint64{minTxNum, maxTxNum, maxTxNum + 1} {
+							probeRoot, probeErr := domsRo.ComputeCommitment(ctx, true, blockNum, probeTxNum, "erigonexec")
+							if probeErr != nil {
+								c.logger.Warn(
+									"erigonexec: persisted root audit compute failed",
+									"block", blockNum,
+									"probe_txnum", probeTxNum,
+									"err", probeErr,
+								)
+								continue
+							}
+							probeHash := ecommon.BytesToHash(probeRoot)
+							storageAsOf, storageAsOfOK, storageAsOfErr := roTx.GetAsOf(kv.StorageDomain, storageProbeKey, probeTxNum)
+							storageAsOfNext, storageAsOfNextOK, storageAsOfNextErr := roTx.GetAsOf(kv.StorageDomain, storageProbeKey, probeTxNum+1)
+							accountAsOf, accountAsOfOK, accountAsOfErr := roTx.GetAsOf(kv.AccountsDomain, accountProbeKey, probeTxNum)
+							accountAsOfNext, accountAsOfNextOK, accountAsOfNextErr := roTx.GetAsOf(kv.AccountsDomain, accountProbeKey, probeTxNum+1)
+							storageLatest, storageLatestStep, storageLatestErr := domsRo.GetLatest(kv.StorageDomain, roTx, storageProbeKey)
+							accountLatest, accountLatestStep, accountLatestErr := domsRo.GetLatest(kv.AccountsDomain, roTx, accountProbeKey)
+							c.logger.Warn(
+								"erigonexec: persisted root audit",
+								"block", blockNum,
+								"hash", block.Hash(),
+								"probe_txnum", probeTxNum,
+								"probe_root", probeHash,
+								"header_root", persistedHeader.Root,
+								"matches_header", probeHash == persistedHeader.Root,
+								"txnums_min", minTxNum,
+								"txnums_max", maxTxNum,
+							)
+							c.logger.Warn(
+								"erigonexec: persisted probe values",
+								"block", blockNum,
+								"probe_txnum", probeTxNum,
+								"probe_addr", pathProbeAddr,
+								"probe_slot", pathProbeSlot,
+								"storage_asof_ok", storageAsOfOK,
+								"storage_asof_len", len(storageAsOf),
+								"storage_asof_preview", logHexPreview(storageAsOf, 64),
+								"storage_asof_err", storageAsOfErr,
+								"storage_asof_next_ok", storageAsOfNextOK,
+								"storage_asof_next_len", len(storageAsOfNext),
+								"storage_asof_next_preview", logHexPreview(storageAsOfNext, 64),
+								"storage_asof_next_err", storageAsOfNextErr,
+								"storage_latest_len", len(storageLatest),
+								"storage_latest_step", storageLatestStep,
+								"storage_latest_preview", logHexPreview(storageLatest, 64),
+								"storage_latest_err", storageLatestErr,
+								"account_probe_addr", accountProbeAddr,
+								"account_asof_ok", accountAsOfOK,
+								"account_asof_len", len(accountAsOf),
+								"account_asof_preview", logHexPreview(accountAsOf, 64),
+								"account_asof_err", accountAsOfErr,
+								"account_asof_next_ok", accountAsOfNextOK,
+								"account_asof_next_len", len(accountAsOfNext),
+								"account_asof_next_preview", logHexPreview(accountAsOfNext, 64),
+								"account_asof_next_err", accountAsOfNextErr,
+								"account_latest_len", len(accountLatest),
+								"account_latest_step", accountLatestStep,
+								"account_latest_preview", logHexPreview(accountLatest, 64),
+								"account_latest_err", accountLatestErr,
+							)
+						}
+					}
+				}
+			}
+		}
+	}
+persistedAuditDone:
 	if debugCommit && c.logger != nil {
 		head, err := c.readCurrentHeader()
 		if err != nil {
@@ -472,12 +895,12 @@ func (c *Client) commitBlock(ctx context.Context, block *etypes.Block) error {
 
 func logExecDebugState(tx kv.TemporalTx, blockNum uint64, stage string) {
 	var (
-		headers uint64
-		bodies  uint64
-		senders uint64
-		exec    uint64
+		headers  uint64
+		bodies   uint64
+		senders  uint64
+		exec     uint64
 		txlookup uint64
-		finish  uint64
+		finish   uint64
 	)
 	var err error
 	if headers, err = stages.GetStageProgress(tx, stages.Headers); err != nil {

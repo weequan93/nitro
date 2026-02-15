@@ -213,6 +213,12 @@ func mainImpl() int {
 	if err != nil {
 		confighelpers.PrintErrorAndExit(err, printSampleUsage)
 	}
+	l2DbPath := filepath.Join(nodeConfig.Persistent.Chain, "l2chaindata", "mdbx.dat")
+	if _, err := os.Stat(l2DbPath); err == nil {
+		log.Info("Resolved persistent chain dir", "path", nodeConfig.Persistent.Chain, "l2chaindata_mdbx", l2DbPath, "exists", true)
+	} else {
+		log.Info("Resolved persistent chain dir", "path", nodeConfig.Persistent.Chain, "l2chaindata_mdbx", l2DbPath, "exists", false, "err", err)
+	}
 	stackConf := node.DefaultConfig
 	backendKind, err := resolveBackendAndDBApply(nodeConfig, &stackConf)
 	if err != nil {

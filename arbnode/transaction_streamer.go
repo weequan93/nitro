@@ -86,7 +86,27 @@ var (
 	debugMsgParseAll    bool
 	debugStreamerOnce   sync.Once
 	debugStreamerEnabled bool
+
+	stopAtBlockOnce sync.Once
+	stopAtBlock     uint64
+	stopAtBlockSet  bool
 )
+
+func stopAtBlockValue() (uint64, bool) {
+	stopAtBlockOnce.Do(func() {
+		if v := strings.TrimSpace(os.Getenv("ERIGON_STOP_AT_BLOCK")); v != "" {
+			parsed, err := strconv.ParseUint(v, 10, 64)
+			if err != nil {
+				log.Warn("Invalid ERIGON_STOP_AT_BLOCK", "value", v, "err", err)
+				return
+			}
+			stopAtBlock = parsed
+			stopAtBlockSet = true
+			log.Warn("Execution stop block enabled (transaction streamer)", "stop_block", stopAtBlock)
+		}
+	})
+	return stopAtBlock, stopAtBlockSet
+}
 
 func shouldDebugMsgPos(pos arbutil.MessageIndex) bool {
 	debugMsgPosOnce.Do(func() {
@@ -1509,6 +1529,14 @@ func (s *TransactionStreamer) ExecuteNextMsg(ctx context.Context) bool {
 		return false
 	}
 	pos++
+	if stopBlock, ok := stopAtBlockValue(); ok && pos > 0 {
+		execHead := pos - 1
+		l2Head := s.exec.MessageIndexToBlockNumber(execHead)
+		if l2Head >= stopBlock {
+			log.Warn("Execution stop block reached (transaction streamer)", "stop_block", stopBlock, "exec_head", execHead, "l2_head_block", l2Head)
+			return false
+		}
+	}
 	logDebugMsgStatus(pos, msgCount, s.exec)
 	if pos >= msgCount {
 		if streamerDebugEnabled() {

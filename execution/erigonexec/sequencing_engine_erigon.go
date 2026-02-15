@@ -20,13 +20,13 @@ import (
 
 	ecommon "github.com/erigontech/erigon-lib/common"
 	elog "github.com/erigontech/erigon-lib/log/v3"
-	"github.com/erigontech/erigon/execution/consensus/ethash"
 	ecore "github.com/erigontech/erigon/core"
 	estate "github.com/erigontech/erigon/core/state"
 	"github.com/erigontech/erigon/core/vm"
 	"github.com/erigontech/erigon/core/vm/evmtypes"
 	"github.com/erigontech/erigon/db/kv"
 	dbstate "github.com/erigontech/erigon/db/state"
+	"github.com/erigontech/erigon/execution/consensus/ethash"
 	etypes "github.com/erigontech/erigon/execution/types"
 
 	"github.com/ethereum/go-ethereum/arbitrum_types"
@@ -38,8 +38,8 @@ import (
 
 	"github.com/offchainlabs/nitro/arbos"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
-	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
+	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/execution"
 	"github.com/offchainlabs/nitro/execution/gethexec"
@@ -47,10 +47,10 @@ import (
 )
 
 type sequencingHooks struct {
-	TxErrors               []error
-	DiscardInvalidTxsEarly bool
-	PreTxFilter            func(*etypes.Header, estate.IntraBlockStateArbitrum, *arbosState.ArbosState, *gtypes.Transaction, *arbitrum_types.ConditionalOptions, common.Address, *l1Info) error
-	PostTxFilter           func(*etypes.Header, estate.IntraBlockStateArbitrum, *arbosState.ArbosState, *gtypes.Transaction, common.Address, uint64, *evmtypes.ExecutionResult) error
+	TxErrors                []error
+	DiscardInvalidTxsEarly  bool
+	PreTxFilter             func(*etypes.Header, estate.IntraBlockStateArbitrum, *arbosState.ArbosState, *gtypes.Transaction, *arbitrum_types.ConditionalOptions, common.Address, *l1Info) error
+	PostTxFilter            func(*etypes.Header, estate.IntraBlockStateArbitrum, *arbosState.ArbosState, *gtypes.Transaction, common.Address, uint64, *evmtypes.ExecutionResult) error
 	ConditionalOptionsForTx []*arbitrum_types.ConditionalOptions
 }
 
@@ -279,7 +279,10 @@ func (c *Client) buildBlockFromTransactions(ctx context.Context, l1Header *arbos
 	receipts := make(etypes.Receipts, 0, len(items))
 	var scheduled []sequencerTxItem
 
-	txNum := domains.TxNum()
+	txNum, err := deriveBlockStartTxNum(tx, prevHeader)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	stateWriter := estate.NewWriter(domains.AsPutDel(tx), nil, txNum)
 	userTxsProcessed := 0
 
@@ -498,9 +501,46 @@ func (c *Client) buildBlockFromTransactions(ctx context.Context, l1Header *arbos
 		return nil, nil, nil, gstate.ErrArbTxFilter
 	}
 
+	// Flush block-level state object changes before computing the state root.
+	// FinalizeTx runs per transaction, but CommitBlock writes the final block
+	// write-set (including deferred account updates) into SharedDomains.
+	if err := ibs.CommitBlock(rules, stateWriter); err != nil {
+		return nil, nil, nil, err
+	}
+
+	commitTxNum := txNum
+
+	commitmentCtx := domains.GetCommitmentContext()
+	if commitmentCtx != nil {
+		if _, _, _, _, restoreErr := commitmentCtx.RestoreLatestCommitmentStateFromTx(tx); restoreErr != nil {
+			return nil, nil, nil, fmt.Errorf("erigonexec: restore latest commitment state from tx: %w", restoreErr)
+		}
+	}
+	domsTxNumBefore := domains.TxNum()
+	ctxTxNumBefore := uint64(0)
+	ctxReadable := false
+	if commitmentCtx != nil {
+		ctxTxNumBefore, _, _, ctxReadable = commitmentCtx.DebugReadContext()
+	}
+	ctxAdjusted := false
+	if commitmentCtx != nil && ctxReadable && ctxTxNumBefore != commitTxNum {
+		commitmentCtx.SetTxNum(commitTxNum)
+		ctxAdjusted = true
+	}
+	domsAdjusted := false
+	if domsTxNumBefore != commitTxNum {
+		domains.SetTxNum(commitTxNum)
+		domsAdjusted = true
+	}
+
 	domains.SetBlockNum(header.Number.Uint64())
-	domains.SetTxNum(txNum)
-	root, err := domains.ComputeCommitment(ctx, true, header.Number.Uint64(), txNum, "erigonexec")
+	root, err := domains.ComputeCommitment(ctx, true, header.Number.Uint64(), commitTxNum, "erigonexec")
+	if domsAdjusted {
+		domains.SetTxNum(domsTxNumBefore)
+	}
+	if ctxAdjusted && commitmentCtx != nil {
+		commitmentCtx.SetTxNum(ctxTxNumBefore)
+	}
 	if err != nil {
 		return nil, nil, nil, err
 	}
