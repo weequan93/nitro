@@ -226,22 +226,23 @@ const (
 type SubspaceID []byte
 
 var (
-	l1PricingSubspace           SubspaceID = []byte{0}
-	l2PricingSubspace           SubspaceID = []byte{1}
-	retryablesSubspace          SubspaceID = []byte{2}
-	addressTableSubspace        SubspaceID = []byte{3}
-	chainOwnerSubspace          SubspaceID = []byte{4}
-	sendMerkleSubspace          SubspaceID = []byte{5}
-	blockhashesSubspace         SubspaceID = []byte{6}
-	chainConfigSubspace         SubspaceID = []byte{7}
-	programsSubspace            SubspaceID = []byte{8}
-	featuresSubspace            SubspaceID = []byte{9}
-	nativeTokenOwnerSubspace    SubspaceID = []byte{10}
-	transactionFiltererSubspace SubspaceID = []byte{11}
-	pricerSubspace              SubspaceID = []byte{12}
-	gaslessSubspace             SubspaceID = []byte{13}
-	subAccountSubspace          SubspaceID = []byte{14}
-	blacklistSubspace           SubspaceID = []byte{15}
+	l1PricingSubspace    SubspaceID = []byte{0}
+	l2PricingSubspace    SubspaceID = []byte{1}
+	retryablesSubspace   SubspaceID = []byte{2}
+	addressTableSubspace SubspaceID = []byte{3}
+	chainOwnerSubspace   SubspaceID = []byte{4}
+	sendMerkleSubspace   SubspaceID = []byte{5}
+	blockhashesSubspace  SubspaceID = []byte{6}
+	chainConfigSubspace  SubspaceID = []byte{7}
+	// Preserve dev-DER-2646 storage layout for existing DER chain state.
+	pricerSubspace              SubspaceID = []byte{8}
+	gaslessSubspace             SubspaceID = []byte{9}
+	subAccountSubspace          SubspaceID = []byte{10}
+	programsSubspace            SubspaceID = []byte{11}
+	blacklistSubspace           SubspaceID = []byte{12}
+	featuresSubspace            SubspaceID = []byte{13}
+	nativeTokenOwnerSubspace    SubspaceID = []byte{14}
+	transactionFiltererSubspace SubspaceID = []byte{15}
 )
 
 var PrecompileMinArbOSVersions = make(map[common.Address]uint64)

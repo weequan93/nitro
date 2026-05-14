@@ -92,3 +92,21 @@ func TestStorageSlots(t *testing.T) {
 		Fail(t, "page offset mismatch")
 	}
 }
+
+func TestDERSnapshotSubspaces(t *testing.T) {
+	expected := map[string]struct {
+		subspace SubspaceID
+		slot     byte
+	}{
+		"pricer":     {pricerSubspace, 8},
+		"gasless":    {gaslessSubspace, 9},
+		"subAccount": {subAccountSubspace, 10},
+		"programs":   {programsSubspace, 11},
+		"blacklist":  {blacklistSubspace, 12},
+	}
+	for name, item := range expected {
+		if len(item.subspace) != 1 || item.subspace[0] != item.slot {
+			t.Fatalf("%s subspace changed from dev-DER-2646 slot %d: %v", name, item.slot, []byte(item.subspace))
+		}
+	}
+}
