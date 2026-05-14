@@ -17,6 +17,7 @@ type TransactionPublisher interface {
 	PublishAuctionResolutionTransaction(ctx context.Context, tx *types.Transaction) error
 	PublishExpressLaneTransaction(ctx context.Context, msg *timeboost.ExpressLaneSubmission) error
 	PublishTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error
+	PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error
 	CheckHealth(ctx context.Context) error
 	Initialize(context.Context) error
 	Start(context.Context) error
@@ -43,6 +44,10 @@ func (a *ArbInterface) Initialize(node *ExecutionNode) {
 
 func (a *ArbInterface) PublishTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
 	return a.txPublisher.PublishTransaction(ctx, tx, options)
+}
+
+func (a *ArbInterface) PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	return a.txPublisher.PublishPriorityTransaction(ctx, tx, options)
 }
 
 func (a *ArbInterface) PublishExpressLaneTransaction(ctx context.Context, msg *timeboost.JsonExpressLaneSubmission) error {

@@ -10,6 +10,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/offchainlabs/nitro/arbutil"
+
 	"github.com/ethereum/go-ethereum/arbitrum_types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -459,6 +461,10 @@ func ProduceBlockAdvanced(
 			}
 
 			computeGas := tx.Gas() - dataGas
+
+			if tx.To() != nil && arbutil.IsCustomPriceAddr(tx.To()) {
+				computeGas = params.TxGas
+			}
 
 			if computeGas < params.TxGas {
 				if isUserTx && sequencingHooks.CanDiscardTx() {

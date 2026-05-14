@@ -35,6 +35,7 @@ type ForwarderConfig struct {
 	RedisUrl              string        `koanf:"redis-url"`
 	UpdateInterval        time.Duration `koanf:"update-interval"`
 	RetryInterval         time.Duration `koanf:"retry-interval"`
+	PriorityNode          bool          `koanf:"priority-node"`
 }
 
 var DefaultNodeForwarderConfig = ForwarderConfig{
@@ -44,6 +45,7 @@ var DefaultNodeForwarderConfig = ForwarderConfig{
 	RedisUrl:              "",
 	UpdateInterval:        time.Second,
 	RetryInterval:         100 * time.Millisecond,
+	PriorityNode:          false,
 }
 
 var DefaultSequencerForwarderConfig = ForwarderConfig{
@@ -53,6 +55,7 @@ var DefaultSequencerForwarderConfig = ForwarderConfig{
 	RedisUrl:              "",
 	UpdateInterval:        time.Second,
 	RetryInterval:         100 * time.Millisecond,
+	PriorityNode:          false,
 }
 
 func AddOptionsForNodeForwarderConfig(prefix string, f *pflag.FlagSet) {
@@ -70,6 +73,7 @@ func AddOptionsForForwarderConfigImpl(prefix string, defaultConfig *ForwarderCon
 	f.String(prefix+".redis-url", defaultConfig.RedisUrl, "the Redis URL to recommend target via")
 	f.Duration(prefix+".update-interval", defaultConfig.UpdateInterval, "forwarding target update interval")
 	f.Duration(prefix+".retry-interval", defaultConfig.RetryInterval, "minimal time between update retries")
+	f.Bool(prefix+".priority-node", defaultConfig.PriorityNode, "convert all rpc_sendRawTransaction to rpc_sendPriorityRawTransaction")
 }
 
 type TxForwarder struct {
@@ -87,6 +91,7 @@ type TxForwarder struct {
 	rpcClients            []*rpc.Client
 	ethClients            []*ethclient.Client
 	tryNewForwarderErrors *regexp.Regexp
+	priorityNode          bool
 }
 
 func NewForwarder(targets []string, config *ForwarderConfig) *TxForwarder {
@@ -113,6 +118,7 @@ func NewForwarder(targets []string, config *ForwarderConfig) *TxForwarder {
 		timeout:               config.ConnectionTimeout,
 		transport:             transport,
 		tryNewForwarderErrors: regexp.MustCompile(`(?i)(^http:|^json:|^i/0|timeout exceeded|no such host)`),
+		priorityNode:          config.PriorityNode,
 	}
 }
 
@@ -132,7 +138,34 @@ func (f *TxForwarder) PublishTransaction(inctx context.Context, tx *types.Transa
 	for pos, rpcClient := range f.rpcClients {
 		var err error
 		if options == nil {
-			err = f.ethClients[pos].SendTransaction(ctx, tx)
+			if f.priorityNode == true {
+				err = f.ethClients[pos].SendPriorityTransaction(ctx, tx)
+			} else {
+				err = f.ethClients[pos].SendTransaction(ctx, tx)
+			}
+		} else {
+			err = arbitrum.SendConditionalTransactionRPC(ctx, rpcClient, tx, options)
+		}
+		if err != nil {
+			log.Warn("error forwarding transaction to a backup target", "target", f.targets[pos], "err", err)
+		}
+		if err == nil || !f.tryNewForwarderErrors.MatchString(err.Error()) {
+			return err
+		}
+	}
+	return errors.New("failed to publish transaction to any of the forwarding targets")
+}
+
+func (f *TxForwarder) PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	if !f.enabled.Load() {
+		return ErrNoSequencer
+	}
+	ctx, cancelFunc := f.ctxWithTimeout()
+	defer cancelFunc()
+	for pos, rpcClient := range f.rpcClients {
+		var err error
+		if options == nil {
+			err = f.ethClients[pos].SendPriorityTransaction(ctx, tx)
 		} else {
 			err = arbitrum.SendConditionalTransactionRPC(ctx, rpcClient, tx, options)
 		}
@@ -297,6 +330,10 @@ func (f *TxDropper) PublishTransaction(ctx context.Context, tx *types.Transactio
 	return txDropperErr
 }
 
+func (f *TxDropper) PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	return txDropperErr
+}
+
 func (f *TxDropper) PublishExpressLaneTransaction(ctx context.Context, msg *timeboost.ExpressLaneSubmission) error {
 	return txDropperErr
 }
@@ -346,6 +383,14 @@ func (f *RedisTxForwarder) PublishTransaction(ctx context.Context, tx *types.Tra
 		return ErrNoSequencer
 	}
 	return forwarder.PublishTransaction(ctx, tx, options)
+}
+
+func (f *RedisTxForwarder) PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	forwarder := f.getForwarder()
+	if forwarder == nil {
+		return ErrNoSequencer
+	}
+	return forwarder.PublishPriorityTransaction(ctx, tx, options)
 }
 
 func (f *RedisTxForwarder) PublishExpressLaneTransaction(ctx context.Context, msg *timeboost.ExpressLaneSubmission) error {

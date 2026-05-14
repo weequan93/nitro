@@ -474,6 +474,7 @@ func (n NodeInterface) GasEstimateL1Component(
 	if err := args.CallDefaults(randomGas, evm.Context.BaseFee, evm.ChainConfig().ChainID); err != nil {
 		return 0, nil, nil, err
 	}
+
 	sdb, ok := evm.StateDB.(*state.StateDB)
 	if !ok {
 		return 0, nil, nil, errors.New("failed to cast to stateDB")
@@ -534,6 +535,7 @@ func (n NodeInterface) GasEstimateComponents(
 	if err := args.CallDefaults(gasCap, evm.Context.BaseFee, evm.ChainConfig().ChainID); err != nil {
 		return 0, 0, nil, nil, err
 	}
+
 	sdb, ok := evm.StateDB.(*state.StateDB)
 	if !ok {
 		return 0, 0, nil, nil, errors.New("failed to cast to stateDB")

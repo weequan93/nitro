@@ -9,6 +9,8 @@ import (
 	"math/big"
 
 	"github.com/holiman/uint256"
+	"github.com/offchainlabs/nitro/arbos/l1pricing"
+	"github.com/offchainlabs/nitro/arbutil"
 
 	"github.com/ethereum/go-ethereum/arbitrum/filter"
 	"github.com/ethereum/go-ethereum/arbitrum/multigas"
@@ -21,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
-	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/programs"
 	"github.com/offchainlabs/nitro/arbos/retryables"
 	"github.com/offchainlabs/nitro/arbos/util"
@@ -559,6 +560,10 @@ func (p *TxProcessor) GasChargingHook(gasRemaining *uint64, intrinsicGas uint64)
 		}
 		p.posterGas = GetPosterGas(p.state, actualGasPrice, p.msg.TxRunContext, posterCost)
 		p.PosterFee = arbmath.BigMulByUint(actualGasPrice, p.posterGas) // round down
+		isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx) || arbutil.IsGaslessTx(p.msg.Tx)
+		if isGasless {
+			p.PosterFee.Set(common.Big0)
+		}
 		gasNeededToStartEVM = p.posterGas
 	}
 
@@ -752,6 +757,8 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 	} else {
 		basefee = p.evm.Context.BaseFee
 	}
+
+	isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx) || arbutil.IsGaslessTx(p.msg.Tx)
 	if gasUsed < p.posterGas {
 		log.Error("gas used < poster gas", "gasUsed", gasUsed, "posterGas", p.posterGas)
 	}
@@ -766,18 +773,22 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 			p.state.Restrict(err)
 			infraFee := arbmath.BigMin(minBaseFee, basefee)
 			infraComputeCost := arbmath.BigMulByUint(infraFee, computeGas)
-			util.MintBalance(&infraFeeAccount, infraComputeCost, p.evm, scenario, tracing.BalanceIncreaseInfraFee)
+			if !isGasless {
+				util.MintBalance(&infraFeeAccount, infraComputeCost, p.evm, scenario, tracing.BalanceIncreaseInfraFee)
+			}
 			computeCost = arbmath.BigSub(computeCost, infraComputeCost)
 		}
 	}
-	if arbmath.BigGreaterThan(computeCost, common.Big0) {
+	if arbmath.BigGreaterThan(computeCost, common.Big0) && !isGasless {
 		util.MintBalance(&networkFeeAccount, computeCost, p.evm, scenario, tracing.BalanceIncreaseNetworkFee)
 	}
 	posterFeeDestination := types.L1PricerFundsPoolAddress
 	if p.state.ArbOSVersion() < params.ArbosVersion_2 {
 		posterFeeDestination = p.evm.Context.Coinbase
 	}
-	util.MintBalance(&posterFeeDestination, p.PosterFee, p.evm, scenario, tracing.BalanceIncreaseL1PosterFee)
+	if !isGasless {
+		util.MintBalance(&posterFeeDestination, p.PosterFee, p.evm, scenario, tracing.BalanceIncreaseL1PosterFee)
+	}
 	if p.state.ArbOSVersion() >= params.ArbosVersion_10 {
 		if _, err := p.state.L1PricingState().AddToL1FeesAvailable(p.PosterFee); err != nil {
 			log.Error("failed to update L1FeesAvailable: ", "err", err)

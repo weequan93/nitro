@@ -1,0 +1,51 @@
+package arbutil
+
+import (
+	"encoding/json"
+	"fmt"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/stretchr/testify/require"
+)
+
+var signData = common.FromHex("0x7b227479706573223a7b22454950373132446f6d61696e223a5b7b226e616d65223a226e616d65222c2274797065223a22737472696e67227d2c7b226e616d65223a2276657273696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a22636861696e4964222c2274797065223a2275696e74323536227d2c7b226e616d65223a22766572696679696e67436f6e7472616374222c2274797065223a2261646472657373227d5d2c224d657373616765223a5b7b226e616d65223a2254696d657374616d70222c2274797065223a22737472696e67227d2c7b226e616d65223a224f7065726174696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a224368696c64222c2274797065223a2261646472657373227d5d7d2c227072696d61727954797065223a224d657373616765222c22646f6d61696e223a7b226e616d65223a2244657269775375624163636f756e745369676e6174757265222c2276657273696f6e223a2231222c22636861696e4964223a35353939303737333933372c22766572696679696e67436f6e7472616374223a22307830303030303030303030303030303030303030303030303030303030303030303030303030374539227d2c226d657373616765223a7b2254696d657374616d70223a2231373336313633353231222c224f7065726174696f6e223a224772616e74222c224368696c64223a22307838663438313633643139333264633232383663633764316632363065303963366564303761316530227d7d")
+
+func TestParseTypeDataNSignature(t *testing.T) {
+	signature, expectedAddress := signTypedDataForTest(t, signData)
+
+	_, address, validSignature, err := ParseTypeDataNSignature(signData, signature)
+	require.NoError(t, err)
+	require.True(t, validSignature)
+	require.Equal(t, expectedAddress, *address)
+}
+
+func TestParseTypeDataNSignatureRejectsInvalidSignatureLength(t *testing.T) {
+	_, _, validSignature, err := ParseTypeDataNSignature(signData, []byte{1, 2, 3})
+	require.Error(t, err)
+	require.False(t, validSignature)
+}
+
+func signTypedDataForTest(t *testing.T, signData []byte) ([]byte, common.Address) {
+	t.Helper()
+
+	privateKey, err := crypto.HexToECDSA("59c6995e998f97a5a0044966f094538e3878c9e59085909bc4fe6b3a7f7f6d3b")
+	require.NoError(t, err)
+
+	typedData := apitypes.TypedData{}
+	require.NoError(t, json.Unmarshal(signData, &typedData))
+
+	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	require.NoError(t, err)
+	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	require.NoError(t, err)
+
+	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
+	signature, err := crypto.Sign(crypto.Keccak256(rawData), privateKey)
+	require.NoError(t, err)
+	signature[64] += 27
+
+	return signature, crypto.PubkeyToAddress(privateKey.PublicKey)
+}

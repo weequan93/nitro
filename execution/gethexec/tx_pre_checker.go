@@ -148,8 +148,12 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 			return err
 		}
 	}
-	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) {
-		return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)
+
+	isGasless := arbos.Pricer().IsCustomPriceTxCheck(tx)
+	// isGasless := arbutil.IsCustomPriceTxCheck(arbos.Pricer(), tx)
+	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !isGasless {
+		// if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !arbutil.IsGaslessTx(tx) && !arbutil.IsCustomPriceTx(tx) {
+		return fmt.Errorf("PreCheckTx() %w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)
 	}
 	stateNonce := statedb.GetNonce(sender)
 	if tx.Nonce() < stateNonce {
@@ -204,7 +208,7 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 	}
 	balance := statedb.GetBalance(sender)
 	cost := tx.Cost()
-	if arbmath.BigLessThan(balance.ToBig(), cost) {
+	if arbmath.BigLessThan(balance.ToBig(), cost) && !isGasless {
 		return fmt.Errorf("%w: address %v have %v want %v", core.ErrInsufficientFunds, sender, balance, cost)
 	}
 	if config.Strictness >= TxPreCheckerStrictnessFullValidation && tx.Nonce() > stateNonce {
@@ -240,6 +244,23 @@ func (c *TxPreChecker) PublishTransaction(ctx context.Context, tx *types.Transac
 		return err
 	}
 	return c.TransactionPublisher.PublishTransaction(ctx, tx, options)
+}
+
+func (c *TxPreChecker) PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	block := c.bc.CurrentBlock()
+	statedb, err := c.bc.StateAt(block.Root)
+	if err != nil {
+		return err
+	}
+	arbos, err := arbosState.OpenSystemArbosState(statedb, nil, true)
+	if err != nil {
+		return err
+	}
+	err = PreCheckTx(c.bc, c.bc.Config(), block, statedb, arbos, tx, options, c.config())
+	if err != nil {
+		return err
+	}
+	return c.TransactionPublisher.PublishPriorityTransaction(ctx, tx, options)
 }
 
 func (c *TxPreChecker) PublishExpressLaneTransaction(ctx context.Context, msg *timeboost.ExpressLaneSubmission) error {

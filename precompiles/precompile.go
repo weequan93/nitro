@@ -513,6 +513,7 @@ func MakePrecompile(metadata *bind.MetaData, implementer interface{}) (addr, *Pr
 }
 
 func Precompiles() map[addr]ArbosPrecompile {
+
 	contracts := make(map[addr]ArbosPrecompile)
 
 	insert := func(address addr, impl ArbosPrecompile) *Precompile {
@@ -586,6 +587,10 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbWasmCache.methodsByName["CacheCodehash"].maxArbosVersion = params.ArbosVersion_Stylus
 	ArbWasmCache.methodsByName["CacheProgram"].arbosVersion = params.ArbosVersion_StylusFixes
 
+	insert(MakePrecompile(precompilesgen.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: types.DeriwGaslessPublicAddress}))
+	insert(MakePrecompile(precompilesgen.DeriwSubAccountPublicMetaData, &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}))
+	insert(MakePrecompile(precompilesgen.DeriwBlacklistPublicMetaData, &DeriwBlacklistPublic{Address: types.DeriwBlacklistPublicAddress}))
+
 	ArbRetryableImpl := &ArbRetryableTx{Address: types.ArbRetryableTxAddress}
 	ArbRetryable := insert(MakePrecompile(precompilesgen.ArbRetryableTxMetaData, ArbRetryableImpl))
 	arbos.ArbRetryableTxAddress = ArbRetryable.address
@@ -640,6 +645,30 @@ func Precompiles() map[addr]ArbosPrecompile {
 	_, arbDebug := MakePrecompile(precompilesgen.ArbDebugMetaData, &ArbDebug{Address: types.ArbDebugAddress})
 	arbDebug.methodsByName["Panic"].arbosVersion = params.ArbosVersion_Stylus
 	insert(debugOnly(arbDebug.address, arbDebug))
+
+	DeriwGaslessImpl := &DeriwGasless{Address: types.DeriwGaslessAddress}
+	emitDeriwGaslessActs := func(evm mech, method bytes4, owner addr, data []byte) error {
+		context := eventCtx(DeriwGaslessImpl.OwnerActsGasCost(method, owner, data))
+		return DeriwGaslessImpl.OwnerActs(context, evm, method, owner, data)
+	}
+	_, DeriwGasless := MakePrecompile(precompilesgen.DeriwGaslessMetaData, DeriwGaslessImpl)
+	insert(deriwGaslessOwnerOnly(DeriwGaslessImpl.Address, DeriwGasless, emitDeriwGaslessActs))
+
+	DeriwBlacklistImpl := &DeriwBlacklist{Address: types.DeriwBlacklistAddress}
+	emitDeriwBlacklistActs := func(evm mech, method bytes4, owner addr, data []byte) error {
+		context := eventCtx(DeriwBlacklistImpl.OwnerActsGasCost(method, owner, data))
+		return DeriwBlacklistImpl.OwnerActs(context, evm, method, owner, data)
+	}
+	_, DeriwBlacklist := MakePrecompile(precompilesgen.DeriwBlacklistMetaData, DeriwBlacklistImpl)
+	insert(deriwBlacklistOwnerOnly(DeriwBlacklistImpl.Address, DeriwBlacklist, emitDeriwBlacklistActs))
+
+	DeriwSubAccountImpl := &DeriwSubAccount{Address: types.DeriwSubAccountAddress}
+	emitDeriwSubAccountActs := func(evm mech, method bytes4, owner addr, data []byte) error {
+		context := eventCtx(DeriwSubAccountImpl.OwnerActsGasCost(method, owner, data))
+		return DeriwSubAccountImpl.OwnerActs(context, evm, method, owner, data)
+	}
+	_, DeriwSubAccount := MakePrecompile(precompilesgen.DeriwSubAccountMetaData, DeriwSubAccountImpl)
+	insert(deriwSubAccountOwnerOnly(DeriwSubAccountImpl.Address, DeriwSubAccount, emitDeriwSubAccountActs))
 
 	ArbosActs := insert(MakePrecompile(precompilesgen.ArbosActsMetaData, &ArbosActs{Address: types.ArbosAddress}))
 	arbos.InternalTxStartBlockMethodID = ArbosActs.GetMethodID("StartBlock")

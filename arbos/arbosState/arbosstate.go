@@ -9,6 +9,9 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/offchainlabs/nitro/arbos/blacklist"
+	"github.com/offchainlabs/nitro/arbos/subAccount"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -31,6 +34,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/merkleAccumulator"
+	"github.com/offchainlabs/nitro/arbos/pricer"
 	"github.com/offchainlabs/nitro/arbos/programs"
 	"github.com/offchainlabs/nitro/arbos/retryables"
 	"github.com/offchainlabs/nitro/arbos/storage"
@@ -72,6 +76,10 @@ type ArbosState struct {
 	collectTips                     storage.StorageBackedUint64
 	backingStorage                  *storage.Storage
 	Burner                          burn.Burner
+	pricer                          *pricer.Pricer
+	gaslessOwners                   *addressSet.AddressSet
+	subAccountState                 *subAccount.SubAccountState
+	blacklist                       *blacklist.Blacklist
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -114,7 +122,27 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		collectTips:                     backingStorage.OpenStorageBackedUint64(uint64(collectTipsOffset)),
 		backingStorage:                  backingStorage,
 		Burner:                          burner,
+		pricer:                          pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace)),
+		gaslessOwners:                   addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
+		subAccountState:                 subAccount.OpenSubAccountState(backingStorage.OpenSubStorage(subAccountSubspace)),
+		blacklist:                       blacklist.OpenBlacklist(backingStorage.OpenSubStorage(blacklistSubspace)),
 	}, nil
+
+}
+
+func OpenArbosPricer(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *pricer.Pricer {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return pricer.OpenPricer(backingStorage.OpenSubStorage(pricerSubspace))
+}
+
+func OpenSubAccountState(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *subAccount.SubAccountState {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return subAccount.OpenSubAccountState(backingStorage.OpenSubStorage(subAccountSubspace))
+}
+
+func OpenArbosBlacklist(stateDB vm.StateDB, burner burn.Burner, readOnly bool) *blacklist.Blacklist {
+	backingStorage := storage.NewGeth(stateDB, burner)
+	return blacklist.OpenBlacklist(backingStorage.OpenSubStorage(blacklistSubspace))
 }
 
 func openFilteredTransactions(arbosVersion uint64, stateDB vm.StateDB, burner burn.Burner) *filteredTransactions.FilteredTransactionsState {
@@ -210,6 +238,10 @@ var (
 	featuresSubspace            SubspaceID = []byte{9}
 	nativeTokenOwnerSubspace    SubspaceID = []byte{10}
 	transactionFiltererSubspace SubspaceID = []byte{11}
+	pricerSubspace              SubspaceID = []byte{12}
+	gaslessSubspace             SubspaceID = []byte{13}
+	subAccountSubspace          SubspaceID = []byte{14}
+	blacklistSubspace           SubspaceID = []byte{15}
 )
 
 var PrecompileMinArbOSVersions = make(map[common.Address]uint64)
@@ -347,10 +379,21 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 		return nil, err
 	}
 
+	_ = pricer.InitializePricer(sto.OpenSubStorage(pricerSubspace))
+
+	gaslessOwnersStorage := sto.OpenCachedSubStorage(gaslessSubspace)
+	_ = addressSet.Initialize(gaslessOwnersStorage)
+	_ = addressSet.OpenAddressSet(gaslessOwnersStorage).Add(initialChainOwner)
+
+	_ = subAccount.InitializeSubAccountState(sto.OpenCachedSubStorage(subAccountSubspace))
+
+	_ = blacklist.InitializeBlacklist(sto.OpenSubStorage(blacklistSubspace))
+
 	aState, err := OpenArbosState(stateDB, burner)
 	if err != nil {
 		return nil, err
 	}
+
 	if desiredArbosVersion > 1 {
 		err = aState.UpgradeArbosVersion(desiredArbosVersion, true, stateDB, chainConfig)
 		if err != nil {
@@ -597,6 +640,10 @@ func (state *ArbosState) L2PricingState() *l2pricing.L2PricingState {
 	return state.l2PricingState
 }
 
+func (state *ArbosState) Pricer() *pricer.Pricer {
+	return state.pricer
+}
+
 func (state *ArbosState) AddressTable() *addressTable.AddressTable {
 	return state.addressTable
 }
@@ -631,6 +678,18 @@ func (state *ArbosState) TransactionFilterers() *addressSet.AddressSet {
 
 func (state *ArbosState) FilteredTransactions() *filteredTransactions.FilteredTransactionsState {
 	return state.filteredTransactions
+}
+
+func (state *ArbosState) GaslessOwners() *addressSet.AddressSet {
+	return state.gaslessOwners
+}
+
+func (state *ArbosState) Blacklist() *blacklist.Blacklist {
+	return state.blacklist
+}
+
+func (state *ArbosState) SubAccount() *subAccount.SubAccountState {
+	return state.subAccountState
 }
 
 func (state *ArbosState) SendMerkleAccumulator() *merkleAccumulator.MerkleAccumulator {

@@ -99,6 +99,7 @@ type SequencerConfig struct {
 	Dangerous                    DangerousConfig  `koanf:"dangerous"`
 	expectedSurplusSoftThreshold int
 	expectedSurplusHardThreshold int
+	PrioritySenderWhitelist      []string `koanf:"priority-sender-whitelist"`
 }
 
 type DangerousConfig struct {
@@ -121,6 +122,14 @@ func (c *SequencerConfig) Validate() error {
 		return fmt.Errorf("undefined expected-surplus-gas-price-mode: %s", c.ExpectedSurplusGasPriceMode)
 	}
 
+	for _, address := range c.PrioritySenderWhitelist {
+		if len(address) == 0 {
+			continue
+		}
+		if !common.IsHexAddress(address) {
+			return fmt.Errorf("sequencer priority sender whitelist entry \"%v\" is not a valid address", address)
+		}
+	}
 	var err error
 	if c.ExpectedSurplusSoftThreshold != "default" {
 		if c.expectedSurplusSoftThreshold, err = strconv.Atoi(c.ExpectedSurplusSoftThreshold); err != nil {
@@ -186,6 +195,7 @@ var DefaultSequencerConfig = SequencerConfig{
 	EnableProfiling:              false,
 	Timeboost:                    timeboost.DefaultConfig,
 	Dangerous:                    DefaultDangerousConfig,
+	PrioritySenderWhitelist:      []string{},
 }
 
 var DefaultDangerousConfig = DangerousConfig{
@@ -199,6 +209,7 @@ func SequencerConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Uint64(prefix+".max-revert-gas-reject", DefaultSequencerConfig.MaxRevertGasReject, "maximum gas executed in a revert for the sequencer to reject the transaction instead of posting it (anti-DOS)")
 	f.Duration(prefix+".max-acceptable-timestamp-delta", DefaultSequencerConfig.MaxAcceptableTimestampDelta, "maximum acceptable time difference between the local time and the latest L1 block's timestamp")
 	f.StringSlice(prefix+".sender-whitelist", DefaultSequencerConfig.SenderWhitelist, "comma separated whitelist of authorized senders (if empty, everyone is allowed)")
+	f.StringSlice(prefix+".priority-sender-whitelist", DefaultSequencerConfig.PrioritySenderWhitelist, "comma separated priority whitelist of authorized senders (if empty, everyone is allowed)")
 	AddOptionsForSequencerForwarderConfig(prefix+".forwarder", f)
 	timeboost.AddOptions(prefix+".timeboost", f)
 
@@ -398,17 +409,19 @@ func (q *synchronizedTxQueue) Len() int {
 type Sequencer struct {
 	stopwaiter.StopWaiter
 
-	execEngine         *ExecutionEngine
-	txQueue            chan txQueueItem
-	txRetryQueue       synchronizedTxQueue
-	l1Reader           *headerreader.HeaderReader
-	config             SequencerConfigFetcher
-	senderWhitelist    map[common.Address]struct{}
-	nonceCache         *nonceCache
-	nonceFailures      *nonceFailureCache
-	expressLaneService *timeboost.ExpressLaneService
-	onForwarderSet     chan struct{}
-	parentChain        *parent.ParentChain
+	execEngine              *ExecutionEngine
+	txQueue                 chan txQueueItem
+	txPriorityQueue         chan txQueueItem
+	txRetryQueue            synchronizedTxQueue
+	l1Reader                *headerreader.HeaderReader
+	config                  SequencerConfigFetcher
+	senderWhitelist         map[common.Address]struct{}
+	prioritySenderWhitelist map[common.Address]struct{}
+	nonceCache              *nonceCache
+	nonceFailures           *nonceFailureCache
+	expressLaneService      *timeboost.ExpressLaneService
+	onForwarderSet          chan struct{}
+	parentChain             *parent.ParentChain
 
 	L1BlockAndTimeMutex sync.Mutex
 	l1BlockNumber       atomic.Uint64
@@ -452,6 +465,14 @@ func NewSequencer(
 		senderWhitelist[common.HexToAddress(address)] = struct{}{}
 	}
 
+	prioritySenderWhitelist := make(map[common.Address]struct{})
+	for _, address := range config.PrioritySenderWhitelist {
+		if len(address) == 0 {
+			continue
+		}
+		prioritySenderWhitelist[common.HexToAddress(address)] = struct{}{}
+	}
+
 	s := &Sequencer{
 		execEngine:                        execEngine,
 		txQueue:                           make(chan txQueueItem, config.QueueSize),
@@ -466,6 +487,8 @@ func NewSequencer(
 		timeboostAuctionResolutionTxQueue: make(chan txQueueItem, 10), // There should never be more than 1 outstanding auction resolutions
 		eventFilter:                       eventFilter,
 		addressFilterService:              addressFilterService,
+		txPriorityQueue:                   make(chan txQueueItem, config.QueueSize),
+		prioritySenderWhitelist:           prioritySenderWhitelist,
 	}
 	s.nonceFailures = &nonceFailureCache{
 		containers.NewLruCacheWithOnEvict(config.NonceCacheSize, s.onNonceFailureEvict),
@@ -528,6 +551,46 @@ func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Tran
 
 	resultChan := make(chan error, 1)
 	err := s.publishTransactionToQueue(queueCtx, tx, options, resultChan, false /* delay tx if express lane is active */)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	// Just to be safe, make sure we don't run over twice the queue timeout
+	abortCtx, cancel := ctxhelper.WithTimeoutOrCancel(parentCtx, queueTimeout*2)
+	defer cancel()
+
+	select {
+	case res := <-resultChan:
+		return res
+	case <-abortCtx.Done():
+		// We use abortCtx here and not queueCtx, because the QueueTimeout only applies to the background queue.
+		// We want to give the background queue as much time as possible to make a response.
+		err := abortCtx.Err()
+		if parentCtx.Err() == nil {
+			// If we've hit the abort deadline (as opposed to parentCtx being canceled), something went wrong.
+			log.Warn("Transaction sequencing hit abort deadline", "err", err, "submittedAt", now, "queueTimeout", queueTimeout*2, "txHash", tx.Hash())
+		}
+		return err
+	}
+}
+
+func (s *Sequencer) PublishPriorityTransaction(parentCtx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	_, forwarder := s.GetPauseAndForwarder()
+	if forwarder != nil {
+		err := forwarder.PublishPriorityTransaction(parentCtx, tx, options)
+		if !errors.Is(err, ErrNoSequencer) {
+			return err
+		}
+	}
+
+	config := s.config()
+	queueTimeout := config.QueueTimeout
+	queueCtx, cancelFunc := ctxhelper.WithTimeoutOrCancel(parentCtx, queueTimeout+config.Timeboost.ExpressLaneAdvantage) // Include timeboost delay in ctx timeout
+	defer cancelFunc()
+
+	resultChan := make(chan error, 1)
+	err := s.publishPriorityTransactionToQueue(queueCtx, tx, options, resultChan, false /* delay tx if express lane is active */)
 	if err != nil {
 		return err
 	}
@@ -700,6 +763,57 @@ func (s *Sequencer) publishTransactionToQueue(queueCtx context.Context, tx *type
 	case <-queueCtx.Done():
 		return queueCtx.Err()
 	}
+	return nil
+}
+
+func (s *Sequencer) publishPriorityTransactionToQueue(queueCtx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions, resultChan chan error, isExpressLaneController bool) error {
+	config := s.config()
+	// Only try to acquire Rlock and check for hard threshold if l1reader is not nil
+	// And hard threshold was enabled, this prevents spamming of read locks when not needed
+	if s.l1Reader != nil && config.ExpectedSurplusHardThreshold != "default" {
+		s.expectedSurplusMutex.RLock()
+		if s.expectedSurplusUpdated && s.expectedSurplus < int64(config.expectedSurplusHardThreshold) {
+			return errors.New("currently not accepting transactions due to expected surplus being below threshold")
+		}
+		s.expectedSurplusMutex.RUnlock()
+	}
+
+	sequencerBacklogGauge.Inc(1)
+	defer sequencerBacklogGauge.Dec(1)
+
+	if len(s.prioritySenderWhitelist) > 0 {
+		signer := types.LatestSigner(s.execEngine.bc.Config())
+		sender, err := types.Sender(signer, tx)
+		if err != nil {
+			return err
+		}
+		_, authorized := s.prioritySenderWhitelist[sender]
+		if !authorized {
+			return errors.New("transaction sender is not on the priority whitelist")
+		}
+	}
+	if tx.Type() >= types.ArbitrumDepositTxType || tx.Type() == types.BlobTxType {
+		// Should be unreachable for Arbitrum types due to UnmarshalBinary not accepting Arbitrum internal txs
+		// and we want to disallow BlobTxType since Arbitrum doesn't support EIP-4844 txs yet.
+		return types.ErrTxTypeNotSupported
+	}
+
+	queueItem := txQueueItem{
+		tx:              tx,
+		txSize:          int(tx.Size()), // #nosec G115
+		options:         options,
+		resultChan:      resultChan,
+		returnedResult:  &atomic.Bool{},
+		ctx:             queueCtx,
+		firstAppearance: time.Now(),
+		isTimeboosted:   isExpressLaneController,
+	}
+	select {
+	case s.txPriorityQueue <- queueItem:
+	case <-queueCtx.Done():
+		return queueCtx.Err()
+	}
+
 	return nil
 }
 
@@ -1280,6 +1394,7 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 				log.Debug("Popped the auction resolution tx", "txHash", queueItem.tx.Hash())
 			default:
 				select {
+				case queueItem = <-s.txPriorityQueue:
 				case queueItem = <-s.txQueue:
 				case queueItem = <-s.timeboostAuctionResolutionTxQueue:
 					log.Debug("Popped the auction resolution tx", "txHash", queueItem.tx.Hash())
@@ -1305,6 +1420,7 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 				log.Debug("Popped the auction resolution tx", "txHash", queueItem.tx.Hash())
 			default:
 				select {
+				case queueItem = <-s.txPriorityQueue:
 				case queueItem = <-s.txQueue:
 				case queueItem = <-s.timeboostAuctionResolutionTxQueue:
 					log.Debug("Popped the auction resolution tx", "txHash", queueItem.tx.Hash())
@@ -1736,10 +1852,11 @@ const (
 	RetryQueue TxSource = iota + 1
 	NonceFailures
 	TxQueue
+	TxPriorityQueue
 	TimeboostAuctionResolutionTxQueue
 )
 
-var txSources = []string{"unknown", "retryQueue", "nonceFailures", "txQueue", "timeboostAuctionResolutionTxQueue"}
+var txSources = []string{"unknown", "retryQueue", "nonceFailures", "txQueue", "txPriorityQueue", "timeboostAuctionResolutionTxQueue"}
 
 func (s TxSource) String() string {
 	if int(s) > len(txSources) || s < 0 {
@@ -1757,6 +1874,7 @@ func (s *Sequencer) StopAndWait() {
 	s.StopWaiter.StopAndWait()
 	if s.txRetryQueue.Len() == 0 &&
 		len(s.txQueue) == 0 &&
+		len(s.txPriorityQueue) == 0 &&
 		s.nonceFailures.Len() == 0 &&
 		len(s.timeboostAuctionResolutionTxQueue) == 0 {
 		return
@@ -1764,6 +1882,7 @@ func (s *Sequencer) StopAndWait() {
 	// this usually means that coordinator's safe-shutdown-delay is too low
 	log.Warn("Sequencer has queued items while shutting down",
 		"txQueue", len(s.txQueue),
+		"txPriorityQueue", len(s.txPriorityQueue),
 		"retryQueue", s.txRetryQueue.Len(),
 		"nonceFailures", s.nonceFailures.Len(),
 		"timeboostAuctionResolutionTxQueue", len(s.timeboostAuctionResolutionTxQueue))
@@ -1785,6 +1904,8 @@ func (s *Sequencer) StopAndWait() {
 				s.nonceFailures.RemoveOldest()
 			} else {
 				select {
+				case item = <-s.txPriorityQueue:
+					source = TxPriorityQueue
 				case item = <-s.txQueue:
 					source = TxQueue
 				case item = <-s.timeboostAuctionResolutionTxQueue:

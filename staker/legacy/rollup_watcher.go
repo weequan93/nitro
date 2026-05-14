@@ -48,13 +48,242 @@ type StakerInfo struct {
 }
 
 type RollupWatcher struct {
-	*rollup_legacy_gen.RollupUserLogic
+	RollUpLogic         RollUpLogic
 	address             common.Address
 	fromBlock           *big.Int
 	client              RollupWatcherL1Interface
 	baseCallOpts        bind.CallOpts
 	unSupportedL3Method atomic.Bool
 	supportedL3Method   atomic.Bool
+}
+
+type RollUpLogic struct {
+	Erc20RollUpUserLogic *rollup_legacy_gen.ERC20RollupUserLogic
+	RollUpUserLogic      *rollup_legacy_gen.RollupUserLogic
+}
+
+func (r *RollUpLogic) GetNodeCreationBlockForLogLookup(callOpts *bind.CallOpts, nodeNum uint64) (*big.Int, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.GetNodeCreationBlockForLogLookup(callOpts, nodeNum)
+	} else {
+		return r.RollUpUserLogic.GetNodeCreationBlockForLogLookup(callOpts, nodeNum)
+	}
+}
+
+func (r *RollUpLogic) CreateChallenge(opts *bind.TransactOpts, stakers [2]common.Address, nodeNums [2]uint64, machineStatuses [2]uint8, globalStates [2]rollup_legacy_gen.GlobalState, numBlocks uint64, secondExecutionHash [32]byte, proposedBlocks [2]*big.Int, wasmModuleRoots [2][32]byte) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.CreateChallenge(opts, stakers, nodeNums, machineStatuses, globalStates, numBlocks, secondExecutionHash, proposedBlocks, wasmModuleRoots)
+	} else {
+		return r.RollUpUserLogic.CreateChallenge(opts, stakers, nodeNums, machineStatuses, globalStates, numBlocks, secondExecutionHash, proposedBlocks, wasmModuleRoots)
+	}
+}
+
+func (r *RollUpLogic) FirstUnresolvedNode(opts *bind.CallOpts) (uint64, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.FirstUnresolvedNode(opts)
+	} else {
+		return r.RollUpUserLogic.FirstUnresolvedNode(opts)
+	}
+}
+
+func (r *RollUpLogic) BaseStake(opts *bind.CallOpts) (*big.Int, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.BaseStake(opts)
+	} else {
+		return r.RollUpUserLogic.BaseStake(opts)
+	}
+}
+
+func (r *RollUpLogic) ChallengeManager(opts *bind.CallOpts) (common.Address, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.ChallengeManager(opts)
+	} else {
+		return r.RollUpUserLogic.ChallengeManager(opts)
+	}
+}
+
+func (r *RollUpLogic) GetNode(callOpts *bind.CallOpts, nodeNum uint64) (rollup_legacy_gen.Node, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.GetNode(callOpts, nodeNum)
+	} else {
+		return r.RollUpUserLogic.GetNode(callOpts, nodeNum)
+	}
+}
+
+func (r *RollUpLogic) MinimumAssertionPeriod(copts *bind.CallOpts) (*big.Int, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.MinimumAssertionPeriod(copts)
+	} else {
+		return r.RollUpUserLogic.MinimumAssertionPeriod(copts)
+	}
+}
+
+func (r *RollUpLogic) StakeOnNewNode(opts *bind.TransactOpts, assertion rollup_legacy_gen.Assertion, expectedNodeHash [32]byte, prevNodeInboxMaxCount *big.Int) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.StakeOnNewNode(opts, assertion, expectedNodeHash, prevNodeInboxMaxCount)
+	} else {
+		return r.RollUpUserLogic.StakeOnNewNode(opts, assertion, expectedNodeHash, prevNodeInboxMaxCount)
+	}
+}
+
+func (r *RollUpLogic) CurrentRequiredStake(opts *bind.CallOpts) (*big.Int, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.CurrentRequiredStake(opts)
+	} else {
+		return r.RollUpUserLogic.CurrentRequiredStake(opts)
+	}
+}
+
+func (r *RollUpLogic) StakeToken(opts *bind.CallOpts) (common.Address, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.StakeToken(opts)
+	} else {
+		return r.RollUpUserLogic.StakeToken(opts)
+	}
+}
+
+func (r *RollUpLogic) WithdrawableFunds(copts *bind.CallOpts, user common.Address) (*big.Int, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.WithdrawableFunds(copts, user)
+	} else {
+		return r.RollUpUserLogic.WithdrawableFunds(copts, user)
+	}
+}
+
+func (r *RollUpLogic) NodeHasStaker(opts *bind.CallOpts, nodeNum uint64, staker common.Address) (bool, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.NodeHasStaker(opts, nodeNum, staker)
+	} else {
+		return r.RollUpUserLogic.NodeHasStaker(opts, nodeNum, staker)
+	}
+}
+
+func (r *RollUpLogic) ReturnOldDeposit(opts *bind.TransactOpts, stakerAddress common.Address) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.ReturnOldDeposit(opts, stakerAddress)
+	} else {
+		return r.RollUpUserLogic.ReturnOldDeposit(opts, stakerAddress)
+	}
+}
+
+func (r *RollUpLogic) WithdrawStakerFunds(opts *bind.TransactOpts) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.WithdrawStakerFunds(opts)
+	} else {
+		return r.RollUpUserLogic.WithdrawStakerFunds(opts)
+	}
+}
+
+func (r *RollUpLogic) LatestConfirmed(opts *bind.CallOpts) (uint64, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.LatestConfirmed(opts)
+	} else {
+		return r.RollUpUserLogic.LatestConfirmed(opts)
+	}
+}
+
+func (r *RollUpLogic) IsValidator(opts *bind.CallOpts, address common.Address) (bool, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.IsValidator(opts, address)
+	} else {
+		return r.RollUpUserLogic.IsValidator(opts, address)
+	}
+}
+
+func (r *RollUpLogic) StakeOnExistingNode(opts *bind.TransactOpts, nodeNum uint64, nodeHash [32]byte) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.StakeOnExistingNode(opts, nodeNum, nodeHash)
+	} else {
+		return r.RollUpUserLogic.StakeOnExistingNode(opts, nodeNum, nodeHash)
+	}
+}
+
+func (r *RollUpLogic) WasmModuleRoot(opts *bind.CallOpts) ([32]byte, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.WasmModuleRoot(opts)
+	} else {
+		return r.RollUpUserLogic.WasmModuleRoot(opts)
+	}
+}
+
+func (r *RollUpLogic) ValidatorWhitelistDisabled(opts *bind.CallOpts) (bool, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.ValidatorWhitelistDisabled(opts)
+	} else {
+		return r.RollUpUserLogic.ValidatorWhitelistDisabled(opts)
+	}
+}
+
+func (r *RollUpLogic) FastConfirmNextNode(auth *bind.TransactOpts, blockHash [32]byte, sendRoot [32]byte, nodeHash [32]byte) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.FastConfirmNextNode(auth, blockHash, sendRoot, nodeHash)
+	} else {
+		return r.RollUpUserLogic.FastConfirmNextNode(auth, blockHash, sendRoot, nodeHash)
+	}
+}
+
+func (r *RollUpLogic) RejectNextNode(opts *bind.TransactOpts, stakerAddress common.Address) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.RejectNextNode(opts, stakerAddress)
+	} else {
+		return r.RollUpUserLogic.RejectNextNode(opts, stakerAddress)
+	}
+}
+
+func (r *RollUpLogic) ConfirmNextNode(opts *bind.TransactOpts, blockHash [32]byte, sendRoot [32]byte) (*types.Transaction, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.ConfirmNextNode(opts, blockHash, sendRoot)
+	} else {
+		return r.RollUpUserLogic.ConfirmNextNode(opts, blockHash, sendRoot)
+	}
+}
+
+func (r *RollUpLogic) StakerMap(opts *bind.CallOpts, arg0 common.Address) (struct {
+	AmountStaked     *big.Int
+	Index            uint64
+	LatestStakedNode uint64
+	CurrentChallenge uint64
+	IsStaked         bool
+}, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		return r.Erc20RollUpUserLogic.StakerMap(opts, arg0)
+	} else {
+		return r.RollUpUserLogic.StakerMap(opts, arg0)
+	}
+}
+
+func (r *RollUpLogic) ParseRollupChallengeStarted(log types.Log) (uint64, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		challenge, err := r.Erc20RollUpUserLogic.ParseRollupChallengeStarted(log)
+		if err != nil {
+			return 0, err
+		}
+		return challenge.ChallengedNode, nil
+	} else {
+		challenge, err := r.RollUpUserLogic.ParseRollupChallengeStarted(log)
+		if err != nil {
+			return 0, err
+		}
+		return challenge.ChallengedNode, nil
+	}
+
+}
+
+func (r *RollUpLogic) ParseNodeCreated(ethLog types.Log) (uint64, rollup_legacy_gen.Assertion, *big.Int, [32]byte, [32]byte, [32]byte, [32]byte, error) {
+	if r.Erc20RollUpUserLogic != nil {
+		parsedLog, err := r.Erc20RollUpUserLogic.ParseNodeCreated(ethLog)
+		if err != nil {
+			return 0, rollup_legacy_gen.Assertion{}, nil, [32]byte{}, [32]byte{}, [32]byte{}, [32]byte{}, err
+		}
+		return parsedLog.NodeNum, parsedLog.Assertion, parsedLog.InboxMaxCount, parsedLog.AfterInboxBatchAcc, parsedLog.NodeHash, parsedLog.WasmModuleRoot, parsedLog.ExecutionHash, nil
+	} else {
+		parsedLog, err := r.RollUpUserLogic.ParseNodeCreated(ethLog)
+		if err != nil {
+			return 0, rollup_legacy_gen.Assertion{}, nil, [32]byte{}, [32]byte{}, [32]byte{}, [32]byte{}, err
+		}
+		return parsedLog.NodeNum, parsedLog.Assertion, parsedLog.InboxMaxCount, parsedLog.AfterInboxBatchAcc, parsedLog.NodeHash, parsedLog.WasmModuleRoot, parsedLog.ExecutionHash, nil
+	}
+
 }
 
 type RollupWatcherL1Interface interface {
@@ -64,16 +293,32 @@ type RollupWatcherL1Interface interface {
 }
 
 func NewRollupWatcher(address common.Address, client RollupWatcherL1Interface, callOpts bind.CallOpts) (*RollupWatcher, error) {
-	con, err := rollup_legacy_gen.NewRollupUserLogic(address, client)
+	var rollUpLogic RollUpLogic
+	dummyRollUp, err := rollup_legacy_gen.NewRollupUserLogic(address, client)
 	if err != nil {
 		return nil, err
 	}
+	stakeToken, err := dummyRollUp.StakeToken(&callOpts)
 
+	if stakeToken == (common.Address{}) {
+		// eth
+		con, err := rollup_legacy_gen.NewRollupUserLogic(address, client)
+		if err != nil {
+			return nil, err
+		}
+		rollUpLogic.RollUpUserLogic = con
+	} else {
+		con, err := rollup_legacy_gen.NewERC20RollupUserLogic(address, client)
+		if err != nil {
+			return nil, err
+		}
+		rollUpLogic.Erc20RollUpUserLogic = con
+	}
 	return &RollupWatcher{
-		address:         address,
-		client:          client,
-		baseCallOpts:    callOpts,
-		RollupUserLogic: con,
+		address:      address,
+		client:       client,
+		baseCallOpts: callOpts,
+		RollUpLogic:  rollUpLogic,
 	}, nil
 }
 
@@ -108,7 +353,7 @@ func looksLikeNoNodeError(err error) bool {
 func (r *RollupWatcher) getNodeCreationBlock(ctx context.Context, nodeNum uint64) (*big.Int, error) {
 	callOpts := r.getCallOpts(ctx)
 	if !r.unSupportedL3Method.Load() {
-		createdAtBlock, err := r.GetNodeCreationBlockForLogLookup(callOpts, nodeNum)
+		createdAtBlock, err := r.RollUpLogic.GetNodeCreationBlockForLogLookup(callOpts, nodeNum)
 		if err == nil {
 			r.supportedL3Method.Store(true)
 			return createdAtBlock, nil
@@ -123,7 +368,8 @@ func (r *RollupWatcher) getNodeCreationBlock(ctx context.Context, nodeNum uint64
 			return nil, err
 		}
 	}
-	node, err := r.GetNode(callOpts, nodeNum)
+
+	node, err := r.RollUpLogic.GetNode(callOpts, nodeNum)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +404,28 @@ func (r *RollupWatcher) LookupCreation(ctx context.Context) (*rollup_legacy_gen.
 	if len(logs) > 1 {
 		return nil, errors.New("rollup created multiple times")
 	}
-	ev, err := r.ParseRollupInitialized(logs[0])
+	ev, err := r.RollUpLogic.RollUpUserLogic.ParseRollupInitialized(logs[0])
+	return ev, err
+}
+
+func (r *RollupWatcher) Erc20LookupCreation(ctx context.Context) (*rollup_legacy_gen.ERC20RollupUserLogicRollupInitialized, error) {
+	var query = ethereum.FilterQuery{
+		FromBlock: r.fromBlock,
+		ToBlock:   r.fromBlock,
+		Addresses: []common.Address{r.address},
+		Topics:    [][]common.Hash{{rollupInitializedID}},
+	}
+	logs, err := r.client.FilterLogs(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(logs) == 0 {
+		return nil, errors.New("rollup not created")
+	}
+	if len(logs) > 1 {
+		return nil, errors.New("rollup created multiple times")
+	}
+	ev, err := r.RollUpLogic.Erc20RollUpUserLogic.ParseRollupInitialized(logs[0])
 	return ev, err
 }
 
@@ -186,28 +453,31 @@ func (r *RollupWatcher) LookupNode(ctx context.Context, number uint64) (*NodeInf
 		return nil, fmt.Errorf("found multiple instances of requested node %v", number)
 	}
 	ethLog := logs[0]
-	parsedLog, err := r.ParseNodeCreated(ethLog)
+
+	nodeNum, assertion, inboxMaxCount, afterInboxBatchAcc, nodeHash, wasmModuleRoot, _, err := r.RollUpLogic.ParseNodeCreated(ethLog)
 	if err != nil {
 		return nil, err
 	}
+
 	l1BlockProposed, err := arbutil.CorrespondingL1BlockNumber(ctx, r.client, ethLog.BlockNumber)
 	if err != nil {
 		return nil, err
 	}
 	return &NodeInfo{
-		NodeNum:                  parsedLog.NodeNum,
+		NodeNum:                  nodeNum,
 		L1BlockProposed:          l1BlockProposed,
 		ParentChainBlockProposed: ethLog.BlockNumber,
-		Assertion:                NewAssertionFromLegacySolidity(parsedLog.Assertion),
-		InboxMaxCount:            parsedLog.InboxMaxCount,
-		AfterInboxBatchAcc:       parsedLog.AfterInboxBatchAcc,
-		NodeHash:                 parsedLog.NodeHash,
-		WasmModuleRoot:           parsedLog.WasmModuleRoot,
+		Assertion:                NewAssertionFromLegacySolidity(assertion),
+		InboxMaxCount:            inboxMaxCount,
+		AfterInboxBatchAcc:       afterInboxBatchAcc,
+		NodeHash:                 nodeHash,
+		WasmModuleRoot:           wasmModuleRoot,
 	}, nil
+
 }
 
 func (r *RollupWatcher) LookupNodeChildren(ctx context.Context, nodeNum uint64, logQueryRangeSize uint64, nodeHash common.Hash) ([]*NodeInfo, error) {
-	node, err := r.RollupUserLogic.GetNode(r.getCallOpts(ctx), nodeNum)
+	node, err := r.RollUpLogic.GetNode(r.getCallOpts(ctx), nodeNum)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +521,8 @@ func (r *RollupWatcher) LookupNodeChildren(ctx context.Context, nodeNum uint64, 
 	infos := make([]*NodeInfo, 0, len(logs))
 	lastHash := nodeHash
 	for i, ethLog := range logs {
-		parsedLog, err := r.ParseNodeCreated(ethLog)
+
+		nodeNum, assertion, inboxMaxCount, afterInboxBatchAcc, _, wasmModuleRoot, executionHash, err := r.RollUpLogic.ParseNodeCreated(ethLog)
 		if err != nil {
 			return nil, err
 		}
@@ -259,27 +530,28 @@ func (r *RollupWatcher) LookupNodeChildren(ctx context.Context, nodeNum uint64, 
 		if i > 0 {
 			lastHashIsSibling[0] = 1
 		}
-		lastHash = crypto.Keccak256Hash(lastHashIsSibling[:], lastHash[:], parsedLog.ExecutionHash[:], parsedLog.AfterInboxBatchAcc[:], parsedLog.WasmModuleRoot[:])
+		lastHash = crypto.Keccak256Hash(lastHashIsSibling[:], lastHash[:], executionHash[:], afterInboxBatchAcc[:], wasmModuleRoot[:])
 		l1BlockProposed, err := arbutil.CorrespondingL1BlockNumber(ctx, r.client, ethLog.BlockNumber)
 		if err != nil {
 			return nil, err
 		}
 		infos = append(infos, &NodeInfo{
-			NodeNum:                  parsedLog.NodeNum,
+			NodeNum:                  nodeNum,
 			L1BlockProposed:          l1BlockProposed,
 			ParentChainBlockProposed: ethLog.BlockNumber,
-			Assertion:                NewAssertionFromLegacySolidity(parsedLog.Assertion),
-			InboxMaxCount:            parsedLog.InboxMaxCount,
-			AfterInboxBatchAcc:       parsedLog.AfterInboxBatchAcc,
+			Assertion:                NewAssertionFromLegacySolidity(assertion),
+			InboxMaxCount:            inboxMaxCount,
+			AfterInboxBatchAcc:       afterInboxBatchAcc,
 			NodeHash:                 lastHash,
-			WasmModuleRoot:           parsedLog.WasmModuleRoot,
+			WasmModuleRoot:           wasmModuleRoot,
 		})
+
 	}
 	return infos, nil
 }
 
 func (r *RollupWatcher) LatestConfirmedCreationBlock(ctx context.Context) (uint64, error) {
-	latestConfirmed, err := r.LatestConfirmed(r.getCallOpts(ctx))
+	latestConfirmed, err := r.RollUpLogic.LatestConfirmed(r.getCallOpts(ctx))
 	if err != nil {
 		return 0, err
 	}
@@ -326,16 +598,16 @@ func (r *RollupWatcher) LookupChallengedNode(ctx context.Context, address common
 		return 0, errors.New("too many matching challenges")
 	}
 
-	challenge, err := r.ParseRollupChallengeStarted(logs[0])
+	challengedNode, err := r.RollUpLogic.ParseRollupChallengeStarted(logs[0])
 	if err != nil {
 		return 0, err
 	}
-
-	return challenge.ChallengedNode, nil
+	return challengedNode, err
 }
 
 func (r *RollupWatcher) StakerInfo(ctx context.Context, staker common.Address) (*StakerInfo, error) {
-	info, err := r.StakerMap(r.getCallOpts(ctx), staker)
+
+	info, err := r.RollUpLogic.StakerMap(r.getCallOpts(ctx), staker)
 	if err != nil {
 		return nil, err
 	}

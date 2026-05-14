@@ -53,7 +53,7 @@ type Config struct {
 // For arbnode, use DefaultConfigForNode instead.
 var DefaultConfig = Config{
 	Enable:                          false,
-	RequestTimeout:                  5 * time.Second,
+	RequestTimeout:                  30 * time.Second,
 	MaxBatchSize:                    1_000_000, // 1MB default
 	LocalCache:                      DefaultCacheConfig,
 	RedisCache:                      DefaultRedisConfig,
@@ -73,7 +73,7 @@ var DefaultConfig = Config{
 // zero values since they have no pflags registered in node mode.
 var DefaultConfigForNode = Config{
 	Enable:                          false,
-	RequestTimeout:                  5 * time.Second,
+	RequestTimeout:                  30 * time.Second,
 	MaxBatchSize:                    1_000_000, // 1MB default
 	LocalCache:                      CacheConfig{},
 	RedisCache:                      RedisConfig{},
