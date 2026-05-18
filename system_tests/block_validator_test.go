@@ -9,6 +9,9 @@ package arbtest
 import (
 	"context"
 	"math/big"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/offchainlabs/nitro/arbnode"
@@ -49,11 +53,32 @@ type Options struct {
 	useRedisStreams bool
 	wasmRootDir     string
 	arbosVersion    uint64 // sets InitialArbOSVersion, overwrites any other operation setting it like upgradeArbOs worload
+	pathDB          bool
+	mockValidation  bool
+	validationHook  func(id uint64)
+	noWorkloadDelay bool
+}
+
+func mockMachineRootDir(t *testing.T, moduleRoot common.Hash) string {
+	t.Helper()
+	rootDir := t.TempDir()
+	latestDir := filepath.Join(rootDir, "latest")
+	Require(t, os.MkdirAll(latestDir, 0755))
+	Require(t, os.WriteFile(filepath.Join(latestDir, "module-root.txt"), []byte(moduleRoot.Hex()+"\n"), 0644))
+	return rootDir
 }
 
 func testBlockValidatorSimple(t *testing.T, opts Options) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	if opts.mockValidation {
+		if opts.useRedisStreams {
+			Fatal(t, "mock validation and redis streams cannot be combined")
+		}
+		if opts.wasmRootDir == "" {
+			opts.wasmRootDir = mockMachineRootDir(t, mockWasmModuleRoots[0])
+		}
+	}
 
 	chainConfig, l1NodeConfigA, lifecycleManager, _, anyTrustSignerKey := setupConfigWithAnyTrust(t, ctx, opts.daModeString)
 	if lifecycleManager != nil {
@@ -64,14 +89,17 @@ func testBlockValidatorSimple(t *testing.T, opts Options) {
 	}
 
 	var delayEvery int
-	if opts.workloadLoops > 1 {
+	if opts.workloadLoops > 1 && !opts.noWorkloadDelay {
 		delayEvery = opts.workloadLoops / 3
 	}
 
 	builder := NewNodeBuilder(ctx).DefaultConfig(t, true)
 	builder = builder.WithWasmRootDir(opts.wasmRootDir)
-	// For now PathDB is not supported when using block validation
-	builder.RequireScheme(t, rawdb.HashScheme)
+	if opts.pathDB {
+		builder.RequireScheme(t, rawdb.PathScheme)
+	} else {
+		builder.RequireScheme(t, rawdb.HashScheme)
+	}
 
 	builder.nodeConfig = l1NodeConfigA
 	builder.chainConfig = chainConfig
@@ -95,6 +123,13 @@ func testBlockValidatorSimple(t *testing.T, opts Options) {
 
 	validatorConfig := arbnode.ConfigDefaultL1NonSequencerTest()
 	validatorConfig.BlockValidator.Enable = true
+	if opts.pathDB {
+		validatorConfig.BlockValidator.Dangerous.AllowPathDB = true
+	}
+	if opts.mockValidation {
+		validatorConfig.BlockValidator.CurrentModuleRoot = mockWasmModuleRoots[0].Hex()
+		validatorConfig.BlockValidator.PendingUpgradeModuleRoot = mockWasmModuleRoots[0].Hex()
+	}
 
 	// Configure validator based on DA mode
 	if opts.daModeString == "referenceda" {
@@ -116,7 +151,14 @@ func testBlockValidatorSimple(t *testing.T, opts Options) {
 		validatorConfig.BlockValidator.RedisValidationClientConfig = redis.ValidationClientConfig{}
 	}
 
-	AddValNode(t, ctx, validatorConfig, !opts.arbitrator, redisURL, opts.wasmRootDir)
+	if opts.mockValidation {
+		spawner, valStack := createMockValidationNode(t, ctx, nil)
+		spawner.EndStateForInput = mockEndStateForNode(builder.L2.ConsensusNode.TxStreamer, builder.L2.ConsensusNode.InboxTracker)
+		spawner.LaunchHook = opts.validationHook
+		configByValidationNode(validatorConfig, valStack)
+	} else {
+		AddValNode(t, ctx, validatorConfig, !opts.arbitrator, redisURL, opts.wasmRootDir)
+	}
 
 	testClientB, cleanupB := builder.Build2ndNode(t, &SecondNodeParams{nodeConfig: validatorConfig})
 	defer cleanupB()
@@ -311,6 +353,40 @@ func TestBlockRecordSimple(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 }
 
+func TestBlockRecorderPathDBSimple(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	builder := NewNodeBuilder(ctx).DefaultConfig(t, true)
+	builder.RequireScheme(t, rawdb.PathScheme)
+	cleanup := builder.Build(t)
+	defer cleanup()
+
+	builder.L2Info.GenerateAccount("User2")
+	tx := builder.L2Info.PrepareTx("Owner", "User2", builder.L2Info.TransferGas, big.NewInt(1e12), nil)
+	err := builder.L2.Client.SendTransaction(ctx, tx)
+	Require(t, err)
+	receipt, err := builder.L2.EnsureTxSucceeded(tx)
+	Require(t, err)
+
+	pos := arbutil.MessageIndex(receipt.BlockNumber.Uint64())
+	msg, err := builder.L2.ConsensusNode.TxStreamer.GetMessage(pos)
+	Require(t, err)
+	recording, err := builder.L2.ExecNode.RecordBlockCreation(pos, msg, []rawdb.WasmTarget{rawdb.LocalTarget()}).Await(ctx)
+	Require(t, err)
+	if recording.BlockHash != receipt.BlockHash {
+		Fatal(t, "unexpected recorded block hash", recording.BlockHash, "want", receipt.BlockHash)
+	}
+	if len(recording.Preimages) == 0 {
+		Fatal(t, "expected recorded preimages")
+	}
+	for hash, preimage := range recording.Preimages {
+		if got := crypto.Keccak256Hash(preimage); got != hash {
+			Fatal(t, "bad recorded preimage", "hash", hash, "got", got)
+		}
+	}
+}
+
 func TestBlockValidatorSimpleOnchainUpgradeArbOs(t *testing.T) {
 	opts := Options{
 		daModeString:  "onchain",
@@ -329,6 +405,77 @@ func TestBlockValidatorSimpleOnchain(t *testing.T) {
 		arbitrator:    true,
 	}
 	testBlockValidatorSimple(t, opts)
+}
+
+func TestBlockValidatorSimplePathDBOnchain(t *testing.T) {
+	opts := Options{
+		daModeString:   "onchain",
+		workloadLoops:  1,
+		workload:       ethSend,
+		arbitrator:     true,
+		pathDB:         true,
+		mockValidation: true,
+	}
+	testBlockValidatorSimple(t, opts)
+}
+
+func TestBlockValidatorSimplePathDBOnchainWithLocalMachine(t *testing.T) {
+	opts := Options{
+		daModeString:  "onchain",
+		workloadLoops: 1,
+		workload:      ethSend,
+		arbitrator:    true,
+		pathDB:        true,
+	}
+	testBlockValidatorSimple(t, opts)
+}
+
+func TestBlockValidatorPathDBMockValidationAtLeast20BPS(t *testing.T) {
+	const minBPS = 20.0
+	const workloadLoops = 40
+
+	var lock sync.Mutex
+	var firstLaunch time.Time
+	var lastLaunch time.Time
+	launches := 0
+	hook := func(id uint64) {
+		now := time.Now()
+		lock.Lock()
+		defer lock.Unlock()
+		if launches == 0 {
+			firstLaunch = now
+		}
+		lastLaunch = now
+		launches++
+	}
+
+	opts := Options{
+		daModeString:    "onchain",
+		workloadLoops:   workloadLoops,
+		workload:        ethSend,
+		arbitrator:      true,
+		pathDB:          true,
+		mockValidation:  true,
+		validationHook:  hook,
+		noWorkloadDelay: true,
+	}
+	testBlockValidatorSimple(t, opts)
+
+	lock.Lock()
+	count := launches
+	elapsed := lastLaunch.Sub(firstLaunch)
+	lock.Unlock()
+	if count < workloadLoops {
+		Fatal(t, "expected at least one validation launch per workload block", "launches", count, "workloadLoops", workloadLoops)
+	}
+	if elapsed <= 0 {
+		Fatal(t, "validation launches did not span a measurable duration", "launches", count, "elapsed", elapsed)
+	}
+	bps := float64(count-1) / elapsed.Seconds()
+	t.Logf("pathdb mock validation launch rate: %.2f bps over %d launches in %s", bps, count, elapsed)
+	if bps < minBPS {
+		Fatal(t, "pathdb validation launch rate below target", "bps", bps, "minBPS", minBPS)
+	}
 }
 
 func TestBlockValidatorSimpleJITOnchainWithPublishedMachine(t *testing.T) {

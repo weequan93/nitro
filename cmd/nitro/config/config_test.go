@@ -75,6 +75,13 @@ func TestInvalidCachingStateSchemeForValidator(t *testing.T) {
 	}
 }
 
+func TestAllowPathDBCachingStateSchemeForValidator(t *testing.T) {
+	validatorArgsWithPathScheme := fmt.Sprintf("%s --execution.caching.state-scheme path --node.block-validator.dangerous.allow-pathdb", validatorArgs)
+	args := strings.Split(validatorArgsWithPathScheme, " ")
+	_, _, err := ParseNode(context.Background(), args)
+	Require(t, err)
+}
+
 // TestAggregatorConfig tests the deprecated --node.data-availability.* flags
 // to ensure backward compatibility. These flags are deprecated in favor of
 // --node.da.anytrust.* but must continue to work.

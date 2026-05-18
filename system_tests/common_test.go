@@ -733,8 +733,8 @@ func (b *NodeBuilder) CheckConfig(t *testing.T) {
 	if b.nodeConfig == nil {
 		b.nodeConfig = arbnode.ConfigDefaultL1Test()
 	}
-	if b.nodeConfig.ValidatorRequired() {
-		// validation currently requires hash
+	if b.nodeConfig.ValidatorRequired() && !b.nodeConfig.BlockValidator.Dangerous.AllowPathDB {
+		// validation defaults to hash unless pathdb validation is explicitly enabled
 		b.RequireScheme(t, rawdb.HashScheme)
 	}
 	if b.defaultStateScheme == "" {

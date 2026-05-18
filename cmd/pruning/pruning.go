@@ -224,7 +224,7 @@ func getLatestConfirmedHash(ctx context.Context, rollupAddrs chaininfo.RollupAdd
 		if err != nil {
 			return common.Hash{}, err
 		}
-		latestConfirmedNum, err := rollup.LatestConfirmed(&callOpts)
+		latestConfirmedNum, err := rollup.RollUpLogic.LatestConfirmed(&callOpts)
 		if err != nil {
 			return common.Hash{}, err
 		}

@@ -5,6 +5,7 @@ package arbtest
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -35,9 +36,11 @@ import (
 )
 
 type mockSpawner struct {
-	ExecSpawned []uint64
-	LaunchDelay time.Duration
-	capacity    int // if 0, defaults to 4
+	ExecSpawned      []uint64
+	LaunchDelay      time.Duration
+	EndStateForInput func(id uint64) (validator.GoGlobalState, error)
+	LaunchHook       func(id uint64)
+	capacity         int // if 0, defaults to 4
 }
 
 var blockHashKey = common.HexToHash("0x11223344")
@@ -77,8 +80,12 @@ func (s *mockSpawner) Launch(entry *validator.ValidationInput, moduleRoot common
 		Promise: containers.NewPromise[validator.GoGlobalState](nil),
 		root:    moduleRoot,
 	}
+	if s.LaunchHook != nil {
+		s.LaunchHook(entry.Id)
+	}
 	<-time.After(s.LaunchDelay)
-	run.Produce(globalstateFromTestPreimages(entry.Preimages))
+	endState, err := s.endStateForInput(entry)
+	run.ProduceResult(endState, err)
 	return run
 }
 
@@ -98,10 +105,54 @@ func (s *mockSpawner) Capacity() int {
 
 func (s *mockSpawner) CreateExecutionRun(wasmModuleRoot common.Hash, input *validator.ValidationInput, _ bool) containers.PromiseInterface[validator.ExecutionRun] {
 	s.ExecSpawned = append(s.ExecSpawned, input.Id)
+	endState, err := s.endStateForInput(input)
+	if err != nil {
+		return containers.NewReadyPromise[validator.ExecutionRun](nil, err)
+	}
 	return containers.NewReadyPromise[validator.ExecutionRun](&mockExecRun{
 		startState: input.StartState,
-		endState:   globalstateFromTestPreimages(input.Preimages),
+		endState:   endState,
 	}, nil)
+}
+
+func (s *mockSpawner) endStateForInput(input *validator.ValidationInput) (validator.GoGlobalState, error) {
+	if s.EndStateForInput != nil {
+		return s.EndStateForInput(input.Id)
+	}
+	return globalstateFromTestPreimages(input.Preimages), nil
+}
+
+func mockEndStateForNode(streamer *arbnode.TransactionStreamer, tracker staker.InboxTrackerInterface) func(uint64) (validator.GoGlobalState, error) {
+	return func(id uint64) (validator.GoGlobalState, error) {
+		pos := arbutil.MessageIndex(id)
+		count := pos + 1
+		var endPos staker.GlobalStatePosition
+		if count == 1 {
+			endPos = staker.GlobalStatePosition{BatchNumber: 1, PosInBatch: 0}
+		} else {
+			batch, found, err := tracker.FindInboxBatchContainingMessage(count - 1)
+			if err != nil {
+				return validator.GoGlobalState{}, err
+			}
+			if !found {
+				return validator.GoGlobalState{}, fmt.Errorf("batch containing message %d not found", count-1)
+			}
+			_, endPos, err = staker.GlobalStatePositionsAtCount(tracker, count, batch)
+			if err != nil {
+				return validator.GoGlobalState{}, err
+			}
+		}
+		res, err := streamer.ResultAtMessageIndex(pos)
+		if err != nil {
+			return validator.GoGlobalState{}, err
+		}
+		return validator.GoGlobalState{
+			Batch:      endPos.BatchNumber,
+			PosInBatch: endPos.PosInBatch,
+			BlockHash:  res.BlockHash,
+			SendRoot:   res.SendRoot,
+		}, nil
+	}
 }
 
 type mockValRun struct {

@@ -4,6 +4,7 @@ package stopwaiter
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,6 +98,26 @@ func TestStopWaiterPromise(t *testing.T) {
 	err = callerB.LongCaller(time.Minute)
 	if err == nil {
 		t.Fatal("longcaller succeeded after caller stop")
+	}
+}
+
+func TestStopWaiterPromisePanicReturnsError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	classA := &ClassA{}
+	classA.Start(ctx)
+	defer classA.StopAndWait()
+
+	promise := LaunchPromiseThread[uint64](classA, func(ctx context.Context) (uint64, error) {
+		panic("boom")
+	})
+	_, err := promise.Await(ctx)
+	if err == nil {
+		t.Fatal("expected panic to be returned as promise error")
+	}
+	if !strings.Contains(err.Error(), "promise thread panicked: boom") {
+		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
 

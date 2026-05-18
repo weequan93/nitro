@@ -212,12 +212,17 @@ func (c *BlockValidatorConfig) Validate() error {
 	if c.Dangerous.Revalidation.EndBlock > 0 && c.Dangerous.Revalidation.EndBlock < c.Dangerous.Revalidation.StartBlock {
 		return fmt.Errorf("revalidation end block %d is before start block %d", c.Dangerous.Revalidation.EndBlock, c.Dangerous.Revalidation.StartBlock)
 	}
+	if c.Dangerous.AssumeLocalHead && c.Dangerous.Revalidation.StartBlock > 0 {
+		return errors.New("assume-local-head cannot be used with revalidation")
+	}
 	return nil
 }
 
 type BlockValidatorDangerousConfig struct {
 	ResetBlockValidation bool               `koanf:"reset-block-validation"`
 	Revalidation         RevalidationConfig `koanf:"revalidation"`
+	AllowPathDB          bool               `koanf:"allow-pathdb"`
+	AssumeLocalHead      bool               `koanf:"assume-local-head"`
 }
 
 type RevalidationConfig struct {
@@ -251,6 +256,8 @@ func BlockValidatorConfigAddOptions(prefix string, f *pflag.FlagSet) {
 
 func BlockValidatorDangerousConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Bool(prefix+".reset-block-validation", DefaultBlockValidatorDangerousConfig.ResetBlockValidation, "resets block-by-block validation, starting again at genesis")
+	f.Bool(prefix+".allow-pathdb", DefaultBlockValidatorDangerousConfig.AllowPathDB, "allow block validation with pathdb state storage")
+	f.Bool(prefix+".assume-local-head", DefaultBlockValidatorDangerousConfig.AssumeLocalHead, "assume the current local chain head is valid and start block validation from there")
 	RevalidationConfigAddOptions(prefix+".revalidation", f)
 }
 
@@ -305,6 +312,8 @@ var TestBlockValidatorConfig = BlockValidatorConfig{
 var DefaultBlockValidatorDangerousConfig = BlockValidatorDangerousConfig{
 	ResetBlockValidation: false,
 	Revalidation:         DefaultRevalidationConfig,
+	AllowPathDB:          false,
+	AssumeLocalHead:      false,
 }
 
 var DefaultRevalidationConfig = RevalidationConfig{
@@ -380,7 +389,7 @@ func NewBlockValidator(
 		return nil, err
 	}
 	ret.validationInputsWriter = valInputsWriter
-	if !config().Dangerous.ResetBlockValidation {
+	if !config().Dangerous.ResetBlockValidation && !config().Dangerous.AssumeLocalHead {
 		validated, err := ret.ReadLastValidatedInfo()
 		if err != nil {
 			return nil, err
@@ -1223,6 +1232,48 @@ func (v *BlockValidator) UpdateLatestStaked(count arbutil.MessageIndex, globalSt
 	nonBlockingTrigger(v.createNodesChan)
 }
 
+func (v *BlockValidator) initAssumeLocalHead() error {
+	processed, err := v.streamer.GetProcessedMessageCount()
+	if err != nil {
+		return fmt.Errorf("failed reading processed message count for assume-local-head: %w", err)
+	}
+	if processed == 0 {
+		return errors.New("cannot assume local head before processing any messages")
+	}
+	batchCount, err := v.inboxTracker.GetBatchCount()
+	if err != nil {
+		return fmt.Errorf("failed reading L1-known batch count for assume-local-head: %w", err)
+	}
+	if batchCount == 0 {
+		return errors.New("cannot assume local head before any batches are known on L1")
+	}
+	l1KnownMessageCount, err := v.inboxTracker.GetBatchMessageCount(batchCount - 1)
+	if err != nil {
+		return fmt.Errorf("failed reading L1-known message count for assume-local-head: %w", err)
+	}
+	checkpoint := processed
+	if checkpoint > l1KnownMessageCount {
+		checkpoint = l1KnownMessageCount
+	}
+	if checkpoint == 0 {
+		return errors.New("cannot assume local head before any L1-known messages are processed")
+	}
+	result, err := v.streamer.ResultAtMessageIndex(checkpoint - 1)
+	if err != nil {
+		return fmt.Errorf("failed reading local head result for assume-local-head: %w", err)
+	}
+	_, endPos, err := v.StatelessBlockValidator.GlobalStatePositionsAtCount(checkpoint)
+	if err != nil {
+		return fmt.Errorf("failed calculating local head position for assume-local-head: %w", err)
+	}
+	globalState := BuildGlobalState(*result, endPos)
+	if err := v.writeLastValidated(globalState, nil); err != nil {
+		return fmt.Errorf("failed writing assume-local-head validation checkpoint: %w", err)
+	}
+	log.Info("block_validator: assume-local-head", "messageCount", checkpoint, "processed", processed, "l1KnownMessageCount", l1KnownMessageCount, "blockhash", globalState.BlockHash, "batch", globalState.Batch, "posInBatch", globalState.PosInBatch)
+	return nil
+}
+
 // Because batches and blocks are handled at separate layers in the node,
 // and because block generation from messages is asynchronous,
 // this call is different than Reorg, which is currently called later.
@@ -1301,8 +1352,12 @@ func (v *BlockValidator) Reorg(ctx context.Context, count arbutil.MessageIndex) 
 func (v *BlockValidator) Initialize(ctx context.Context) error {
 	config := v.config()
 
-	// genesis block is impossible to validate unless genesis state is empty
-	if v.lastValidGS.Batch == 0 && v.legacyValidInfo == nil {
+	if config.Dangerous.AssumeLocalHead {
+		if err := v.initAssumeLocalHead(); err != nil {
+			return err
+		}
+	} else if v.lastValidGS.Batch == 0 && v.legacyValidInfo == nil {
+		// genesis block is impossible to validate unless genesis state is empty
 		genesis, err := v.streamer.ResultAtMessageIndex(0)
 		if err != nil {
 			return err

@@ -178,8 +178,8 @@ func (c *NodeConfig) Validate() error {
 	if err := c.BlocksReExecutor.Validate(); err != nil {
 		return err
 	}
-	if c.Node.ValidatorRequired() && (c.Execution.Caching.StateScheme == rawdb.PathScheme) {
-		return errors.New("path cannot be used as execution.caching.state-scheme when validator is required")
+	if c.Node.ValidatorRequired() && (c.Execution.Caching.StateScheme == rawdb.PathScheme) && !c.Node.BlockValidator.Dangerous.AllowPathDB {
+		return errors.New("path cannot be used as execution.caching.state-scheme when validator is required without --node.block-validator.dangerous.allow-pathdb")
 	}
 	if err := c.VersionAlerter.Validate(); err != nil {
 		return err

@@ -385,7 +385,7 @@ func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) 
 					_, err = builder.L1.EnsureTxSucceeded(tx)
 					Require(t, err)
 
-					managerAddr, err := stakerA.Rollup().ChallengeManager(&bind.CallOpts{Context: ctx})
+					managerAddr, err := stakerA.Rollup().RollUpLogic.ChallengeManager(&bind.CallOpts{Context: ctx})
 					Require(t, err)
 					// 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103
 					proxyAdminSlot := common.BigToHash(arbmath.BigSub(crypto.Keccak256Hash([]byte("eip1967.proxy.admin")).Big(), common.Big1))

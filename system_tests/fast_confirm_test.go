@@ -299,7 +299,6 @@ func setupFastConfirmation(ctx context.Context, t *testing.T) (*NodeBuilder, *le
 		l2node.TxStreamer,
 		pcds,
 		nil,
-		nil,
 	)
 	Require(t, err)
 	err = stakerA.Initialize(ctx)
@@ -497,7 +496,6 @@ func TestFastConfirmationWithSafe(t *testing.T) {
 		l2nodeA.TxStreamer,
 		pcdsA,
 		nil,
-		nil,
 	)
 	Require(t, err)
 	err = stakerA.Initialize(ctx)
@@ -555,7 +553,6 @@ func TestFastConfirmationWithSafe(t *testing.T) {
 		pcdsB,
 		l2nodeB.TxStreamer,
 		pcdsB,
-		nil,
 		nil,
 	)
 	Require(t, err)

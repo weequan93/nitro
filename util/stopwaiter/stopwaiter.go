@@ -6,6 +6,7 @@ package stopwaiter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"runtime"
 	"runtime/debug"
@@ -340,13 +341,19 @@ func LaunchPromiseThread[T any](
 	innerCtx, cancel := context.WithCancel(ctx)
 	promise := containers.NewPromise[T](cancel)
 	err = s.LaunchThreadSafe(func(context.Context) { // we don't use the param's context
+		defer cancel()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error("Promise thread crashed", "message", r, "stack", string(debug.Stack()))
+				_ = promise.ProduceErrorSafe(fmt.Errorf("promise thread panicked: %v", r))
+			}
+		}()
 		val, err := foo(innerCtx)
 		if err != nil {
 			promise.ProduceError(err)
 		} else {
 			promise.Produce(val)
 		}
-		cancel()
 	})
 	if err != nil {
 		promise.ProduceError(err)
