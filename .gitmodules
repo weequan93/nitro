@@ -9,7 +9,7 @@
 	url = https://github.com/google/brotli.git
 [submodule "contracts"]
 	path = contracts
-	url = https://github.com/OffchainLabs/nitro-contracts.git
+	url = https://github.com/weequan93/nitro-contracts
 	branch = develop
 [submodule "crates/wasm-testsuite/testsuite"]
 	path = crates/wasm-testsuite/testsuite
@@ -19,7 +19,7 @@
 	url = https://github.com/OffchainLabs/wasmer.git
 [submodule "nitro-testnode"]
 	path = nitro-testnode
-	url = https://github.com/OffchainLabs/nitro-testnode.git
+	url = https://github.com/weequan93/nitro-testnode
 [submodule "crates/langs/rust"]
 	path = crates/langs/rust
 	url = https://github.com/OffchainLabs/stylus-sdk-rs.git
@@ -40,4 +40,4 @@
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 [submodule "contracts-local/src/precompiles"]
 	path = contracts-local/src/precompiles
-	url = https://github.com/OffchainLabs/nitro-precompile-interfaces.git
+	url = https://github.com/weequan93/nitro-precompile-interfaces
