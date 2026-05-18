@@ -328,6 +328,10 @@ func (r *RollupWatcher) getCallOpts(ctx context.Context) *bind.CallOpts {
 	return &opts
 }
 
+func (r *RollupWatcher) LatestConfirmed(opts *bind.CallOpts) (uint64, error) {
+	return r.RollUpLogic.LatestConfirmed(opts)
+}
+
 const noNodeErr string = "NO_NODE"
 
 func looksLikeNoNodeError(err error) bool {

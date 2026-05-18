@@ -212,17 +212,19 @@ RUN ./download-machine.sh consensus-v51 0x8a7513bf7bb3e3db04b0d982d0e973bcf57bf8
 RUN ./download-machine.sh consensus-v60-rc.4 0x333f5e036235b1ce1a34cbbe254ccbb2615218f9ae6f84aeef0511cb09ef9b67
 RUN ./download-machine.sh consensus-v60-rc.5 0x7a9e6a77354888257a9989ce0b6bb39df5fedf222d453932933fdf7a489cbb57
 RUN ./download-machine.sh consensus-v51.1 0xc2c02df561d4afaf9a1d6785f70098ec3874765c638e3cb6dbe8d3c83333e14c
-RUN ./download-deriw-machine.sh consensus-v32.arm64.deriw1 0x3b68623c622d17784f4c9fc1b4fd57e41ce3bf930e8085596df8adbaa3363eb5
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw1 0xdc1e1c6d401767b2cb11f66af9b17a7795319ff4ea7ccd72ce1dea982634e7bf
-RUN ./download-deriw-machine.sh consensus-v32.arm64.deriw2 0xd41ab0afd67575e0fe131b56eb44a1785d68666fe8f672292e3099434b739b28
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw2 0x58dc4b5ce8a268aa9ead2ad96ffb2fb1c54dc98d3abc8ccfdfbc679bda95f1eb
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw3 0xcb68723ef526e62b4a1bc50beaccc6ac75044a0bc8006eab1d7f7831861c1f17
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw4 0x52121965b38261c506d8db0baded88857757fdf79ac1695f01c252150a0083b9
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw5 0x6594f00133a728a53902cff5d44f9ef5f8849b66cf5c7ccf3a07dd650f20585b
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw6 0xc6708a804c5cc1cbfb579a0db22085f15cb75ad2b45bf064b00216ca980bfbc6
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw7 0x98e9dd9c183a903a89bf161440872128c16369da059e5ea974602ca864309ad6
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw8 0x9078685c07cc54deb8e6b7086015abba0ddef072c22122aba28debbb929d097c
-RUN ./download-deriw-machine.sh consensus-v32.amd64.deriw9 0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f
+RUN mkdir -p /workspace/legacy-machines
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.arm64.deriw1 0x3b68623c622d17784f4c9fc1b4fd57e41ce3bf930e8085596df8adbaa3363eb5
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw1 0xdc1e1c6d401767b2cb11f66af9b17a7795319ff4ea7ccd72ce1dea982634e7bf
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.arm64.deriw2 0xd41ab0afd67575e0fe131b56eb44a1785d68666fe8f672292e3099434b739b28
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw2 0x58dc4b5ce8a268aa9ead2ad96ffb2fb1c54dc98d3abc8ccfdfbc679bda95f1eb
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw3 0xcb68723ef526e62b4a1bc50beaccc6ac75044a0bc8006eab1d7f7831861c1f17
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw4 0x52121965b38261c506d8db0baded88857757fdf79ac1695f01c252150a0083b9
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw5 0x6594f00133a728a53902cff5d44f9ef5f8849b66cf5c7ccf3a07dd650f20585b
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw6 0xc6708a804c5cc1cbfb579a0db22085f15cb75ad2b45bf064b00216ca980bfbc6
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw7 0x98e9dd9c183a903a89bf161440872128c16369da059e5ea974602ca864309ad6
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw8 0x9078685c07cc54deb8e6b7086015abba0ddef072c22122aba28debbb929d097c
+RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.amd64.deriw9 0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f
+RUN rm -f /workspace/legacy-machines/latest
 
 # Factored out of node-builder so the stripped variant doesn't depend on it.
 FROM golang:1.25-bookworm AS node-builder-base
@@ -314,7 +316,7 @@ USER root
 COPY --from=contracts-builder /workspace/contracts/       /contracts/
 COPY --from=contracts-builder /workspace/contracts-local/ /contracts-local/
 COPY --from=nitro-legacy      /home/user/target/machines  /home/user/nitro-legacy/machines
-RUN rm -rf /workspace/target/legacy-machines/latest
+COPY --from=machine-versions  /workspace/legacy-machines/ /home/user/nitro-legacy/machines/
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
     apt-get install -y \
