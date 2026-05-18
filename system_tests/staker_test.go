@@ -61,7 +61,19 @@ func makeBackgroundTxs(ctx context.Context, builder *NodeBuilder) error {
 	return nil
 }
 
+type stakerTestOptions struct {
+	pathDB bool
+}
+
 func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) {
+	stakerTestImplWithOptions(t, faultyStaker, honestStakerInactive, stakerTestOptions{})
+}
+
+func stakerPathDBTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) {
+	stakerTestImplWithOptions(t, faultyStaker, honestStakerInactive, stakerTestOptions{pathDB: true})
+}
+
+func stakerTestImplWithOptions(t *testing.T, faultyStaker bool, honestStakerInactive bool, opts stakerTestOptions) {
 	logHandler := testhelpers.InitTestLog(t, log.LvlTrace)
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
@@ -83,8 +95,14 @@ func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) 
 		transferGas,
 	)
 
-	// For now validation only works with HashScheme set
-	builder.RequireScheme(t, rawdb.HashScheme)
+	if opts.pathDB {
+		builder.RequireScheme(t, rawdb.PathScheme)
+		builder.execConfig.Caching.Archive = true
+		builder.execConfig.Caching.StateHistory = 0
+		builder.nodeConfig.BlockValidator.Dangerous.AllowPathDB = true
+	} else {
+		builder.RequireScheme(t, rawdb.HashScheme)
+	}
 
 	builder.nodeConfig.BatchPoster.MaxDelay = -1000 * time.Hour
 	cleanupA := builder.Build(t)
@@ -193,6 +211,9 @@ func stakerTestImpl(t *testing.T, faultyStaker bool, honestStakerInactive bool) 
 
 	_, valStack := createTestValidationNode(t, ctx, &valnode.TestValidationConfig)
 	blockValidatorConfig := staker.TestBlockValidatorConfig
+	if opts.pathDB {
+		blockValidatorConfig.Dangerous.AllowPathDB = true
+	}
 
 	locator, err := server_common.NewMachineLocator(valnode.TestValidationConfig.Wasm.RootPath)
 	Require(t, err)
