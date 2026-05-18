@@ -24,6 +24,7 @@ import (
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
+	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/timeboost"
 	"github.com/offchainlabs/nitro/util/arbmath"
 	"github.com/offchainlabs/nitro/util/headerreader"
@@ -141,6 +142,9 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 	if err != nil {
 		return err
 	}
+	if arbos.Blacklist().IsBlacklistTxCheck(&sender, tx) {
+		return fmt.Errorf("PreCheckTx() transaction blacklisted: from %v to %v", sender, tx.To())
+	}
 	baseFee := header.BaseFee
 	if config.Strictness < TxPreCheckerStrictnessLikelyCompatible {
 		baseFee, err = arbos.L2PricingState().MinBaseFeeWei()
@@ -149,10 +153,8 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 		}
 	}
 
-	isGasless := arbos.Pricer().IsCustomPriceTxCheck(tx)
-	// isGasless := arbutil.IsCustomPriceTxCheck(arbos.Pricer(), tx)
+	isGasless := arbos.Pricer().IsCustomPriceTxCheckWithSender(tx, sender) || arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx)
 	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !isGasless {
-		// if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !arbutil.IsGaslessTx(tx) && !arbutil.IsCustomPriceTx(tx) {
 		return fmt.Errorf("PreCheckTx() %w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)
 	}
 	stateNonce := statedb.GetNonce(sender)

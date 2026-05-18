@@ -642,7 +642,7 @@ func (s *Sequencer) PublishAuctionResolutionTransaction(ctx context.Context, tx 
 	if *tx.To() != s.expressLaneService.AuctionContractAddr() {
 		return fmt.Errorf("transaction recipient %#x is not the auction contract %#x", *tx.To(), s.expressLaneService.AuctionContractAddr())
 	}
-	signer := types.LatestSigner(s.execEngine.bc.Config())
+	signer := s.signerForHeader(s.execEngine.bc.CurrentBlock())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		return err
@@ -699,6 +699,11 @@ func (s *Sequencer) PublishExpressLaneTransaction(ctx context.Context, msg *time
 	return s.expressLaneService.SequenceExpressLaneSubmission(msg)
 }
 
+func (s *Sequencer) signerForHeader(header *types.Header) types.Signer {
+	arbosVersion := types.DeserializeHeaderExtraInformation(header).ArbOSFormatVersion
+	return types.MakeSigner(s.execEngine.bc.Config(), header.Number, header.Time, arbosVersion)
+}
+
 func (s *Sequencer) PublishTimeboostedTransaction(queueCtx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
 	resultChan := make(chan error, 1)
 	return s.publishTransactionToQueue(queueCtx, tx, options, resultChan, true)
@@ -720,7 +725,7 @@ func (s *Sequencer) publishTransactionToQueue(queueCtx context.Context, tx *type
 	defer sequencerBacklogGauge.Dec(1)
 
 	if len(s.senderWhitelist) > 0 {
-		signer := types.LatestSigner(s.execEngine.bc.Config())
+		signer := s.signerForHeader(s.execEngine.bc.CurrentBlock())
 		sender, err := types.Sender(signer, tx)
 		if err != nil {
 			return err
@@ -782,7 +787,7 @@ func (s *Sequencer) publishPriorityTransactionToQueue(queueCtx context.Context, 
 	defer sequencerBacklogGauge.Dec(1)
 
 	if len(s.prioritySenderWhitelist) > 0 {
-		signer := types.LatestSigner(s.execEngine.bc.Config())
+		signer := s.signerForHeader(s.execEngine.bc.CurrentBlock())
 		sender, err := types.Sender(signer, tx)
 		if err != nil {
 			return err
@@ -1339,6 +1344,17 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 
 	config := s.config()
 	lastBlock := s.execEngine.bc.CurrentBlock()
+	lastState, stateErr := s.execEngine.bc.StateAt(lastBlock.Root)
+	if stateErr != nil {
+		log.Error("failed to get current state to pre-check sequencer tx fees", "err", stateErr)
+	}
+	var lastArbos *arbosState.ArbosState
+	if lastState != nil {
+		lastArbos, stateErr = arbosState.OpenSystemArbosState(lastState, nil, true)
+		if stateErr != nil {
+			log.Error("failed to open ArbOS state to pre-check sequencer tx fees", "err", stateErr)
+		}
+	}
 
 	// Clear out old nonceFailures
 	s.nonceFailures.Resize(config.NonceFailureCacheSize)
@@ -1455,7 +1471,16 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 			log.Info("Error sequencing timeboost tx", "err", err)
 			continue
 		}
-		if arbmath.BigLessThan(queueItem.tx.GasFeeCap(), lastBlock.BaseFee) {
+		sender, err := types.Sender(s.signerForHeader(lastBlock), queueItem.tx)
+		if err != nil {
+			queueItem.returnResult(err)
+			continue
+		}
+		isCustomPriceTx := arbutil.IsGaslessTx(queueItem.tx) || arbutil.IsCustomPriceTx(queueItem.tx)
+		if !isCustomPriceTx && lastArbos != nil {
+			isCustomPriceTx = lastArbos.Pricer().IsCustomPriceTxCheckWithSender(queueItem.tx, sender)
+		}
+		if arbmath.BigLessThan(queueItem.tx.GasFeeCap(), lastBlock.BaseFee) && !isCustomPriceTx {
 			queueItem.returnResult(fmt.Errorf("%w: maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, queueItem.tx.GasFeeCap(), lastBlock.BaseFee))
 			continue
 		}

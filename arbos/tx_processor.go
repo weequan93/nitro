@@ -560,7 +560,7 @@ func (p *TxProcessor) GasChargingHook(gasRemaining *uint64, intrinsicGas uint64)
 		}
 		p.posterGas = GetPosterGas(p.state, actualGasPrice, p.msg.TxRunContext, posterCost)
 		p.PosterFee = arbmath.BigMulByUint(actualGasPrice, p.posterGas) // round down
-		isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx) || arbutil.IsGaslessTx(p.msg.Tx)
+		isGasless := p.SkipBaseFeeCheck(p.msg.Tx)
 		if isGasless {
 			p.PosterFee.Set(common.Big0)
 		}
@@ -758,7 +758,7 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 		basefee = p.evm.Context.BaseFee
 	}
 
-	isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx) || arbutil.IsGaslessTx(p.msg.Tx)
+	isGasless := p.SkipBaseFeeCheck(p.msg.Tx)
 	if gasUsed < p.posterGas {
 		log.Error("gas used < poster gas", "gasUsed", gasUsed, "posterGas", p.posterGas)
 	}
@@ -796,7 +796,7 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 	}
 
 	// Multi-dimensional refund (normal tx path)
-	if multiDimensionalCost != nil {
+	if multiDimensionalCost != nil && !isGasless {
 		totalCost := arbmath.BigMulByUint(basefee, gasUsed) // baseFee * gasUsed for multi-gas refund calc
 		amount := new(big.Int).Sub(totalCost, multiDimensionalCost)
 		if amount.Sign() > 0 {
@@ -812,7 +812,7 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 		}
 	}
 
-	if p.msg.GasPrice.Sign() > 0 { // in tests, gas price could be 0
+	if p.msg.GasPrice.Sign() > 0 && !isGasless { // in tests, gas price could be 0
 		// ArbOS's gas pool is meant to enforce the computational speed-limit.
 		// We don't want to remove from the pool the poster's L1 costs (as expressed in L2 gas in this func)
 		// Hence, we deduct the previously saved poster L2-gas-equivalent to reveal the compute-only gas
@@ -955,6 +955,36 @@ func (p *TxProcessor) MsgIsNonMutating() bool {
 		return false
 	}
 	return p.msg.TxRunContext.IsNonMutating()
+}
+
+func (p *TxProcessor) SkipBaseFeeCheck(tx *types.Transaction) bool {
+	if tx == nil && p != nil && p.msg != nil {
+		tx = p.msg.Tx
+	}
+	if arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx) {
+		return true
+	}
+	if p == nil || p.state == nil {
+		return false
+	}
+	if p.msg != nil && p.state.Pricer().IsCustomPriceTxCheckWithSender(tx, p.msg.From) {
+		return true
+	}
+	return p.state.Pricer().IsCustomPriceTxCheck(tx)
+}
+
+func (p *TxProcessor) SubAccountParent(sender common.Address, to *common.Address, data []byte) (common.Address, bool, error) {
+	if p == nil || p.state == nil {
+		return common.Address{}, false, nil
+	}
+	parent, err := p.state.SubAccount().GetParentAddress(sender, to, data)
+	if err != nil {
+		return common.Address{}, false, err
+	}
+	if parent == nil || *parent == (common.Address{}) {
+		return common.Address{}, false, nil
+	}
+	return *parent, true, nil
 }
 
 func (p *TxProcessor) IsCalldataPricingIncreaseEnabled() bool {

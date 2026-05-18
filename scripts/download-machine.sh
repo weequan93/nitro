@@ -3,28 +3,36 @@ set -euo pipefail
 
 tag="$1"
 module_root="$2"
-repo="${3:-OffchainLabs/nitro}"
+source="${3:-OffchainLabs/nitro}"
 
 mkdir "$module_root"
 ln -sfT "$module_root" latest
 cd "$module_root"
 echo "$module_root" > module-root.txt
 
-if [ "$repo" = "OffchainLabs/nitro" ]; then
-	url_base="https://github.com/$repo/releases/download/$tag"
+download_from_url() {
+	local url_base="$1"
 	wget "$url_base/machine.v2.wavm.br"
 
-	status_code="$(curl -LI "$url_base/replay.wasm" -so /dev/null -w '%{http_code}')"
-	if [ "$status_code" -ne 404 ]; then
-		wget "$url_base/replay.wasm"
-	fi
+	for optional_file in replay.wasm until-host-io-state.bin; do
+		status_code="$(curl -LI "$url_base/$optional_file" -so /dev/null -w '%{http_code}')"
+		if [ "$status_code" -ne 404 ]; then
+			wget "$url_base/$optional_file"
+		fi
+	done
+}
+
+if [[ "$source" =~ ^https?:// ]]; then
+	download_from_url "$source"
+elif [ "$source" = "OffchainLabs/nitro" ]; then
+	download_from_url "https://github.com/$source/releases/download/$tag"
 else
 	token="$(cat "${GH_TOKEN_FILE:-/run/secrets/gh_token}" 2>/dev/null | tr -d '[:space:]' || true)"
 	if [ -z "$token" ]; then
-		echo "ERROR: $repo requires a GitHub token; mount one as a BuildKit secret with id=gh_token (e.g., --mount=type=secret,id=gh_token,required=false)" >&2
+		echo "ERROR: $source requires a GitHub token; mount one as a BuildKit secret with id=gh_token (e.g., --mount=type=secret,id=gh_token,required=false)" >&2
 		exit 1
 	fi
-	api="https://api.github.com/repos/$repo/releases"
+	api="https://api.github.com/repos/$source/releases"
 
 	release_json="$(curl -fsSL --retry 3 \
 		-H "Authorization: Bearer $token" \
@@ -54,5 +62,10 @@ else
 	replay_id="$(asset_id_for replay.wasm)"
 	if [ -n "$replay_id" ]; then
 		download_asset replay.wasm "$replay_id"
+	fi
+
+	until_host_io_id="$(asset_id_for until-host-io-state.bin)"
+	if [ -n "$until_host_io_id" ]; then
+		download_asset until-host-io-state.bin "$until_host_io_id"
 	fi
 fi

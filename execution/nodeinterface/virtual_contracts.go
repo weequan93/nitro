@@ -19,6 +19,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
+	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/execution/gethexec"
 	"github.com/offchainlabs/nitro/gethhook"
 	"github.com/offchainlabs/nitro/precompiles"
@@ -46,6 +47,43 @@ func init() {
 	nodeInterfaceDebugImpl := &NodeInterfaceDebug{Address: types.NodeInterfaceDebugAddress}
 	nodeInterfaceDebugMeta := node_interfacegen.NodeInterfaceDebugMetaData
 	_, nodeInterfaceDebug := precompiles.MakePrecompile(nodeInterfaceDebugMeta, nodeInterfaceDebugImpl)
+
+	core.RPCSubAccountParentHook = func(statedb *state.StateDB, sender common.Address, to *common.Address, data []byte) (common.Address, bool, error) {
+		arbosVersion := arbosState.ArbOSVersion(statedb)
+		if arbosVersion == 0 {
+			return common.Address{}, false, nil
+		}
+		state, err := arbosState.OpenSystemArbosState(statedb, nil, true)
+		if err != nil {
+			return common.Address{}, false, err
+		}
+		parent, err := state.SubAccount().GetParentAddress(sender, to, data)
+		if err != nil {
+			return common.Address{}, false, err
+		}
+		if parent == nil || *parent == (common.Address{}) {
+			return common.Address{}, false, nil
+		}
+		return *parent, true, nil
+	}
+
+	core.RPCGaslessTxHook = func(statedb *state.StateDB, sender common.Address, tx *types.Transaction) (bool, error) {
+		if arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx) {
+			return true, nil
+		}
+		if statedb == nil {
+			return false, nil
+		}
+		arbosVersion := arbosState.ArbOSVersion(statedb)
+		if arbosVersion == 0 {
+			return false, nil
+		}
+		state, err := arbosState.OpenSystemArbosState(statedb, nil, true)
+		if err != nil {
+			return false, err
+		}
+		return state.Pricer().IsCustomPriceTxCheckWithSender(tx, sender), nil
+	}
 
 	core.InterceptRPCMessage = func(
 		msg *core.Message,
