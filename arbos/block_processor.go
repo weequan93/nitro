@@ -462,7 +462,7 @@ func ProduceBlockAdvanced(
 
 			computeGas := tx.Gas() - dataGas
 
-			if tx.To() != nil && arbutil.IsCustomPriceAddr(tx.To()) {
+			if buildState.arbState.Pricer().IsCustomPriceTxCheck(tx) || arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx) {
 				computeGas = params.TxGas
 			}
 
