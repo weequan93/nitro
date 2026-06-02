@@ -796,7 +796,7 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 	}
 
 	// Multi-dimensional refund (normal tx path)
-	if multiDimensionalCost != nil {
+	if multiDimensionalCost != nil && !isGasless {
 		totalCost := arbmath.BigMulByUint(basefee, gasUsed) // baseFee * gasUsed for multi-gas refund calc
 		amount := new(big.Int).Sub(totalCost, multiDimensionalCost)
 		if amount.Sign() > 0 {
@@ -812,7 +812,7 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 		}
 	}
 
-	if p.msg.GasPrice.Sign() > 0 { // in tests, gas price could be 0
+	if p.msg.GasPrice.Sign() > 0 && !isGasless { // in tests, gas price could be 0
 		// ArbOS's gas pool is meant to enforce the computational speed-limit.
 		// We don't want to remove from the pool the poster's L1 costs (as expressed in L2 gas in this func)
 		// Hence, we deduct the previously saved poster L2-gas-equivalent to reveal the compute-only gas
@@ -966,6 +966,9 @@ func (p *TxProcessor) SkipBaseFeeCheck(tx *types.Transaction) bool {
 	}
 	if p == nil || p.state == nil {
 		return false
+	}
+	if p.msg != nil && p.state.Pricer().IsCustomPriceTxCheckWithSender(tx, p.msg.From) {
+		return true
 	}
 	return p.state.Pricer().IsCustomPriceTxCheck(tx)
 }

@@ -150,7 +150,7 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 		}
 	}
 
-	isGasless := arbos.Pricer().IsCustomPriceTxCheck(tx) || arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx)
+	isGasless := arbos.Pricer().IsCustomPriceTxCheckWithSender(tx, sender) || arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx)
 	if arbmath.BigLessThan(tx.GasFeeCap(), baseFee) && !isGasless {
 		return fmt.Errorf("PreCheckTx() %w: address %v, maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, sender, tx.GasFeeCap(), header.BaseFee)
 	}

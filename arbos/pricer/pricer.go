@@ -42,20 +42,24 @@ func (pricer *Pricer) TxToAddrs() *addressSet.AddressSet {
 }
 
 func (pricer *Pricer) IsCustomPriceTxCheck(tx *types.Transaction) bool {
-	if tx != nil {
-	}
 	if tx != nil && tx.To() != nil {
-		addr := common.HexToAddress(tx.To().String())
-		IsGaslessContract, err := pricer.TxToAddrs().IsMember(addr)
-		if err != nil {
-			return false
-		}
-		return IsGaslessContract
+		return pricer.IsCustomPriceTxToAddr(tx.To())
 	}
 	return false
 }
 
+func (pricer *Pricer) IsCustomPriceTxCheckWithSender(tx *types.Transaction, sender common.Address) bool {
+	if pricer.IsCustomPriceTxFromAddr(&sender) {
+		return true
+	}
+	return pricer.IsCustomPriceTxCheck(tx)
+}
+
 func (pricer *Pricer) IsCustomPriceTxCheckAddr(addr *common.Address) bool {
+	return pricer.IsCustomPriceTxToAddr(addr)
+}
+
+func (pricer *Pricer) IsCustomPriceTxToAddr(addr *common.Address) bool {
 	if addr == nil {
 		return false
 	}
@@ -65,4 +69,15 @@ func (pricer *Pricer) IsCustomPriceTxCheckAddr(addr *common.Address) bool {
 	}
 	return IsGaslessContract
 
+}
+
+func (pricer *Pricer) IsCustomPriceTxFromAddr(addr *common.Address) bool {
+	if addr == nil {
+		return false
+	}
+	IsGaslessSender, err := pricer.TxFromAddrs().IsMember(*addr)
+	if err != nil {
+		return false
+	}
+	return IsGaslessSender
 }

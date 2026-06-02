@@ -119,6 +119,20 @@ func TestPricer(t *testing.T) {
 	if isValid != true {
 		require.Fail(t, "Check valid to address fail , expected %s, receive %s", true, isValid)
 	}
+
+	isValid = pricer.IsCustomPriceTxCheckWithSender(tx, validPricerFromAddress)
+	if isValid != true {
+		require.Fail(t, "Check valid from address fail , expected %s, receive %s", true, isValid)
+	}
+
+	inner = &types.BlobTx{
+		To: invalidPricerToAddress,
+	}
+	tx = types.NewTx(inner)
+	isValid = pricer.IsCustomPriceTxCheckWithSender(tx, validPricerFromAddress)
+	if isValid != true {
+		require.Fail(t, "Check valid from address fail , expected %s, receive %s", true, isValid)
+	}
 }
 
 func Require(t *testing.T, err error, printables ...interface{}) {

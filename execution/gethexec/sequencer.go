@@ -1466,9 +1466,14 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 			log.Info("Error sequencing timeboost tx", "err", err)
 			continue
 		}
+		sender, err := types.Sender(types.LatestSigner(s.execEngine.bc.Config()), queueItem.tx)
+		if err != nil {
+			queueItem.returnResult(err)
+			continue
+		}
 		isCustomPriceTx := arbutil.IsGaslessTx(queueItem.tx) || arbutil.IsCustomPriceTx(queueItem.tx)
 		if !isCustomPriceTx && lastArbos != nil {
-			isCustomPriceTx = lastArbos.Pricer().IsCustomPriceTxCheck(queueItem.tx)
+			isCustomPriceTx = lastArbos.Pricer().IsCustomPriceTxCheckWithSender(queueItem.tx, sender)
 		}
 		if arbmath.BigLessThan(queueItem.tx.GasFeeCap(), lastBlock.BaseFee) && !isCustomPriceTx {
 			queueItem.returnResult(fmt.Errorf("%w: maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, queueItem.tx.GasFeeCap(), lastBlock.BaseFee))
