@@ -1339,6 +1339,17 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 
 	config := s.config()
 	lastBlock := s.execEngine.bc.CurrentBlock()
+	lastState, stateErr := s.execEngine.bc.StateAt(lastBlock.Root)
+	if stateErr != nil {
+		log.Error("failed to get current state to pre-check sequencer tx fees", "err", stateErr)
+	}
+	var lastArbos *arbosState.ArbosState
+	if lastState != nil {
+		lastArbos, stateErr = arbosState.OpenSystemArbosState(lastState, nil, true)
+		if stateErr != nil {
+			log.Error("failed to open ArbOS state to pre-check sequencer tx fees", "err", stateErr)
+		}
+	}
 
 	// Clear out old nonceFailures
 	s.nonceFailures.Resize(config.NonceFailureCacheSize)
@@ -1455,7 +1466,11 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 			log.Info("Error sequencing timeboost tx", "err", err)
 			continue
 		}
-		if arbmath.BigLessThan(queueItem.tx.GasFeeCap(), lastBlock.BaseFee) {
+		isCustomPriceTx := arbutil.IsGaslessTx(queueItem.tx) || arbutil.IsCustomPriceTx(queueItem.tx)
+		if !isCustomPriceTx && lastArbos != nil {
+			isCustomPriceTx = lastArbos.Pricer().IsCustomPriceTxCheck(queueItem.tx)
+		}
+		if arbmath.BigLessThan(queueItem.tx.GasFeeCap(), lastBlock.BaseFee) && !isCustomPriceTx {
 			queueItem.returnResult(fmt.Errorf("%w: maxFeePerGas: %s baseFee: %s", core.ErrFeeCapTooLow, queueItem.tx.GasFeeCap(), lastBlock.BaseFee))
 			continue
 		}

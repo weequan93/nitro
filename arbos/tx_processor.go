@@ -560,7 +560,7 @@ func (p *TxProcessor) GasChargingHook(gasRemaining *uint64, intrinsicGas uint64)
 		}
 		p.posterGas = GetPosterGas(p.state, actualGasPrice, p.msg.TxRunContext, posterCost)
 		p.PosterFee = arbmath.BigMulByUint(actualGasPrice, p.posterGas) // round down
-		isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx) || arbutil.IsGaslessTx(p.msg.Tx)
+		isGasless := p.SkipBaseFeeCheck(p.msg.Tx)
 		if isGasless {
 			p.PosterFee.Set(common.Big0)
 		}
@@ -758,7 +758,7 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 		basefee = p.evm.Context.BaseFee
 	}
 
-	isGasless := p.state.Pricer().IsCustomPriceTxCheck(p.msg.Tx) || arbutil.IsGaslessTx(p.msg.Tx)
+	isGasless := p.SkipBaseFeeCheck(p.msg.Tx)
 	if gasUsed < p.posterGas {
 		log.Error("gas used < poster gas", "gasUsed", gasUsed, "posterGas", p.posterGas)
 	}
@@ -955,6 +955,19 @@ func (p *TxProcessor) MsgIsNonMutating() bool {
 		return false
 	}
 	return p.msg.TxRunContext.IsNonMutating()
+}
+
+func (p *TxProcessor) SkipBaseFeeCheck(tx *types.Transaction) bool {
+	if tx == nil && p != nil && p.msg != nil {
+		tx = p.msg.Tx
+	}
+	if arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx) {
+		return true
+	}
+	if p == nil || p.state == nil {
+		return false
+	}
+	return p.state.Pricer().IsCustomPriceTxCheck(tx)
 }
 
 func (p *TxProcessor) IsCalldataPricingIncreaseEnabled() bool {
