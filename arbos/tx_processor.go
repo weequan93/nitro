@@ -973,6 +973,20 @@ func (p *TxProcessor) SkipBaseFeeCheck(tx *types.Transaction) bool {
 	return p.state.Pricer().IsCustomPriceTxCheck(tx)
 }
 
+func (p *TxProcessor) SubAccountParent(sender common.Address, to *common.Address, data []byte) (common.Address, bool, error) {
+	if p == nil || p.state == nil {
+		return common.Address{}, false, nil
+	}
+	parent, err := p.state.SubAccount().GetParentAddress(sender, to, data)
+	if err != nil {
+		return common.Address{}, false, err
+	}
+	if parent == nil || *parent == (common.Address{}) {
+		return common.Address{}, false, nil
+	}
+	return *parent, true, nil
+}
+
 func (p *TxProcessor) IsCalldataPricingIncreaseEnabled() bool {
 	if p.state.ArbOSVersion() < params.ArbosVersion_40 {
 		return false
