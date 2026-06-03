@@ -142,6 +142,9 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 	if err != nil {
 		return err
 	}
+	if arbos.Blacklist().IsBlacklistTxCheck(&sender, tx) {
+		return fmt.Errorf("PreCheckTx() transaction blacklisted: from %v to %v", sender, tx.To())
+	}
 	baseFee := header.BaseFee
 	if config.Strictness < TxPreCheckerStrictnessLikelyCompatible {
 		baseFee, err = arbos.L2PricingState().MinBaseFeeWei()
