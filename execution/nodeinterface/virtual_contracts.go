@@ -47,6 +47,25 @@ func init() {
 	nodeInterfaceDebugMeta := node_interfacegen.NodeInterfaceDebugMetaData
 	_, nodeInterfaceDebug := precompiles.MakePrecompile(nodeInterfaceDebugMeta, nodeInterfaceDebugImpl)
 
+	core.RPCSubAccountParentHook = func(statedb *state.StateDB, sender common.Address, to *common.Address, data []byte) (common.Address, bool, error) {
+		arbosVersion := arbosState.ArbOSVersion(statedb)
+		if arbosVersion == 0 {
+			return common.Address{}, false, nil
+		}
+		state, err := arbosState.OpenSystemArbosState(statedb, nil, true)
+		if err != nil {
+			return common.Address{}, false, err
+		}
+		parent, err := state.SubAccount().GetParentAddress(sender, to, data)
+		if err != nil {
+			return common.Address{}, false, err
+		}
+		if parent == nil || *parent == (common.Address{}) {
+			return common.Address{}, false, nil
+		}
+		return *parent, true, nil
+	}
+
 	core.InterceptRPCMessage = func(
 		msg *core.Message,
 		ctx context.Context,
