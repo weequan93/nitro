@@ -19,6 +19,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
+	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/execution/gethexec"
 	"github.com/offchainlabs/nitro/gethhook"
 	"github.com/offchainlabs/nitro/precompiles"
@@ -64,6 +65,24 @@ func init() {
 			return common.Address{}, false, nil
 		}
 		return *parent, true, nil
+	}
+
+	core.RPCGaslessTxHook = func(statedb *state.StateDB, sender common.Address, tx *types.Transaction) (bool, error) {
+		if arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx) {
+			return true, nil
+		}
+		if statedb == nil {
+			return false, nil
+		}
+		arbosVersion := arbosState.ArbOSVersion(statedb)
+		if arbosVersion == 0 {
+			return false, nil
+		}
+		state, err := arbosState.OpenSystemArbosState(statedb, nil, true)
+		if err != nil {
+			return false, err
+		}
+		return state.Pricer().IsCustomPriceTxCheckWithSender(tx, sender), nil
 	}
 
 	core.InterceptRPCMessage = func(
