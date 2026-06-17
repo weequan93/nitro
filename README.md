@@ -32,6 +32,7 @@ Deriw DAC: Data Availability Committee (DAC) which providing data availability t
 Deriw Validator: Fault prove module of Deriw Chain
 
 For the chain deployment information see [docs](https://docs.deriw.com/)
+For the Full Node information see [run-node](docs/run-node.md)
 
 ## Contact
 
