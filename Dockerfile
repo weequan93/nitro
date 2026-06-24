@@ -214,6 +214,7 @@ RUN ./download-machine.sh consensus-v60-rc.5 0x7a9e6a77354888257a9989ce0b6bb39df
 RUN ./download-machine.sh consensus-v51.1 0xc2c02df561d4afaf9a1d6785f70098ec3874765c638e3cb6dbe8d3c83333e14c
 
 RUN ./download-machine.sh consensus-v60-deriw1 0xeaad272c3bc4fe429afcd210b7dc9208fc87181c8270d27239c0ddfb92eedfa4 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xeaad272c3bc4fe429afcd210b7dc9208fc87181c8270d27239c0ddfb92eedfa4
+RUN ./download-machine.sh consensus-v60-deriw2 0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421
 
 RUN mkdir -p /workspace/legacy-machines
 RUN cd /workspace/legacy-machines && /workspace/machines/download-deriw-machine.sh consensus-v32.arm64.deriw1 0x3b68623c622d17784f4c9fc1b4fd57e41ce3bf930e8085596df8adbaa3363eb5
