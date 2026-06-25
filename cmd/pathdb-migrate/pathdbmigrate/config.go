@@ -63,6 +63,8 @@ type Config struct {
 	Src              DBConfig                        `koanf:"src"`
 	Dst              DBConfig                        `koanf:"dst"`
 	Block            string                          `koanf:"block"`
+	AccountHistory   AccountHistoryConfig            `koanf:"account-history"`
+	ArchiveHistory   ArchiveHistoryConfig            `koanf:"archive-history"`
 	Migrate          bool                            `koanf:"migrate"`
 	Verify           bool                            `koanf:"verify"`
 	VerifyOnly       bool                            `koanf:"verify-only"`
@@ -78,10 +80,39 @@ type Config struct {
 	MetricsServer    genericconf.MetricsServerConfig `koanf:"metrics-server"`
 }
 
+type AccountHistoryConfig struct {
+	Enable       bool     `koanf:"enable"`
+	Addresses    []string `koanf:"addresses"`
+	StartBlock   string   `koanf:"start-block"`
+	EndBlock     string   `koanf:"end-block"`
+	ResetHistory bool     `koanf:"reset-history"`
+}
+
+type ArchiveHistoryConfig struct {
+	Enable           bool   `koanf:"enable"`
+	StartBlock       string `koanf:"start-block"`
+	EndBlock         string `koanf:"end-block"`
+	ResetHistory     bool   `koanf:"reset-history"`
+	RequirePreimages bool   `koanf:"require-preimages"`
+	ProgressEvery    uint64 `koanf:"progress-every"`
+}
+
 var DefaultConfig = Config{
-	Src:              DBConfigDefaultSrc,
-	Dst:              DBConfigDefaultDst,
-	Block:            "latest",
+	Src:   DBConfigDefaultSrc,
+	Dst:   DBConfigDefaultDst,
+	Block: "latest",
+	AccountHistory: AccountHistoryConfig{
+		Enable:     false,
+		StartBlock: "0",
+		EndBlock:   "latest",
+	},
+	ArchiveHistory: ArchiveHistoryConfig{
+		Enable:           false,
+		StartBlock:       "0",
+		EndBlock:         "latest",
+		RequirePreimages: true,
+		ProgressEvery:    1000,
+	},
 	Migrate:          false,
 	Verify:           true,
 	VerifyOnly:       false,
@@ -101,6 +132,17 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	DBConfigAddOptions("src", f, &DefaultConfig.Src)
 	DBConfigAddOptions("dst", f, &DefaultConfig.Dst)
 	f.String("block", DefaultConfig.Block, "state block to migrate ('latest' or block number)")
+	f.Bool("account-history.enable", DefaultConfig.AccountHistory.Enable, "write targeted PathDB account history for known addresses without replaying blocks")
+	f.StringSlice("account-history.addresses", DefaultConfig.AccountHistory.Addresses, "addresses to include in generated account history")
+	f.String("account-history.start-block", DefaultConfig.AccountHistory.StartBlock, "first block for targeted account history")
+	f.String("account-history.end-block", DefaultConfig.AccountHistory.EndBlock, "last block for targeted account history ('latest' or block number)")
+	f.Bool("account-history.reset-history", DefaultConfig.AccountHistory.ResetHistory, "DANGEROUS: reset existing destination PathDB state history before writing account history")
+	f.Bool("archive-history.enable", DefaultConfig.ArchiveHistory.Enable, "write full PathDB archive state history from hashdb without replaying blocks")
+	f.String("archive-history.start-block", DefaultConfig.ArchiveHistory.StartBlock, "first block for full archive history")
+	f.String("archive-history.end-block", DefaultConfig.ArchiveHistory.EndBlock, "last block for full archive history ('latest' or block number)")
+	f.Bool("archive-history.reset-history", DefaultConfig.ArchiveHistory.ResetHistory, "DANGEROUS: reset existing destination PathDB state history before writing archive history")
+	f.Bool("archive-history.require-preimages", DefaultConfig.ArchiveHistory.RequirePreimages, "require account key preimages when writing full archive history")
+	f.Uint64("archive-history.progress-every", DefaultConfig.ArchiveHistory.ProgressEvery, "log archive-history progress every N blocks")
 	f.Bool("migrate", DefaultConfig.Migrate, "write pathdb trie nodes and metadata into destination database")
 	f.Bool("verify", DefaultConfig.Verify, "verify destination pathdb after migration")
 	f.Bool("verify-only", DefaultConfig.VerifyOnly, "verify an existing pathdb destination without running migration")
@@ -117,6 +159,40 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 }
 
 func (c *Config) Validate() error {
+	if c.AccountHistory.Enable && c.ArchiveHistory.Enable {
+		return errors.New("account-history.enable and archive-history.enable cannot both be set")
+	}
+	if c.AccountHistory.Enable {
+		if c.Src.ChainData == "" {
+			return errors.New("src.chain-data is required")
+		}
+		if c.Dst.ChainData == "" {
+			return errors.New("dst.chain-data is required")
+		}
+		if len(c.AccountHistory.Addresses) == 0 {
+			return errors.New("account-history.addresses is required")
+		}
+		if c.Migrate || c.VerifyOnly || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+			return errors.New("account-history.enable cannot be combined with migrate, verify-only, cleanup, or compact modes")
+		}
+	}
+	if c.ArchiveHistory.Enable {
+		if c.Src.ChainData == "" {
+			return errors.New("src.chain-data is required")
+		}
+		if c.Dst.ChainData == "" {
+			return errors.New("dst.chain-data is required")
+		}
+		if c.Migrate || c.VerifyOnly || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+			return errors.New("archive-history.enable cannot be combined with migrate, verify-only, cleanup, or compact modes")
+		}
+		if c.ArchiveHistory.ProgressEvery == 0 {
+			return errors.New("archive-history.progress-every must be greater than 0")
+		}
+		if !c.ArchiveHistory.RequirePreimages {
+			return errors.New("archive-history.require-preimages=false is not supported for full archive-compatible migration")
+		}
+	}
 	if !c.VerifyOnly && c.Src.ChainData == "" {
 		return errors.New("src.chain-data is required")
 	}

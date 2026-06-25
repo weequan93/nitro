@@ -128,6 +128,12 @@ func ensureDestinationReady(db ethdb.Database, expected *selectedState) error {
 }
 
 func (m *Migrator) Run(ctx context.Context) error {
+	if m.config.AccountHistory.Enable {
+		return m.runAccountHistory(ctx)
+	}
+	if m.config.ArchiveHistory.Enable {
+		return m.runArchiveHistory(ctx)
+	}
 	if m.config.VerifyOnly {
 		dst, err := openChainDB(&m.config.Dst, "dst", false, m.config.IgnoreUnfinished)
 		if err != nil {
