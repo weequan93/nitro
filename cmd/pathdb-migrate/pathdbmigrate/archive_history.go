@@ -5,6 +5,7 @@ package pathdbmigrate
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -22,8 +23,12 @@ import (
 
 const storageIndexSizeForArchiveHistory = common.HashLength + 5
 
+var errArchiveStateUnavailable = errors.New("archive source state trie unavailable")
+
 type archiveHistoryStats struct {
 	blocks           uint64
+	availableBlocks  uint64
+	skippedBlocks    uint64
 	transitions      uint64
 	accounts         uint64
 	storageSlots     uint64
@@ -74,6 +79,16 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			endRoot,
 		)
 	}
+	_, initialRoot, err := canonicalHeaderAndRoot(src, start)
+	if err != nil {
+		return err
+	}
+	if !archiveTrieRootAvailable(src, endRoot) {
+		return fmt.Errorf("archive-history target block %d root %s is unavailable in source hashdb and cannot be skipped", end, endRoot)
+	}
+	if !cfg.SkipMissingStates && !archiveTrieRootAvailable(src, initialRoot) {
+		return fmt.Errorf("archive-history start block %d root %s is unavailable in source hashdb", start, initialRoot)
+	}
 
 	ancientDir, err := dst.AncientDatadir()
 	if err != nil {
@@ -102,23 +117,29 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 	srcTrieDB := triedb.NewDatabase(src, triedb.HashDefaults)
 	defer srcTrieDB.Close()
 
-	_, prevRoot, err := canonicalHeaderAndRoot(src, start)
-	if err != nil {
-		return err
-	}
-	stateID := uint64(0)
-	rawdb.WriteStateID(dst, prevRoot, stateID)
-
 	started := time.Now()
 	stats := archiveHistoryStats{}
 	totalBlocks := end - start
+	stateID := uint64(0)
+	prevRoot := common.Hash{}
+	anchorBlock := start
+	haveAnchor := archiveTrieRootAvailable(src, initialRoot)
+	if haveAnchor {
+		prevRoot = initialRoot
+		stats.availableBlocks++
+		rawdb.WriteStateID(dst, prevRoot, stateID)
+	} else {
+		stats.skippedBlocks++
+		log.Warn("Skipping unavailable initial archive state", "block", start, "root", initialRoot)
+	}
 	log.Info(
 		"Writing full archive state history",
 		"start", start,
 		"end", end,
 		"target", end,
 		"targetRoot", endRoot,
-		"initialRoot", prevRoot,
+		"initialRoot", initialRoot,
+		"skipMissingStates", cfg.SkipMissingStates,
 		"progressEvery", cfg.ProgressEvery,
 		"storageHistoryVersion", 0,
 	)
@@ -132,23 +153,52 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			return err
 		}
 		stats.blocks++
+		if !haveAnchor {
+			if !archiveTrieRootAvailable(src, root) {
+				if block == end {
+					return fmt.Errorf("archive-history target block %d root %s is unavailable in source hashdb and cannot be skipped", block, root)
+				}
+				recordSkippedArchiveState(block, root, anchorBlock, prevRoot, "state root is unavailable", cfg.ProgressEvery, &stats)
+				continue
+			}
+			haveAnchor = true
+			prevRoot = root
+			anchorBlock = block
+			stats.availableBlocks++
+			rawdb.WriteStateID(dst, prevRoot, stateID)
+			log.Info("Selected first available archive state", "block", block, "root", root, "skippedBlocks", stats.skippedBlocks)
+			continue
+		}
 
 		if root == prevRoot {
+			stats.availableBlocks++
+			anchorBlock = block
 			rawdb.WriteStateID(dst, root, stateID)
 			if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, block, end) {
 				logArchiveProgress("Full archive history progress", block, end, root, stateID, totalBlocks, started, stats)
 			}
 			continue
 		}
+		if !archiveTrieRootAvailable(src, root) {
+			if !cfg.SkipMissingStates || block == end {
+				return fmt.Errorf("block %d archive state root %s is unavailable in source hashdb", block, root)
+			}
+			recordSkippedArchiveState(block, root, anchorBlock, prevRoot, "state root is unavailable", cfg.ProgressEvery, &stats)
+			continue
+		}
 
-		stateID++
 		accounts, storages, changedAccounts, changedSlots, err := archiveHistoryOrigins(src, srcTrieDB, prevRoot, root)
 		if err != nil {
+			if cfg.SkipMissingStates && block != end && isMissingArchiveState(err) {
+				recordSkippedArchiveState(block, root, anchorBlock, prevRoot, err.Error(), cfg.ProgressEvery, &stats)
+				continue
+			}
 			return fmt.Errorf("block %d archive history origins: %w", block, err)
 		}
 		if len(accounts) == 0 {
 			return fmt.Errorf("block %d root changed from %s to %s but no account changes were found", block, prevRoot, root)
 		}
+		stateID++
 		meta := encodeArchiveHistoryMeta(prevRoot, root, block)
 		accountIndex, storageIndex, accountData, storageData, err := encodeArchiveHistory(accounts, storages)
 		if err != nil {
@@ -160,18 +210,28 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		rawdb.WriteStateID(dst, root, stateID)
 
 		stats.transitions++
+		stats.availableBlocks++
 		stats.accounts += changedAccounts
 		stats.storageSlots += changedSlots
 		if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, block, end) {
 			logArchiveProgress("Full archive history progress", block, end, root, stateID, totalBlocks, started, stats)
 		}
 		prevRoot = root
+		anchorBlock = block
 	}
 
 	rawdb.WritePersistentStateID(dst, stateID)
 	resetStateHistoryIndexes(dst)
 	if err := dst.SyncKeyValue(); err != nil {
 		return fmt.Errorf("sync destination db: %w", err)
+	}
+	if stats.skippedBlocks != 0 {
+		log.Warn(
+			"Archive state history is incomplete because source states were unavailable",
+			"availableBlocks", stats.availableBlocks,
+			"skippedBlocks", stats.skippedBlocks,
+			"coverage", archiveCoverage(stats),
+		)
 	}
 	log.Info(
 		"Full archive state history finished",
@@ -180,6 +240,10 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		"target", end,
 		"targetRoot", endRoot,
 		"blocks", stats.blocks,
+		"availableBlocks", stats.availableBlocks,
+		"skippedBlocks", stats.skippedBlocks,
+		"coverage", archiveCoverage(stats),
+		"partial", stats.skippedBlocks != 0,
 		"transitions", stats.transitions,
 		"stateID", stateID,
 		"accounts", stats.accounts,
@@ -191,6 +255,12 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 }
 
 func archiveHistoryOrigins(src ethdb.KeyValueReader, trieDB *triedb.Database, parentRoot common.Hash, root common.Hash) (map[common.Address][]byte, map[common.Address]map[common.Hash][]byte, uint64, uint64, error) {
+	if !archiveTrieRootAvailable(src, parentRoot) {
+		return nil, nil, 0, 0, fmt.Errorf("%w: parent account root %s", errArchiveStateUnavailable, parentRoot)
+	}
+	if !archiveTrieRootAvailable(src, root) {
+		return nil, nil, 0, 0, fmt.Errorf("%w: account root %s", errArchiveStateUnavailable, root)
+	}
 	oldTrie, err := trie.New(trie.TrieID(parentRoot), trieDB)
 	if err != nil {
 		return nil, nil, 0, 0, fmt.Errorf("open parent account trie %s: %w", parentRoot, err)
@@ -229,7 +299,7 @@ func archiveHistoryOrigins(src ethdb.KeyValueReader, trieDB *triedb.Database, pa
 		if oldStorageRoot == newStorageRoot {
 			continue
 		}
-		slotOrigins, err := archiveStorageOrigins(trieDB, parentRoot, root, accountHash, oldStorageRoot, newStorageRoot)
+		slotOrigins, err := archiveStorageOrigins(src, trieDB, parentRoot, root, accountHash, oldStorageRoot, newStorageRoot)
 		if err != nil {
 			return nil, nil, 0, 0, fmt.Errorf("account %s storage history: %w", address, err)
 		}
@@ -241,7 +311,13 @@ func archiveHistoryOrigins(src ethdb.KeyValueReader, trieDB *triedb.Database, pa
 	return accounts, storages, uint64(len(accounts)), storageSlots, nil
 }
 
-func archiveStorageOrigins(trieDB *triedb.Database, parentRoot common.Hash, root common.Hash, accountHash common.Hash, oldRoot common.Hash, newRoot common.Hash) (map[common.Hash][]byte, error) {
+func archiveStorageOrigins(src ethdb.KeyValueReader, trieDB *triedb.Database, parentRoot common.Hash, root common.Hash, accountHash common.Hash, oldRoot common.Hash, newRoot common.Hash) (map[common.Hash][]byte, error) {
+	if !archiveTrieRootAvailable(src, oldRoot) {
+		return nil, fmt.Errorf("%w: parent storage root %s", errArchiveStateUnavailable, oldRoot)
+	}
+	if !archiveTrieRootAvailable(src, newRoot) {
+		return nil, fmt.Errorf("%w: storage root %s", errArchiveStateUnavailable, newRoot)
+	}
 	oldTrie, err := trie.New(trie.StorageTrieID(parentRoot, accountHash, oldRoot), trieDB)
 	if err != nil {
 		return nil, fmt.Errorf("open parent storage trie %s: %w", oldRoot, err)
@@ -452,6 +528,9 @@ func logArchiveProgress(msg string, block uint64, end uint64, root common.Hash, 
 		"percent", fmt.Sprintf("%.2f", percent),
 		"root", root,
 		"stateID", stateID,
+		"availableBlocks", stats.availableBlocks,
+		"skippedBlocks", stats.skippedBlocks,
+		"coverage", archiveCoverage(stats),
 		"transitions", stats.transitions,
 		"accounts", stats.accounts,
 		"storageSlots", stats.storageSlots,
@@ -460,4 +539,39 @@ func logArchiveProgress(msg string, block uint64, end uint64, root common.Hash, 
 		"elapsed", elapsed,
 		"eta", remaining,
 	)
+}
+
+func archiveTrieRootAvailable(db ethdb.KeyValueReader, root common.Hash) bool {
+	return root == types.EmptyRootHash || rawdb.HasLegacyTrieNode(db, root)
+}
+
+func isMissingArchiveState(err error) bool {
+	if errors.Is(err, errArchiveStateUnavailable) {
+		return true
+	}
+	var missing *trie.MissingNodeError
+	return errors.As(err, &missing)
+}
+
+func recordSkippedArchiveState(block uint64, root common.Hash, anchorBlock uint64, anchorRoot common.Hash, reason string, progressEvery uint64, stats *archiveHistoryStats) {
+	stats.skippedBlocks++
+	if stats.skippedBlocks <= 10 || stats.blocks%progressEvery == 0 {
+		log.Warn(
+			"Skipping unavailable archive state",
+			"block", block,
+			"root", root,
+			"anchorBlock", anchorBlock,
+			"anchorRoot", anchorRoot,
+			"skippedBlocks", stats.skippedBlocks,
+			"reason", reason,
+		)
+	}
+}
+
+func archiveCoverage(stats archiveHistoryStats) string {
+	total := stats.availableBlocks + stats.skippedBlocks
+	if total == 0 {
+		return "100.00%"
+	}
+	return fmt.Sprintf("%.2f%%", float64(stats.availableBlocks)*100/float64(total))
 }

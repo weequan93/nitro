@@ -4,6 +4,8 @@ package pathdbmigrate
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -175,5 +177,41 @@ func copyDatabase(t *testing.T, src ethdb.Database, dst ethdb.Database) {
 	}
 	if err := batch.Write(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestArchiveTrieRootAvailable(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	root := crypto.Keccak256Hash([]byte("retained-state-root"))
+
+	if !archiveTrieRootAvailable(db, types.EmptyRootHash) {
+		t.Fatal("empty root must always be available")
+	}
+	if archiveTrieRootAvailable(db, root) {
+		t.Fatal("unstored root unexpectedly reported as available")
+	}
+	rawdb.WriteLegacyTrieNode(db, root, []byte{0x80})
+	if !archiveTrieRootAvailable(db, root) {
+		t.Fatal("stored root was not reported as available")
+	}
+}
+
+func TestMissingArchiveStateClassification(t *testing.T) {
+	if !isMissingArchiveState(fmt.Errorf("wrapped: %w", errArchiveStateUnavailable)) {
+		t.Fatal("sentinel error was not classified as a missing archive state")
+	}
+	missing := &trie.MissingNodeError{NodeHash: crypto.Keccak256Hash([]byte("missing-node"))}
+	if !isMissingArchiveState(fmt.Errorf("wrapped: %w", missing)) {
+		t.Fatal("missing trie node was not classified as a missing archive state")
+	}
+	if isMissingArchiveState(errors.New("unrelated failure")) {
+		t.Fatal("unrelated error was classified as a missing archive state")
+	}
+}
+
+func TestArchiveCoverage(t *testing.T) {
+	stats := archiveHistoryStats{availableBlocks: 3, skippedBlocks: 1}
+	if got, want := archiveCoverage(stats), "75.00%"; got != want {
+		t.Fatalf("unexpected coverage: have %q want %q", got, want)
 	}
 }

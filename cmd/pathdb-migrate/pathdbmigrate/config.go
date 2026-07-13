@@ -89,12 +89,13 @@ type AccountHistoryConfig struct {
 }
 
 type ArchiveHistoryConfig struct {
-	Enable           bool   `koanf:"enable"`
-	StartBlock       string `koanf:"start-block"`
-	EndBlock         string `koanf:"end-block"`
-	ResetHistory     bool   `koanf:"reset-history"`
-	RequirePreimages bool   `koanf:"require-preimages"`
-	ProgressEvery    uint64 `koanf:"progress-every"`
+	Enable            bool   `koanf:"enable"`
+	StartBlock        string `koanf:"start-block"`
+	EndBlock          string `koanf:"end-block"`
+	ResetHistory      bool   `koanf:"reset-history"`
+	RequirePreimages  bool   `koanf:"require-preimages"`
+	SkipMissingStates bool   `koanf:"skip-missing-states"`
+	ProgressEvery     uint64 `koanf:"progress-every"`
 }
 
 var DefaultConfig = Config{
@@ -142,6 +143,7 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.String("archive-history.end-block", DefaultConfig.ArchiveHistory.EndBlock, "last block for full archive history ('latest' or block number)")
 	f.Bool("archive-history.reset-history", DefaultConfig.ArchiveHistory.ResetHistory, "DANGEROUS: reset existing destination PathDB state history before writing archive history")
 	f.Bool("archive-history.require-preimages", DefaultConfig.ArchiveHistory.RequirePreimages, "require account key preimages when writing full archive history")
+	f.Bool("archive-history.skip-missing-states", DefaultConfig.ArchiveHistory.SkipMissingStates, "skip unavailable source hashdb states and generate best-effort history between retained states")
 	f.Uint64("archive-history.progress-every", DefaultConfig.ArchiveHistory.ProgressEvery, "log archive-history progress every N blocks")
 	f.Bool("migrate", DefaultConfig.Migrate, "write pathdb trie nodes and metadata into destination database")
 	f.Bool("verify", DefaultConfig.Verify, "verify destination pathdb after migration")
