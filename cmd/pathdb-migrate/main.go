@@ -39,6 +39,36 @@ func printSampleUsage(name string) {
 
 func printProgress(m *pathdbmigrate.Migrator) {
 	stats := m.Stats()
+	if archive, ok := stats.ArchiveHistoryProgress(); ok {
+		elapsed := stats.Elapsed()
+		percent := float64(100)
+		if archive.EndBlock > archive.StartBlock {
+			percent = float64(archive.ProcessedBlocks) * 100 / float64(archive.EndBlock-archive.StartBlock)
+		}
+		coverage := float64(100)
+		if checked := archive.AvailableBlocks + archive.SkippedBlocks; checked != 0 {
+			coverage = float64(archive.AvailableBlocks) * 100 / float64(checked)
+		}
+		rate := float64(0)
+		if elapsed > 0 {
+			rate = float64(archive.ProcessedBlocks) / elapsed.Seconds()
+		}
+		eta := time.Duration(0)
+		if rate > 0 && archive.EndBlock >= archive.CurrentBlock {
+			eta = time.Duration(float64(archive.EndBlock-archive.CurrentBlock)/rate) * time.Second
+		}
+		fmt.Printf("Archive history progress:\n")
+		fmt.Printf("\trange:\t%d -> %d\n", archive.StartBlock, archive.EndBlock)
+		fmt.Printf("\tcurrent block:\t%d (%.2f%%)\n", archive.CurrentBlock, percent)
+		fmt.Printf("\tprocessed blocks:\t%d\n", archive.ProcessedBlocks)
+		fmt.Printf("\tavailable / skipped:\t%d / %d (coverage %.2f%%)\n", archive.AvailableBlocks, archive.SkippedBlocks, coverage)
+		fmt.Printf("\thistory records / state ID:\t%d / %d\n", archive.Transitions, archive.StateID)
+		fmt.Printf("\taccounts / storage slots:\t%d / %d\n", archive.Accounts, archive.StorageSlots)
+		fmt.Printf("\tmissing preimages:\t%d\n", archive.MissingPreimages)
+		fmt.Printf("\trate:\t%.2f blocks/s\n", rate)
+		fmt.Printf("\telapsed / eta:\t%v / %v\n", elapsed, eta)
+		return
+	}
 	fmt.Printf("Progress:\n")
 	fmt.Printf("\taccount nodes:\t%d\n", stats.AccountNodes())
 	fmt.Printf("\taccount leaves:\t%d\n", stats.AccountLeaves())

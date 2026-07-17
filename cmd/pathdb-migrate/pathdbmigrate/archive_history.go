@@ -121,6 +121,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 	stats := archiveHistoryStats{}
 	totalBlocks := end - start
 	stateID := uint64(0)
+	m.stats.resetArchiveHistory(start, end)
 	prevRoot := common.Hash{}
 	anchorBlock := start
 	haveAnchor := archiveTrieRootAvailable(src, initialRoot)
@@ -132,6 +133,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		stats.skippedBlocks++
 		log.Warn("Skipping unavailable initial archive state", "block", start, "root", initialRoot)
 	}
+	m.stats.setArchiveHistoryProgress(start, stateID, stats)
 	log.Info(
 		"Writing full archive state history",
 		"start", start,
@@ -153,12 +155,14 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			return err
 		}
 		stats.blocks++
+		m.stats.setArchiveHistoryProgress(block, stateID, stats)
 		if !haveAnchor {
 			if !archiveTrieRootAvailable(src, root) {
 				if block == end {
 					return fmt.Errorf("archive-history target block %d root %s is unavailable in source hashdb and cannot be skipped", block, root)
 				}
 				recordSkippedArchiveState(block, root, anchorBlock, prevRoot, "state root is unavailable", cfg.ProgressEvery, &stats)
+				m.stats.setArchiveHistoryProgress(block, stateID, stats)
 				continue
 			}
 			haveAnchor = true
@@ -166,6 +170,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			anchorBlock = block
 			stats.availableBlocks++
 			rawdb.WriteStateID(dst, prevRoot, stateID)
+			m.stats.setArchiveHistoryProgress(block, stateID, stats)
 			log.Info("Selected first available archive state", "block", block, "root", root, "skippedBlocks", stats.skippedBlocks)
 			continue
 		}
@@ -174,6 +179,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			stats.availableBlocks++
 			anchorBlock = block
 			rawdb.WriteStateID(dst, root, stateID)
+			m.stats.setArchiveHistoryProgress(block, stateID, stats)
 			if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, block, end) {
 				logArchiveProgress("Full archive history progress", block, end, root, stateID, totalBlocks, started, stats)
 			}
@@ -184,6 +190,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 				return fmt.Errorf("block %d archive state root %s is unavailable in source hashdb", block, root)
 			}
 			recordSkippedArchiveState(block, root, anchorBlock, prevRoot, "state root is unavailable", cfg.ProgressEvery, &stats)
+			m.stats.setArchiveHistoryProgress(block, stateID, stats)
 			continue
 		}
 
@@ -191,6 +198,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		if err != nil {
 			if cfg.SkipMissingStates && block != end && isMissingArchiveState(err) {
 				recordSkippedArchiveState(block, root, anchorBlock, prevRoot, err.Error(), cfg.ProgressEvery, &stats)
+				m.stats.setArchiveHistoryProgress(block, stateID, stats)
 				continue
 			}
 			return fmt.Errorf("block %d archive history origins: %w", block, err)
@@ -213,6 +221,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		stats.availableBlocks++
 		stats.accounts += changedAccounts
 		stats.storageSlots += changedSlots
+		m.stats.setArchiveHistoryProgress(block, stateID, stats)
 		if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, block, end) {
 			logArchiveProgress("Full archive history progress", block, end, root, stateID, totalBlocks, started, stats)
 		}
@@ -225,12 +234,24 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 	if err := dst.SyncKeyValue(); err != nil {
 		return fmt.Errorf("sync destination db: %w", err)
 	}
+	m.stats.setArchiveHistoryProgress(end, stateID, stats)
 	if stats.skippedBlocks != 0 {
 		log.Warn(
 			"Archive state history is incomplete because source states were unavailable",
 			"availableBlocks", stats.availableBlocks,
 			"skippedBlocks", stats.skippedBlocks,
 			"coverage", archiveCoverage(stats),
+		)
+	}
+	if stats.transitions == 0 && end > start {
+		log.Warn(
+			"Archive state history completed without writing any history records",
+			"start", start,
+			"end", end,
+			"availableBlocks", stats.availableBlocks,
+			"skippedBlocks", stats.skippedBlocks,
+			"coverage", archiveCoverage(stats),
+			"hint", "the source must retain at least two usable hashdb states; disable skip-missing-states to fail at the first unavailable state",
 		)
 	}
 	log.Info(

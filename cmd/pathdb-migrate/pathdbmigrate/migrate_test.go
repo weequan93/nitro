@@ -215,3 +215,42 @@ func TestArchiveCoverage(t *testing.T) {
 		t.Fatalf("unexpected coverage: have %q want %q", got, want)
 	}
 }
+
+func TestArchiveHistoryProgressStats(t *testing.T) {
+	var stats Stats
+	stats.resetArchiveHistory(10, 20)
+	stats.setArchiveHistoryProgress(14, 2, archiveHistoryStats{
+		blocks:           4,
+		availableBlocks:  3,
+		skippedBlocks:    2,
+		transitions:      2,
+		accounts:         7,
+		storageSlots:     11,
+		missingPreimages: 1,
+	})
+
+	progress, ok := stats.ArchiveHistoryProgress()
+	if !ok {
+		t.Fatal("archive history progress mode was not enabled")
+	}
+	if progress.StartBlock != 10 || progress.EndBlock != 20 || progress.CurrentBlock != 14 {
+		t.Fatalf("unexpected archive range progress: %+v", progress)
+	}
+	if progress.ProcessedBlocks != 4 || progress.AvailableBlocks != 3 || progress.SkippedBlocks != 2 {
+		t.Fatalf("unexpected archive block counts: %+v", progress)
+	}
+	if progress.Transitions != 2 || progress.StateID != 2 {
+		t.Fatalf("unexpected archive history counts: %+v", progress)
+	}
+	if progress.Accounts != 7 || progress.StorageSlots != 11 || progress.MissingPreimages != 1 {
+		t.Fatalf("unexpected archive data counts: %+v", progress)
+	}
+	if stats.startUnixNano.Load() == 0 {
+		t.Fatal("archive history start time was not initialized")
+	}
+
+	stats.Reset()
+	if _, ok := stats.ArchiveHistoryProgress(); ok {
+		t.Fatal("generic reset did not clear archive history progress mode")
+	}
+}
