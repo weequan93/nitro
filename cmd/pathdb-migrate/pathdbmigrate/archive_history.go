@@ -194,7 +194,44 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			continue
 		}
 
-		accounts, storages, changedAccounts, changedSlots, err := archiveHistoryOrigins(src, srcTrieDB, prevRoot, root)
+		var (
+			accountIndex    []byte
+			storageIndex    []byte
+			accountData     []byte
+			storageData     []byte
+			changedAccounts uint64
+			changedSlots    uint64
+		)
+		transitionGap := block - anchorBlock
+		if transitionGap >= cfg.SpillGap {
+			log.Warn(
+				"Large archive state gap will use a disk-backed trie diff",
+				"anchorBlock", anchorBlock,
+				"block", block,
+				"gap", transitionGap,
+				"spillGap", cfg.SpillGap,
+			)
+			encoded, spillErr := archiveHistoryOriginsSpilled(
+				ctx, src, srcTrieDB, prevRoot, root, cfg, m.config.Dst.ChainData,
+			)
+			err = spillErr
+			if err == nil {
+				accountIndex = encoded.accountIndex
+				storageIndex = encoded.storageIndex
+				accountData = encoded.accountData
+				storageData = encoded.storageData
+				changedAccounts = encoded.accounts
+				changedSlots = encoded.storageSlots
+			}
+		} else {
+			accounts, storages, accountCount, slotCount, originErr := archiveHistoryOrigins(src, srcTrieDB, prevRoot, root)
+			err = originErr
+			if err == nil {
+				changedAccounts = accountCount
+				changedSlots = slotCount
+				accountIndex, storageIndex, accountData, storageData, err = encodeArchiveHistory(accounts, storages)
+			}
+		}
 		if err != nil {
 			if cfg.SkipMissingStates && block != end && isMissingArchiveState(err) {
 				recordSkippedArchiveState(block, root, anchorBlock, prevRoot, err.Error(), cfg.ProgressEvery, &stats)
@@ -203,15 +240,11 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			}
 			return fmt.Errorf("block %d archive history origins: %w", block, err)
 		}
-		if len(accounts) == 0 {
+		if changedAccounts == 0 {
 			return fmt.Errorf("block %d root changed from %s to %s but no account changes were found", block, prevRoot, root)
 		}
 		stateID++
 		meta := encodeArchiveHistoryMeta(prevRoot, root, block)
-		accountIndex, storageIndex, accountData, storageData, err := encodeArchiveHistory(accounts, storages)
-		if err != nil {
-			return fmt.Errorf("block %d encode archive history: %w", block, err)
-		}
 		if err := rawdb.WriteStateHistory(freezer, stateID, meta, accountIndex, storageIndex, accountData, storageData); err != nil {
 			return fmt.Errorf("write archive history id %d block %d: %w", stateID, block, err)
 		}

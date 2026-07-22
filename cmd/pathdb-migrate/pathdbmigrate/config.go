@@ -96,6 +96,9 @@ type ArchiveHistoryConfig struct {
 	RequirePreimages  bool   `koanf:"require-preimages"`
 	SkipMissingStates bool   `koanf:"skip-missing-states"`
 	ProgressEvery     uint64 `koanf:"progress-every"`
+	SpillGap          uint64 `koanf:"spill-gap"`
+	SpillDirectory    string `koanf:"spill-directory"`
+	SpillCache        int    `koanf:"spill-cache"`
 }
 
 var DefaultConfig = Config{
@@ -113,6 +116,8 @@ var DefaultConfig = Config{
 		EndBlock:         "latest",
 		RequirePreimages: true,
 		ProgressEvery:    1000,
+		SpillGap:         10000,
+		SpillCache:       64,
 	},
 	Migrate:          false,
 	Verify:           true,
@@ -145,6 +150,9 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Bool("archive-history.require-preimages", DefaultConfig.ArchiveHistory.RequirePreimages, "require account key preimages when writing full archive history")
 	f.Bool("archive-history.skip-missing-states", DefaultConfig.ArchiveHistory.SkipMissingStates, "skip unavailable source hashdb states and generate best-effort history between retained states")
 	f.Uint64("archive-history.progress-every", DefaultConfig.ArchiveHistory.ProgressEvery, "log archive-history progress every N blocks")
+	f.Uint64("archive-history.spill-gap", DefaultConfig.ArchiveHistory.SpillGap, "use a disk-backed trie diff when retained states are separated by at least N blocks")
+	f.String("archive-history.spill-directory", DefaultConfig.ArchiveHistory.SpillDirectory, "directory for disk-backed archive trie diffs; defaults beside dst.chain-data")
+	f.Int("archive-history.spill-cache", DefaultConfig.ArchiveHistory.SpillCache, "cache in megabytes for disk-backed archive trie diffs")
 	f.Bool("migrate", DefaultConfig.Migrate, "write pathdb trie nodes and metadata into destination database")
 	f.Bool("verify", DefaultConfig.Verify, "verify destination pathdb after migration")
 	f.Bool("verify-only", DefaultConfig.VerifyOnly, "verify an existing pathdb destination without running migration")
@@ -190,6 +198,12 @@ func (c *Config) Validate() error {
 		}
 		if c.ArchiveHistory.ProgressEvery == 0 {
 			return errors.New("archive-history.progress-every must be greater than 0")
+		}
+		if c.ArchiveHistory.SpillGap == 0 {
+			return errors.New("archive-history.spill-gap must be greater than 0")
+		}
+		if c.ArchiveHistory.SpillCache <= 0 {
+			return errors.New("archive-history.spill-cache must be greater than 0")
 		}
 		if !c.ArchiveHistory.RequirePreimages {
 			return errors.New("archive-history.require-preimages=false is not supported for full archive-compatible migration")

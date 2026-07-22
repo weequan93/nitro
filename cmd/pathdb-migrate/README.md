@@ -87,6 +87,35 @@ go run ./cmd/pathdb-migrate \
   --ignore-unfinished-conversion
 ```
 
+## Archive history with missing states
+
+Full archive-history migration can bridge retained hashdb states while skipping
+state roots that are genuinely unavailable in the source. Large gaps use a
+temporary disk-backed trie diff by default, avoiding an in-memory map of every
+changed account and storage slot:
+
+```sh
+GOMEMLIMIT=48GiB GOMAXPROCS=4 ./pathdb-migrate \
+  --src.chain-data /data/node/l2chaindata \
+  --dst.chain-data /data/node-path/l2chaindata \
+  --src.cache 256 \
+  --dst.cache 256 \
+  --archive-history.enable \
+  --archive-history.start-block 0 \
+  --archive-history.end-block 35000000 \
+  --archive-history.skip-missing-states \
+  --archive-history.spill-gap 10000 \
+  --archive-history.spill-cache 64 \
+  --archive-history.spill-directory /data/node-path/pathdb-spill
+```
+
+The spill directory must be on a filesystem with enough free space. Temporary
+spill data is removed after the transition, and stale spill directories from an
+interrupted run are removed on retry. If a failed run already wrote destination
+history, use `--archive-history.reset-history` only on the disposable destination
+copy before retrying. Disk spilling reduces migration memory; it cannot restore
+state roots or trie nodes that are absent from the source hashdb.
+
 ## Safety Notes
 
 - Keep the original hash database until the converted node has caught up and

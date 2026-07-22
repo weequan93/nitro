@@ -3,9 +3,11 @@
 package pathdbmigrate
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -214,6 +216,190 @@ func TestArchiveCoverage(t *testing.T) {
 	if got, want := archiveCoverage(stats), "75.00%"; got != want {
 		t.Fatalf("unexpected coverage: have %q want %q", got, want)
 	}
+}
+
+func TestDiskBackedArchiveHistoryMatchesInMemoryEncoding(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	trieDB := triedb.NewDatabase(db, triedb.HashDefaults)
+	defer trieDB.Close()
+
+	oldRoot, newRoot := buildArchiveHashStatePair(t, db, trieDB)
+	accounts, storages, accountCount, storageCount, err := archiveHistoryOrigins(db, trieDB, oldRoot, newRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accountIndex, storageIndex, accountData, storageData, err := encodeArchiveHistory(accounts, storages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := &encodedArchiveHistory{
+		accountIndex: accountIndex,
+		storageIndex: storageIndex,
+		accountData:  accountData,
+		storageData:  storageData,
+		accounts:     accountCount,
+		storageSlots: storageCount,
+	}
+
+	spillDirectory := t.TempDir()
+	config := DefaultConfig.ArchiveHistory
+	config.SpillDirectory = spillDirectory
+	config.SpillCache = 16
+	actual, err := archiveHistoryOriginsSpilled(context.Background(), db, trieDB, oldRoot, newRoot, config, "l2chaindata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(spillDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("archive spill directory was not cleaned: %v", entries)
+	}
+	if expected.accounts != actual.accounts ||
+		expected.storageSlots != actual.storageSlots ||
+		!bytes.Equal(expected.accountIndex, actual.accountIndex) ||
+		!bytes.Equal(expected.storageIndex, actual.storageIndex) ||
+		!bytes.Equal(expected.accountData, actual.accountData) ||
+		!bytes.Equal(expected.storageData, actual.storageData) {
+		t.Fatalf(
+			"disk-backed encoding differs: accounts %d/%d storage %d/%d indexes %x/%x storageIndexes %x/%x accountData %x/%x storageData %x/%x",
+			expected.accounts, actual.accounts,
+			expected.storageSlots, actual.storageSlots,
+			expected.accountIndex, actual.accountIndex,
+			expected.storageIndex, actual.storageIndex,
+			expected.accountData, actual.accountData,
+			expected.storageData, actual.storageData,
+		)
+	}
+}
+
+func buildArchiveHashStatePair(t *testing.T, db ethdb.Database, trieDB *triedb.Database) (common.Hash, common.Hash) {
+	t.Helper()
+
+	addresses := []common.Address{
+		common.HexToAddress("0x3000"),
+		common.HexToAddress("0x1000"),
+		common.HexToAddress("0x2000"),
+	}
+	accountHashes := make([]common.Hash, len(addresses))
+	preimages := make(map[common.Hash][]byte, len(addresses))
+	for i, address := range addresses {
+		accountHashes[i] = crypto.Keccak256Hash(address.Bytes())
+		preimages[accountHashes[i]] = common.CopyBytes(address.Bytes())
+	}
+	rawdb.WritePreimages(db, preimages)
+
+	slotOne := crypto.Keccak256Hash(common.LeftPadBytes([]byte{1}, common.HashLength))
+	slotTwo := crypto.Keccak256Hash(common.LeftPadBytes([]byte{2}, common.HashLength))
+	oldStorage := commitArchiveStorageTrie(t, db, trieDB, types.EmptyRootHash, accountHashes[0], types.EmptyRootHash, map[common.Hash]uint64{
+		slotOne: 11,
+	})
+
+	oldAccounts := map[common.Hash]*types.StateAccount{
+		accountHashes[0]: {
+			Nonce: 1, Balance: uint256.NewInt(100), Root: oldStorage, CodeHash: types.EmptyCodeHash.Bytes(),
+		},
+		accountHashes[1]: {
+			Nonce: 2, Balance: uint256.NewInt(200), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes(),
+		},
+	}
+	oldRoot := commitArchiveAccountTrie(t, trieDB, types.EmptyRootHash, oldAccounts, nil)
+	if err := trieDB.Commit(oldRoot, false); err != nil {
+		t.Fatalf("commit old account root %s: %v", oldRoot, err)
+	}
+	if !rawdb.HasLegacyTrieNode(db, oldStorage) {
+		t.Fatalf("old storage root %s disappeared after account commit", oldStorage)
+	}
+
+	newStorage := commitArchiveStorageTrie(t, db, trieDB, oldRoot, accountHashes[0], oldStorage, map[common.Hash]uint64{
+		slotOne: 22,
+		slotTwo: 33,
+	})
+
+	newAccounts := map[common.Hash]*types.StateAccount{
+		accountHashes[0]: {
+			Nonce: 3, Balance: uint256.NewInt(300), Root: newStorage, CodeHash: types.EmptyCodeHash.Bytes(),
+		},
+		accountHashes[2]: {
+			Nonce: 4, Balance: uint256.NewInt(400), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes(),
+		},
+	}
+	newRoot := commitArchiveAccountTrie(t, trieDB, oldRoot, newAccounts, []common.Hash{accountHashes[1]})
+	if err := trieDB.Commit(newRoot, false); err != nil {
+		t.Fatalf("commit new account root %s: %v", newRoot, err)
+	}
+	return oldRoot, newRoot
+}
+
+func commitArchiveStorageTrie(
+	t *testing.T,
+	db ethdb.Database,
+	trieDB *triedb.Database,
+	stateRoot common.Hash,
+	accountHash common.Hash,
+	parentRoot common.Hash,
+	values map[common.Hash]uint64,
+) common.Hash {
+	t.Helper()
+	storageTrie, err := trie.New(trie.StorageTrieID(stateRoot, accountHash, parentRoot), trieDB)
+	if err != nil {
+		t.Fatalf("open storage trie root %s: %v", parentRoot, err)
+	}
+	for slot, value := range values {
+		blob, err := rlp.EncodeToBytes(uint256.NewInt(value))
+		if err != nil {
+			t.Fatal(err)
+		}
+		storageTrie.MustUpdate(slot.Bytes(), blob)
+	}
+	root, nodes := storageTrie.Commit(false)
+	if _, ok := nodes.HashSet()[root]; !ok {
+		t.Fatalf("committed storage root %s is absent from node set", root)
+	}
+	// Persist each storage trie independently so both historical endpoints stay
+	// available to the diff.
+	if err := trieDB.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := trieDB.Commit(root, false); err != nil {
+		t.Fatalf("commit storage trie root %s: %v", root, err)
+	}
+	if !rawdb.HasLegacyTrieNode(db, root) {
+		t.Fatalf("committed storage trie root %s was not persisted", root)
+	}
+	return root
+}
+
+func commitArchiveAccountTrie(
+	t *testing.T,
+	trieDB *triedb.Database,
+	parentRoot common.Hash,
+	accounts map[common.Hash]*types.StateAccount,
+	deleted []common.Hash,
+) common.Hash {
+	t.Helper()
+	accountTrie, err := trie.New(trie.TrieID(parentRoot), trieDB)
+	if err != nil {
+		t.Fatalf("open account trie root %s: %v", parentRoot, err)
+	}
+	for accountHash, account := range accounts {
+		blob, err := rlp.EncodeToBytes(account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		accountTrie.MustUpdate(accountHash.Bytes(), blob)
+	}
+	for _, accountHash := range deleted {
+		accountTrie.MustDelete(accountHash.Bytes())
+	}
+	// Collect account leaves so hashdb can link and flush the referenced
+	// storage tries as part of the complete state root.
+	root, nodes := accountTrie.Commit(true)
+	if err := trieDB.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil); err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
 
 func TestArchiveHistoryProgressStats(t *testing.T) {
