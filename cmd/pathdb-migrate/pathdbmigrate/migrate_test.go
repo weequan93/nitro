@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -272,6 +275,116 @@ func TestDiskBackedArchiveHistoryMatchesInMemoryEncoding(t *testing.T) {
 			expected.storageData, actual.storageData,
 		)
 	}
+}
+
+func TestArchiveHistoryRejectsOversizedSnappySectionBeforeAllocation(t *testing.T) {
+	if err := validateArchiveHistorySectionSize("small", 1); err != nil {
+		t.Fatalf("small archive history section was rejected: %v", err)
+	}
+	if err := validateArchiveHistorySectionSize("storage index", math.MaxUint32); err == nil {
+		t.Fatal("oversized Snappy section was not rejected")
+	}
+	if _, err := encodeArchiveHistoryFromSpill(nil, archiveSpillStats{
+		storageSlots: math.MaxUint32,
+	}); err == nil {
+		t.Fatal("oversized spilled history was not rejected before allocation")
+	}
+}
+
+func TestParallelArchiveHistoryWritesTransitionsInBlockOrder(t *testing.T) {
+	src := rawdb.NewMemoryDatabase()
+	dst := rawdb.NewMemoryDatabase()
+	trieDB := triedb.NewDatabase(src, triedb.HashDefaults)
+	defer trieDB.Close()
+
+	oldRoot, newRoot := buildArchiveHashStatePair(t, src, trieDB)
+	changedAddress := common.HexToAddress("0x2000")
+	changedHash := crypto.Keccak256Hash(changedAddress.Bytes())
+	thirdRoot := commitArchiveAccountTrie(t, trieDB, newRoot, map[common.Hash]*types.StateAccount{
+		changedHash: {
+			Nonce:    5,
+			Balance:  uint256.NewInt(500),
+			Root:     types.EmptyRootHash,
+			CodeHash: types.EmptyCodeHash.Bytes(),
+		},
+	}, nil)
+	if err := trieDB.Commit(thirdRoot, false); err != nil {
+		t.Fatalf("commit third account root %s: %v", thirdRoot, err)
+	}
+
+	writeCanonicalRootHeader(src, 0, oldRoot)
+	writeCanonicalRootHeader(src, 1, newRoot)
+	writeCanonicalRootHeader(src, 2, thirdRoot)
+
+	freezer, err := rawdb.NewStateFreezer("", false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer freezer.Close()
+
+	config := DefaultConfig
+	config.Dst.ChainData = t.TempDir()
+	config.ArchiveHistory.Workers = 2
+	config.ArchiveHistory.SpillGap = 10000
+	config.ArchiveHistory.ProgressEvery = 1
+	migrator := NewMigrator(&config)
+	migrator.stats.resetArchiveHistory(0, 2)
+
+	stateID, stats, err := migrator.runArchiveHistoryParallel(
+		context.Background(),
+		src,
+		dst,
+		freezer,
+		0,
+		2,
+		oldRoot,
+		0,
+		true,
+		0,
+		archiveHistoryStats{availableBlocks: 1},
+		time.Now(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stateID != 2 || stats.blocks != 2 || stats.transitions != 2 || stats.availableBlocks != 3 {
+		t.Fatalf("unexpected parallel archive result: stateID=%d stats=%+v", stateID, stats)
+	}
+	if got := rawdb.ReadStateID(dst, oldRoot); got != nil {
+		t.Fatalf("parallel helper unexpectedly wrote initial state ID: %v", *got)
+	}
+	if got := rawdb.ReadStateID(dst, newRoot); got == nil || *got != 1 {
+		t.Fatalf("unexpected state ID for block 1 root: %v", got)
+	}
+	if got := rawdb.ReadStateID(dst, thirdRoot); got == nil || *got != 2 {
+		t.Fatalf("unexpected state ID for block 2 root: %v", got)
+	}
+	if frozen, err := freezer.Ancients(); err != nil || frozen != 2 {
+		t.Fatalf("unexpected freezer size: entries=%d err=%v", frozen, err)
+	}
+	metaOne, _, _, _, _, err := rawdb.ReadStateHistory(freezer, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metaTwo, _, _, _, _, err := rawdb.ReadStateHistory(freezer, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := encodeArchiveHistoryMeta(oldRoot, newRoot, 1); !bytes.Equal(metaOne, want) {
+		t.Fatalf("first history record is out of order: have %x want %x", metaOne, want)
+	}
+	if want := encodeArchiveHistoryMeta(newRoot, thirdRoot, 2); !bytes.Equal(metaTwo, want) {
+		t.Fatalf("second history record is out of order: have %x want %x", metaTwo, want)
+	}
+}
+
+func writeCanonicalRootHeader(db ethdb.Database, number uint64, root common.Hash) {
+	header := &types.Header{
+		Number: new(big.Int).SetUint64(number),
+		Root:   root,
+	}
+	rawdb.WriteHeader(db, header)
+	rawdb.WriteCanonicalHash(db, header.Hash(), number)
 }
 
 func buildArchiveHashStatePair(t *testing.T, db ethdb.Database, trieDB *triedb.Database) (common.Hash, common.Hash) {

@@ -337,6 +337,26 @@ func encodeArchiveHistoryFromSpill(store ethdb.KeyValueStore, stats archiveSpill
 	if stats.storageSlots > math.MaxUint32 {
 		return nil, fmt.Errorf("too many storage slots in archive history: %d", stats.storageSlots)
 	}
+	if stats.accounts > math.MaxUint64/accountIndexSize {
+		return nil, fmt.Errorf("account index is too large: %d entries", stats.accounts)
+	}
+	if stats.storageSlots > math.MaxUint64/storageIndexSizeForArchiveHistory {
+		return nil, fmt.Errorf("storage index is too large: %d entries", stats.storageSlots)
+	}
+	sections := []struct {
+		name string
+		size uint64
+	}{
+		{name: "account index", size: stats.accounts * accountIndexSize},
+		{name: "storage index", size: stats.storageSlots * storageIndexSizeForArchiveHistory},
+		{name: "account data", size: stats.accountDataBytes},
+		{name: "storage data", size: stats.storageDataBytes},
+	}
+	for _, section := range sections {
+		if err := validateArchiveHistorySectionSize(section.name, section.size); err != nil {
+			return nil, err
+		}
+	}
 	accountIndex, err := checkedArchiveAllocation(stats.accounts, accountIndexSize, "account index")
 	if err != nil {
 		return nil, err
@@ -456,6 +476,17 @@ func removeStaleArchiveSpills(parent string, prefix string) error {
 	return nil
 }
 
+func prepareArchiveSpillDirectory(config ArchiveHistoryConfig, dstChainData string) error {
+	parent, prefix := archiveSpillDirectory(config, dstChainData)
+	if err := os.MkdirAll(parent, 0755); err != nil {
+		return fmt.Errorf("create archive spill parent: %w", err)
+	}
+	if err := removeStaleArchiveSpills(parent, prefix); err != nil {
+		return fmt.Errorf("remove stale archive spill: %w", err)
+	}
+	return nil
+}
+
 func archiveHistoryOriginsSpilled(
 	ctx context.Context,
 	src ethdb.KeyValueReader,
@@ -468,9 +499,6 @@ func archiveHistoryOriginsSpilled(
 	parent, prefix := archiveSpillDirectory(config, dstChainData)
 	if err := os.MkdirAll(parent, 0755); err != nil {
 		return nil, fmt.Errorf("create archive spill parent: %w", err)
-	}
-	if err := removeStaleArchiveSpills(parent, prefix); err != nil {
-		return nil, fmt.Errorf("remove stale archive spill: %w", err)
 	}
 	directory, err := os.MkdirTemp(parent, prefix)
 	if err != nil {

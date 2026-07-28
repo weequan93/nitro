@@ -113,9 +113,9 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		}
 	}
 	resetStateHistoryIndexes(dst)
-
-	srcTrieDB := triedb.NewDatabase(src, triedb.HashDefaults)
-	defer srcTrieDB.Close()
+	if err := prepareArchiveSpillDirectory(cfg, m.config.Dst.ChainData); err != nil {
+		return err
+	}
 
 	started := time.Now()
 	stats := archiveHistoryStats{}
@@ -143,123 +143,131 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		"initialRoot", initialRoot,
 		"skipMissingStates", cfg.SkipMissingStates,
 		"progressEvery", cfg.ProgressEvery,
+		"workers", cfg.Workers,
 		"storageHistoryVersion", 0,
 	)
 
-	for block := start + 1; block <= end; block++ {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		_, root, err := canonicalHeaderAndRoot(src, block)
+	if cfg.Workers > 1 {
+		stateID, stats, err = m.runArchiveHistoryParallel(
+			ctx,
+			src,
+			dst,
+			freezer,
+			start,
+			end,
+			prevRoot,
+			anchorBlock,
+			haveAnchor,
+			stateID,
+			stats,
+			started,
+		)
 		if err != nil {
 			return err
 		}
-		stats.blocks++
-		m.stats.setArchiveHistoryProgress(block, stateID, stats)
-		if !haveAnchor {
+	} else {
+		srcTrieDB := triedb.NewDatabase(src, triedb.HashDefaults)
+		defer srcTrieDB.Close()
+
+		for block := start + 1; block <= end; block++ {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			_, root, err := canonicalHeaderAndRoot(src, block)
+			if err != nil {
+				return err
+			}
+			stats.blocks++
+			m.stats.setArchiveHistoryProgress(block, stateID, stats)
+			if !haveAnchor {
+				if !archiveTrieRootAvailable(src, root) {
+					if block == end {
+						return fmt.Errorf("archive-history target block %d root %s is unavailable in source hashdb and cannot be skipped", block, root)
+					}
+					recordSkippedArchiveState(block, root, anchorBlock, prevRoot, "state root is unavailable", cfg.ProgressEvery, &stats)
+					m.stats.setArchiveHistoryProgress(block, stateID, stats)
+					continue
+				}
+				haveAnchor = true
+				prevRoot = root
+				anchorBlock = block
+				stats.availableBlocks++
+				rawdb.WriteStateID(dst, prevRoot, stateID)
+				m.stats.setArchiveHistoryProgress(block, stateID, stats)
+				log.Info("Selected first available archive state", "block", block, "root", root, "skippedBlocks", stats.skippedBlocks)
+				continue
+			}
+
+			if root == prevRoot {
+				stats.availableBlocks++
+				anchorBlock = block
+				rawdb.WriteStateID(dst, root, stateID)
+				m.stats.setArchiveHistoryProgress(block, stateID, stats)
+				if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, block, end) {
+					logArchiveProgress("Full archive history progress", block, end, root, stateID, totalBlocks, started, stats)
+				}
+				continue
+			}
 			if !archiveTrieRootAvailable(src, root) {
-				if block == end {
-					return fmt.Errorf("archive-history target block %d root %s is unavailable in source hashdb and cannot be skipped", block, root)
+				if !cfg.SkipMissingStates || block == end {
+					return fmt.Errorf("block %d archive state root %s is unavailable in source hashdb", block, root)
 				}
 				recordSkippedArchiveState(block, root, anchorBlock, prevRoot, "state root is unavailable", cfg.ProgressEvery, &stats)
 				m.stats.setArchiveHistoryProgress(block, stateID, stats)
 				continue
 			}
-			haveAnchor = true
-			prevRoot = root
-			anchorBlock = block
-			stats.availableBlocks++
-			rawdb.WriteStateID(dst, prevRoot, stateID)
-			m.stats.setArchiveHistoryProgress(block, stateID, stats)
-			log.Info("Selected first available archive state", "block", block, "root", root, "skippedBlocks", stats.skippedBlocks)
-			continue
-		}
 
-		if root == prevRoot {
-			stats.availableBlocks++
-			anchorBlock = block
+			encoded, err := computeArchiveTransition(
+				ctx,
+				src,
+				srcTrieDB,
+				archiveTransitionJob{
+					block:       block,
+					anchorBlock: anchorBlock,
+					parentRoot:  prevRoot,
+					root:        root,
+				},
+				cfg,
+				m.config.Dst.ChainData,
+				nil,
+			)
+			if err != nil {
+				if cfg.SkipMissingStates && block != end && isMissingArchiveState(err) {
+					recordSkippedArchiveState(block, root, anchorBlock, prevRoot, err.Error(), cfg.ProgressEvery, &stats)
+					m.stats.setArchiveHistoryProgress(block, stateID, stats)
+					continue
+				}
+				return fmt.Errorf("block %d archive history origins: %w", block, err)
+			}
+			if encoded.accounts == 0 {
+				return fmt.Errorf("block %d root changed from %s to %s but no account changes were found", block, prevRoot, root)
+			}
+			stateID++
+			meta := encodeArchiveHistoryMeta(prevRoot, root, block)
+			if err := rawdb.WriteStateHistory(
+				freezer,
+				stateID,
+				meta,
+				encoded.accountIndex,
+				encoded.storageIndex,
+				encoded.accountData,
+				encoded.storageData,
+			); err != nil {
+				return fmt.Errorf("write archive history id %d block %d: %w", stateID, block, err)
+			}
 			rawdb.WriteStateID(dst, root, stateID)
+
+			stats.transitions++
+			stats.availableBlocks++
+			stats.accounts += encoded.accounts
+			stats.storageSlots += encoded.storageSlots
 			m.stats.setArchiveHistoryProgress(block, stateID, stats)
 			if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, block, end) {
 				logArchiveProgress("Full archive history progress", block, end, root, stateID, totalBlocks, started, stats)
 			}
-			continue
+			prevRoot = root
+			anchorBlock = block
 		}
-		if !archiveTrieRootAvailable(src, root) {
-			if !cfg.SkipMissingStates || block == end {
-				return fmt.Errorf("block %d archive state root %s is unavailable in source hashdb", block, root)
-			}
-			recordSkippedArchiveState(block, root, anchorBlock, prevRoot, "state root is unavailable", cfg.ProgressEvery, &stats)
-			m.stats.setArchiveHistoryProgress(block, stateID, stats)
-			continue
-		}
-
-		var (
-			accountIndex    []byte
-			storageIndex    []byte
-			accountData     []byte
-			storageData     []byte
-			changedAccounts uint64
-			changedSlots    uint64
-		)
-		transitionGap := block - anchorBlock
-		if transitionGap >= cfg.SpillGap {
-			log.Warn(
-				"Large archive state gap will use a disk-backed trie diff",
-				"anchorBlock", anchorBlock,
-				"block", block,
-				"gap", transitionGap,
-				"spillGap", cfg.SpillGap,
-			)
-			encoded, spillErr := archiveHistoryOriginsSpilled(
-				ctx, src, srcTrieDB, prevRoot, root, cfg, m.config.Dst.ChainData,
-			)
-			err = spillErr
-			if err == nil {
-				accountIndex = encoded.accountIndex
-				storageIndex = encoded.storageIndex
-				accountData = encoded.accountData
-				storageData = encoded.storageData
-				changedAccounts = encoded.accounts
-				changedSlots = encoded.storageSlots
-			}
-		} else {
-			accounts, storages, accountCount, slotCount, originErr := archiveHistoryOrigins(src, srcTrieDB, prevRoot, root)
-			err = originErr
-			if err == nil {
-				changedAccounts = accountCount
-				changedSlots = slotCount
-				accountIndex, storageIndex, accountData, storageData, err = encodeArchiveHistory(accounts, storages)
-			}
-		}
-		if err != nil {
-			if cfg.SkipMissingStates && block != end && isMissingArchiveState(err) {
-				recordSkippedArchiveState(block, root, anchorBlock, prevRoot, err.Error(), cfg.ProgressEvery, &stats)
-				m.stats.setArchiveHistoryProgress(block, stateID, stats)
-				continue
-			}
-			return fmt.Errorf("block %d archive history origins: %w", block, err)
-		}
-		if changedAccounts == 0 {
-			return fmt.Errorf("block %d root changed from %s to %s but no account changes were found", block, prevRoot, root)
-		}
-		stateID++
-		meta := encodeArchiveHistoryMeta(prevRoot, root, block)
-		if err := rawdb.WriteStateHistory(freezer, stateID, meta, accountIndex, storageIndex, accountData, storageData); err != nil {
-			return fmt.Errorf("write archive history id %d block %d: %w", stateID, block, err)
-		}
-		rawdb.WriteStateID(dst, root, stateID)
-
-		stats.transitions++
-		stats.availableBlocks++
-		stats.accounts += changedAccounts
-		stats.storageSlots += changedSlots
-		m.stats.setArchiveHistoryProgress(block, stateID, stats)
-		if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, block, end) {
-			logArchiveProgress("Full archive history progress", block, end, root, stateID, totalBlocks, started, stats)
-		}
-		prevRoot = root
-		anchorBlock = block
 	}
 
 	rawdb.WritePersistentStateID(dst, stateID)
