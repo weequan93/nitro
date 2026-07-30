@@ -4,10 +4,10 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  fio-pathdb-disk-test.sh TEST_DIRECTORY
+  fio-pathdb-disk-test.sh TEST_DIRECTORY_OR_MOUNTED_DEVICE
 
 Example:
-  SIZE_GIB=64 RUNTIME=45 ./fio-pathdb-disk-test.sh /data/fio-test
+  SIZE_GIB=64 RUNTIME=45 ./fio-pathdb-disk-test.sh /dev/vdd1
 
 The script creates and removes one temporary test file. It never writes to a
 raw block device. Stop pathdb-migrate and other disk-heavy jobs before running.
@@ -20,7 +20,7 @@ if [[ $# -ne 1 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 2
 fi
 
-for command_name in fio jq df awk nproc mktemp pgrep readlink; do
+for command_name in fio jq df awk nproc mktemp pgrep readlink findmnt; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Missing command: $command_name" >&2
     echo "On Ubuntu: sudo apt-get install -y fio jq" >&2
@@ -33,7 +33,25 @@ if [[ "$(fio --version 2>/dev/null || true)" != fio-* ]]; then
   exit 1
 fi
 
-TEST_DIR="$(readlink -f "$1")"
+TEST_TARGET="$(readlink -f "$1")"
+CREATED_TEST_DIR=0
+
+if [[ -b "$TEST_TARGET" ]]; then
+  MOUNT_TARGET="$(findmnt -n -r -o TARGET --source "$TEST_TARGET" | head -n 1 || true)"
+  if [[ -z "$MOUNT_TARGET" ]]; then
+    echo "Device is not mounted; refusing raw-device testing: $TEST_TARGET" >&2
+    exit 1
+  fi
+  TEST_DIR="$MOUNT_TARGET/.fio-pathdb-benchmark"
+  if [[ ! -d "$TEST_DIR" ]]; then
+    mkdir "$TEST_DIR"
+    CREATED_TEST_DIR=1
+  fi
+else
+  TEST_DIR="$TEST_TARGET"
+fi
+
+TEST_DIR="$(readlink -f "$TEST_DIR")"
 SIZE_GIB="${SIZE_GIB:-64}"
 RUNTIME="${RUNTIME:-45}"
 MIGRATION_JOBS="${MIGRATION_JOBS:-3}"
@@ -76,6 +94,9 @@ RESULT_DIR="$(mktemp -d /tmp/fio-pathdb-results.XXXXXX)"
 cleanup() {
   rm -f -- "$TEST_FILE"
   rm -rf -- "$RESULT_DIR"
+  if (( CREATED_TEST_DIR == 1 )); then
+    rmdir -- "$TEST_DIR" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT INT TERM
 
