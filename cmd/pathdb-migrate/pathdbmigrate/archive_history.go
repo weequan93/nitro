@@ -144,6 +144,8 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		"skipMissingStates", cfg.SkipMissingStates,
 		"progressEvery", cfg.ProgressEvery,
 		"workers", cfg.Workers,
+		"maxInFlight", cfg.MaxInFlight,
+		"resultMemoryLimitMB", cfg.ResultMemoryLimit,
 		"storageHistoryVersion", 0,
 	)
 

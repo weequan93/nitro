@@ -277,6 +277,60 @@ func TestDiskBackedArchiveHistoryMatchesInMemoryEncoding(t *testing.T) {
 	}
 }
 
+func TestCompletedArchiveResultSpillRoundTrip(t *testing.T) {
+	expected := &encodedArchiveHistory{
+		accountIndex: []byte("account-index"),
+		storageIndex: []byte("storage-index"),
+		accountData:  []byte("account-data"),
+		storageData:  []byte("storage-data"),
+		accounts:     3,
+		storageSlots: 7,
+	}
+	spill, err := spillEncodedArchiveHistory(t.TempDir(), 42, expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := spill.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected.accounts != actual.accounts ||
+		expected.storageSlots != actual.storageSlots ||
+		!bytes.Equal(expected.accountIndex, actual.accountIndex) ||
+		!bytes.Equal(expected.storageIndex, actual.storageIndex) ||
+		!bytes.Equal(expected.accountData, actual.accountData) ||
+		!bytes.Equal(expected.storageData, actual.storageData) {
+		t.Fatalf("completed archive result changed after spill: expected %+v actual %+v", expected, actual)
+	}
+	directory := spill.directory
+	if err := spill.remove(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(directory); !os.IsNotExist(err) {
+		t.Fatalf("completed archive result spill was not removed: %v", err)
+	}
+}
+
+func TestArchiveResultMemoryLimiter(t *testing.T) {
+	limiter := newArchiveResultMemoryLimiter(1)
+	if !limiter.tryAcquire(768 * 1024) {
+		t.Fatal("initial archive result memory reservation failed")
+	}
+	if limiter.tryAcquire(512 * 1024) {
+		t.Fatal("archive result memory limiter exceeded its budget")
+	}
+	limiter.release(768 * 1024)
+	if !limiter.tryAcquire(512 * 1024) {
+		t.Fatal("released archive result memory was not reusable")
+	}
+	limiter.release(512 * 1024)
+
+	spillAll := newArchiveResultMemoryLimiter(0)
+	if spillAll.tryAcquire(1) {
+		t.Fatal("zero archive result memory limit retained a result")
+	}
+}
+
 func TestArchiveHistoryRejectsOversizedSnappySectionBeforeAllocation(t *testing.T) {
 	if err := validateArchiveHistorySectionSize("small", 1); err != nil {
 		t.Fatalf("small archive history section was rejected: %v", err)
@@ -325,7 +379,10 @@ func TestParallelArchiveHistoryWritesTransitionsInBlockOrder(t *testing.T) {
 	config := DefaultConfig
 	config.Dst.ChainData = t.TempDir()
 	config.ArchiveHistory.Workers = 2
+	config.ArchiveHistory.MaxInFlight = 2
+	config.ArchiveHistory.ResultMemoryLimit = 0
 	config.ArchiveHistory.SpillGap = 10000
+	config.ArchiveHistory.SpillDirectory = t.TempDir()
 	config.ArchiveHistory.ProgressEvery = 1
 	migrator := NewMigrator(&config)
 	migrator.stats.resetArchiveHistory(0, 2)
@@ -375,6 +432,11 @@ func TestParallelArchiveHistoryWritesTransitionsInBlockOrder(t *testing.T) {
 	}
 	if want := encodeArchiveHistoryMeta(newRoot, thirdRoot, 2); !bytes.Equal(metaTwo, want) {
 		t.Fatalf("second history record is out of order: have %x want %x", metaTwo, want)
+	}
+	if entries, err := os.ReadDir(config.ArchiveHistory.SpillDirectory); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("parallel archive result spill directory was not cleaned: %v", entries)
 	}
 }
 

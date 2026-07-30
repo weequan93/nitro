@@ -97,6 +97,8 @@ type ArchiveHistoryConfig struct {
 	SkipMissingStates bool   `koanf:"skip-missing-states"`
 	ProgressEvery     uint64 `koanf:"progress-every"`
 	Workers           int    `koanf:"workers"`
+	MaxInFlight       int    `koanf:"max-inflight"`
+	ResultMemoryLimit int    `koanf:"result-memory-limit"`
 	SpillGap          uint64 `koanf:"spill-gap"`
 	SpillDirectory    string `koanf:"spill-directory"`
 	SpillCache        int    `koanf:"spill-cache"`
@@ -112,14 +114,15 @@ var DefaultConfig = Config{
 		EndBlock:   "latest",
 	},
 	ArchiveHistory: ArchiveHistoryConfig{
-		Enable:           false,
-		StartBlock:       "0",
-		EndBlock:         "latest",
-		RequirePreimages: true,
-		ProgressEvery:    1000,
-		Workers:          1,
-		SpillGap:         10000,
-		SpillCache:       64,
+		Enable:            false,
+		StartBlock:        "0",
+		EndBlock:          "latest",
+		RequirePreimages:  true,
+		ProgressEvery:     1000,
+		Workers:           1,
+		ResultMemoryLimit: 256,
+		SpillGap:          10000,
+		SpillCache:        64,
 	},
 	Migrate:          false,
 	Verify:           true,
@@ -153,6 +156,8 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Bool("archive-history.skip-missing-states", DefaultConfig.ArchiveHistory.SkipMissingStates, "skip unavailable source hashdb states and generate best-effort history between retained states")
 	f.Uint64("archive-history.progress-every", DefaultConfig.ArchiveHistory.ProgressEvery, "log archive-history progress every N blocks")
 	f.Int("archive-history.workers", DefaultConfig.ArchiveHistory.Workers, "number of archive trie-diff workers; results are written in block order")
+	f.Int("archive-history.max-inflight", DefaultConfig.ArchiveHistory.MaxInFlight, "maximum scheduled archive transitions; 0 uses the worker count")
+	f.Int("archive-history.result-memory-limit", DefaultConfig.ArchiveHistory.ResultMemoryLimit, "maximum megabytes retained by completed parallel results; excess results spill to disk (0 spills all)")
 	f.Uint64("archive-history.spill-gap", DefaultConfig.ArchiveHistory.SpillGap, "use a disk-backed trie diff when retained states are separated by at least N blocks")
 	f.String("archive-history.spill-directory", DefaultConfig.ArchiveHistory.SpillDirectory, "directory for disk-backed archive trie diffs; defaults beside dst.chain-data")
 	f.Int("archive-history.spill-cache", DefaultConfig.ArchiveHistory.SpillCache, "cache in megabytes for disk-backed archive trie diffs")
@@ -204,6 +209,15 @@ func (c *Config) Validate() error {
 		}
 		if c.ArchiveHistory.Workers <= 0 {
 			return errors.New("archive-history.workers must be greater than 0")
+		}
+		if c.ArchiveHistory.MaxInFlight < 0 {
+			return errors.New("archive-history.max-inflight must be non-negative")
+		}
+		if c.ArchiveHistory.MaxInFlight != 0 && c.ArchiveHistory.MaxInFlight < c.ArchiveHistory.Workers {
+			return errors.New("archive-history.max-inflight must be at least archive-history.workers")
+		}
+		if c.ArchiveHistory.ResultMemoryLimit < 0 {
+			return errors.New("archive-history.result-memory-limit must be non-negative")
 		}
 		if c.ArchiveHistory.SpillGap == 0 {
 			return errors.New("archive-history.spill-gap must be greater than 0")

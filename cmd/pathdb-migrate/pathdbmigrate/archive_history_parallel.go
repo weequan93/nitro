@@ -6,7 +6,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/snappy"
@@ -27,9 +29,11 @@ type archiveTransitionJob struct {
 }
 
 type archiveTransitionResult struct {
-	job     archiveTransitionJob
-	encoded *encodedArchiveHistory
-	err     error
+	job         archiveTransitionJob
+	encoded     *encodedArchiveHistory
+	spilled     *spilledArchiveHistory
+	memoryBytes uint64
+	err         error
 }
 
 type archiveBlockEventKind uint8
@@ -292,7 +296,34 @@ func (m *Migrator) runArchiveHistoryParallel(
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	window := cfg.Workers * 2
+	window := cfg.MaxInFlight
+	if window == 0 {
+		window = cfg.Workers
+	}
+	resultSpillParent, resultSpillPrefix := archiveSpillDirectory(cfg, m.config.Dst.ChainData)
+	if err := os.MkdirAll(resultSpillParent, 0755); err != nil {
+		return initialStateID, initialStats, fmt.Errorf("create archive result spill parent: %w", err)
+	}
+	resultSpillDirectory, err := os.MkdirTemp(resultSpillParent, resultSpillPrefix+"results-")
+	if err != nil {
+		return initialStateID, initialStats, fmt.Errorf("create archive result spill directory: %w", err)
+	}
+	defer os.RemoveAll(resultSpillDirectory)
+
+	resultMemory := newArchiveResultMemoryLimiter(cfg.ResultMemoryLimit)
+	var spilledResults atomic.Uint64
+	var spilledResultBytes atomic.Uint64
+	defer func() {
+		log.Info(
+			"Parallel archive result buffering summary",
+			"workers", cfg.Workers,
+			"maxInFlight", window,
+			"resultMemoryLimitMB", cfg.ResultMemoryLimit,
+			"spilledResults", spilledResults.Load(),
+			"spilledBytes", spilledResultBytes.Load(),
+		)
+	}()
+
 	jobs := make(chan archiveTransitionJob, window)
 	results := make(chan archiveTransitionResult, window)
 	events := make(chan archiveBlockEvent, window)
@@ -315,8 +346,29 @@ func (m *Migrator) runArchiveHistoryParallel(
 					encoded, err := computeArchiveTransition(
 						runCtx, src, trieDB, job, cfg, m.config.Dst.ChainData, spillGate,
 					)
+					result := archiveTransitionResult{job: job, err: err}
+					if err == nil {
+						size := encodedArchiveHistorySize(encoded)
+						if resultMemory.tryAcquire(size) {
+							result.encoded = encoded
+							result.memoryBytes = size
+						} else {
+							result.spilled, result.err = spillEncodedArchiveHistory(
+								resultSpillDirectory,
+								job.order,
+								encoded,
+							)
+							if result.err != nil {
+								result.err = fmt.Errorf("spill completed archive transition: %w", result.err)
+							} else {
+								spilledResults.Add(1)
+								spilledResultBytes.Add(size)
+							}
+							encoded = nil
+						}
+					}
 					select {
-					case results <- archiveTransitionResult{job: job, encoded: encoded, err: err}:
+					case results <- result:
 					case <-runCtx.Done():
 						return
 					}
@@ -373,6 +425,16 @@ func (m *Migrator) runArchiveHistoryParallel(
 			}
 		}
 	}
+	releaseResult := func(result *archiveTransitionResult) {
+		if err := result.release(resultMemory); err != nil {
+			log.Warn(
+				"Failed to remove completed archive result spill",
+				"block", result.job.block,
+				"order", result.job.order,
+				"err", err,
+			)
+		}
+	}
 	for event := range events {
 		if event.err != nil {
 			return stateID, stats, event.err
@@ -410,6 +472,7 @@ func (m *Migrator) runArchiveHistoryParallel(
 				return stateID, stats, err
 			}
 			if result.err != nil {
+				releaseResult(&result)
 				if cfg.SkipMissingStates && isMissingArchiveState(result.err) {
 					return stateID, stats, fmt.Errorf(
 						"block %d parallel archive transition found missing trie data after scheduling dependent work: %w; retry with --archive-history.workers 1 or choose a later start block",
@@ -419,7 +482,13 @@ func (m *Migrator) runArchiveHistoryParallel(
 				}
 				return stateID, stats, fmt.Errorf("block %d archive history origins: %w", event.block, result.err)
 			}
-			if result.encoded.accounts == 0 {
+			encoded, err := result.materialize()
+			if err != nil {
+				releaseResult(&result)
+				return stateID, stats, fmt.Errorf("block %d load archive history result: %w", event.block, err)
+			}
+			if encoded.accounts == 0 {
+				releaseResult(&result)
 				return stateID, stats, fmt.Errorf(
 					"block %d root changed from %s to %s but no account changes were found",
 					event.block,
@@ -433,18 +502,20 @@ func (m *Migrator) runArchiveHistoryParallel(
 				freezer,
 				stateID,
 				meta,
-				result.encoded.accountIndex,
-				result.encoded.storageIndex,
-				result.encoded.accountData,
-				result.encoded.storageData,
+				encoded.accountIndex,
+				encoded.storageIndex,
+				encoded.accountData,
+				encoded.storageData,
 			); err != nil {
+				releaseResult(&result)
 				return stateID, stats, fmt.Errorf("write archive history id %d block %d: %w", stateID, event.block, err)
 			}
 			rawdb.WriteStateID(dst, event.root, stateID)
 			stats.transitions++
 			stats.availableBlocks++
-			stats.accounts += result.encoded.accounts
-			stats.storageSlots += result.encoded.storageSlots
+			stats.accounts += encoded.accounts
+			stats.storageSlots += encoded.storageSlots
+			releaseResult(&result)
 		default:
 			return stateID, stats, fmt.Errorf("unknown archive block event kind %d", event.kind)
 		}
