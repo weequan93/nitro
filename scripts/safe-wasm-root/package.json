@@ -1,0 +1,30 @@
+{
+  "name": "safe-wasm-root-operator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "create-safe": "node create-safe.mjs",
+    "grant-safe": "node grant-safe-executor.mjs",
+    "grant-deriw-safe": "node grant-deriw-safe-executor.mjs",
+    "rotate-deriw-owner": "node rotate-deriw-safe-owner.mjs",
+    "revoke-deriw-executor": "node revoke-deriw-executor.mjs",
+    "arbos-propose": "node arbos-propose.mjs",
+    "arbos-confirm": "node arbos-confirm.mjs",
+    "arbos-execute": "node arbos-execute.mjs",
+    "arbos-verify": "node arbos-verify.mjs",
+    "propose": "node propose.mjs",
+    "confirm": "node confirm.mjs",
+    "execute": "node execute.mjs",
+    "verify": "node verify.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@safe-global/protocol-kit": "8.0.4",
+    "@safe-global/types-kit": "4.0.1",
+    "viem": "2.55.10"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
