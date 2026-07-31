@@ -19,11 +19,18 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
 )
 
 const storageIndexSizeForArchiveHistory = common.HashLength + 5
 
 var errArchiveStateUnavailable = errors.New("archive source state trie unavailable")
+
+func newArchiveTrieDatabase(src ethdb.Database, cleanCacheMB int) *triedb.Database {
+	hashConfig := *hashdb.Defaults
+	hashConfig.CleanCacheSize = cleanCacheMB * 1024 * 1024
+	return triedb.NewDatabase(src, &triedb.Config{HashDB: &hashConfig})
+}
 
 type archiveHistoryStats struct {
 	blocks           uint64
@@ -145,6 +152,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		"progressEvery", cfg.ProgressEvery,
 		"workers", cfg.Workers,
 		"maxInFlight", cfg.MaxInFlight,
+		"trieCleanCacheMB", cfg.TrieCleanCache,
 		"resultMemoryLimitMB", cfg.ResultMemoryLimit,
 		"storageHistoryVersion", 0,
 	)
@@ -168,7 +176,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 			return err
 		}
 	} else {
-		srcTrieDB := triedb.NewDatabase(src, triedb.HashDefaults)
+		srcTrieDB := newArchiveTrieDatabase(src, cfg.TrieCleanCache)
 		defer srcTrieDB.Close()
 
 		for block := start + 1; block <= end; block++ {
@@ -404,46 +412,17 @@ func archiveStorageOrigins(src ethdb.KeyValueReader, trieDB *triedb.Database, pa
 func changedLeafOrigins(oldTrie *trie.Trie, newTrie *trie.Trie) (map[common.Hash]struct{}, map[common.Hash][]byte, error) {
 	changed := make(map[common.Hash]struct{})
 	oldOrigins := make(map[common.Hash][]byte)
-
-	oldToNew, err := changedLeaves(oldTrie, newTrie)
+	err := forEachChangedLeaf(oldTrie, newTrie, func(key common.Hash, origin []byte) error {
+		changed[key] = struct{}{}
+		if origin != nil {
+			oldOrigins[key] = origin
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, nil, err
-	}
-	for key := range oldToNew {
-		changed[key] = struct{}{}
-	}
-
-	newToOld, err := changedLeaves(newTrie, oldTrie)
-	if err != nil {
-		return nil, nil, err
-	}
-	for key, oldBlob := range newToOld {
-		changed[key] = struct{}{}
-		oldOrigins[key] = oldBlob
 	}
 	return changed, oldOrigins, nil
-}
-
-func changedLeaves(base *trie.Trie, target *trie.Trie) (map[common.Hash][]byte, error) {
-	baseIt, err := base.NodeIterator(nil)
-	if err != nil {
-		return nil, err
-	}
-	targetIt, err := target.NodeIterator(nil)
-	if err != nil {
-		return nil, err
-	}
-	diff, _ := trie.NewDifferenceIterator(baseIt, targetIt)
-	leaves := make(map[common.Hash][]byte)
-	for diff.Next(true) {
-		if diff.Leaf() {
-			leaves[common.BytesToHash(diff.LeafKey())] = common.CopyBytes(diff.LeafBlob())
-		}
-	}
-	if err := diff.Error(); err != nil {
-		return nil, err
-	}
-	return leaves, nil
 }
 
 func decodeArchiveAccountOrigin(accountHash common.Hash, blob []byte) (*types.StateAccount, []byte, error) {

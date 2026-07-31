@@ -106,6 +106,7 @@ GOMEMLIMIT=40GiB GOMAXPROCS=8 ./pathdb-migrate \
   --archive-history.skip-missing-states \
   --archive-history.workers 4 \
   --archive-history.max-inflight 4 \
+  --archive-history.trie-clean-cache 4096 \
   --archive-history.result-memory-limit 256 \
   --archive-history.spill-gap 10000 \
   --archive-history.spill-cache 64 \
@@ -120,6 +121,9 @@ scheduled work and defaults to the worker count. Completed results share the
 memory budget set by `--archive-history.result-memory-limit`; results that do
 not fit spill to temporary files before being committed in order. Set the
 result memory limit to `0` to spill every completed parallel result.
+`--archive-history.trie-clean-cache` creates one shared hash-trie clean-node
+cache for all workers, avoiding repeated Pebble lookups for nodes shared by
+adjacent state roots. The value is in MiB; use `0` to disable it.
 
 Start with three or four workers and watch RSS. On storage with spare random
 read capacity, increase workers one at a time while keeping max-inflight equal

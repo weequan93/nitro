@@ -3,6 +3,7 @@
 package pathdbmigrate
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -83,84 +84,166 @@ func (w *archiveSpillWriter) flush() error {
 	return nil
 }
 
-type differenceLeafStream struct {
-	it   trie.NodeIterator
-	ok   bool
-	key  common.Hash
-	blob []byte
+type archiveTrieCursor struct {
+	it trie.NodeIterator
+	ok bool
 }
 
-func newDifferenceLeafStream(base *trie.Trie, target *trie.Trie) (*differenceLeafStream, error) {
-	baseIt, err := base.NodeIterator(nil)
+func newArchiveTrieCursor(tr *trie.Trie) (*archiveTrieCursor, error) {
+	it, err := tr.NodeIterator(nil)
 	if err != nil {
 		return nil, err
 	}
-	targetIt, err := target.NodeIterator(nil)
-	if err != nil {
+	cursor := &archiveTrieCursor{it: it}
+	if err := cursor.advance(true); err != nil {
 		return nil, err
 	}
-	diff, _ := trie.NewDifferenceIterator(baseIt, targetIt)
-	stream := &differenceLeafStream{it: diff}
-	if err := stream.advance(); err != nil {
-		return nil, err
-	}
-	return stream, nil
+	return cursor, nil
 }
 
-func (s *differenceLeafStream) advance() error {
-	for s.it.Next(true) {
-		if !s.it.Leaf() {
+func (c *archiveTrieCursor) advance(descend bool) error {
+	c.ok = c.it.Next(descend)
+	if !c.ok {
+		return c.it.Error()
+	}
+	return nil
+}
+
+func archiveCursorLeaf(cursor *archiveTrieCursor) (common.Hash, []byte, error) {
+	key := cursor.it.LeafKey()
+	if len(key) != common.HashLength {
+		return common.Hash{}, nil, fmt.Errorf("unexpected trie leaf key length %d", len(key))
+	}
+	return common.BytesToHash(key), cursor.it.LeafBlob(), nil
+}
+
+func emitArchiveCursorLeaf(
+	cursor *archiveTrieCursor,
+	origin bool,
+	callback func(key common.Hash, origin []byte) error,
+) error {
+	key, blob, err := archiveCursorLeaf(cursor)
+	if err != nil {
+		return err
+	}
+	if !origin {
+		blob = nil
+	} else {
+		blob = common.CopyBytes(blob)
+	}
+	return callback(key, blob)
+}
+
+// forEachChangedLeaf traverses both secure tries once, emits every changed leaf,
+// and skips identical hashed subtrees. Origin is the value in base, or nil when
+// the leaf did not exist in base.
+func forEachChangedLeaf(base *trie.Trie, target *trie.Trie, callback func(key common.Hash, origin []byte) error) error {
+	baseCursor, err := newArchiveTrieCursor(base)
+	if err != nil {
+		return err
+	}
+	targetCursor, err := newArchiveTrieCursor(target)
+	if err != nil {
+		return err
+	}
+	advanceBoth := func(descend bool) error {
+		baseErr := baseCursor.advance(descend)
+		targetErr := targetCursor.advance(descend)
+		if baseErr != nil {
+			return baseErr
+		}
+		return targetErr
+	}
+	for baseCursor.ok || targetCursor.ok {
+		switch {
+		case !baseCursor.ok:
+			if targetCursor.it.Leaf() {
+				if err := emitArchiveCursorLeaf(targetCursor, false, callback); err != nil {
+					return err
+				}
+			}
+			if err := targetCursor.advance(true); err != nil {
+				return err
+			}
+			continue
+		case !targetCursor.ok:
+			if baseCursor.it.Leaf() {
+				if err := emitArchiveCursorLeaf(baseCursor, true, callback); err != nil {
+					return err
+				}
+			}
+			if err := baseCursor.advance(true); err != nil {
+				return err
+			}
 			continue
 		}
-		key := s.it.LeafKey()
-		if len(key) != common.HashLength {
-			return fmt.Errorf("unexpected trie leaf key length %d", len(key))
-		}
-		s.key = common.BytesToHash(key)
-		s.blob = common.CopyBytes(s.it.LeafBlob())
-		s.ok = true
-		return nil
-	}
-	s.ok = false
-	s.blob = nil
-	return s.it.Error()
-}
 
-// forEachChangedLeaf emits the union of changed leaf keys in lexical trie-key order.
-// origin is the value in base, or nil when the leaf did not exist in base.
-func forEachChangedLeaf(base *trie.Trie, target *trie.Trie, callback func(key common.Hash, origin []byte) error) error {
-	forward, err := newDifferenceLeafStream(base, target)
-	if err != nil {
-		return err
-	}
-	reverse, err := newDifferenceLeafStream(target, base)
-	if err != nil {
-		return err
-	}
-	for forward.ok || reverse.ok {
+		pathCmp := bytes.Compare(baseCursor.it.Path(), targetCursor.it.Path())
+		if pathCmp < 0 {
+			if baseCursor.it.Leaf() {
+				if err := emitArchiveCursorLeaf(baseCursor, true, callback); err != nil {
+					return err
+				}
+			}
+			if err := baseCursor.advance(true); err != nil {
+				return err
+			}
+			continue
+		}
+		if pathCmp > 0 {
+			if targetCursor.it.Leaf() {
+				if err := emitArchiveCursorLeaf(targetCursor, false, callback); err != nil {
+					return err
+				}
+			}
+			if err := targetCursor.advance(true); err != nil {
+				return err
+			}
+			continue
+		}
+
+		baseLeaf := baseCursor.it.Leaf()
+		targetLeaf := targetCursor.it.Leaf()
 		switch {
-		case !reverse.ok || (forward.ok && forward.key.Cmp(reverse.key) < 0):
-			if err := callback(forward.key, nil); err != nil {
+		case baseLeaf && targetLeaf:
+			baseKey, baseBlob, err := archiveCursorLeaf(baseCursor)
+			if err != nil {
 				return err
 			}
-			if err := forward.advance(); err != nil {
+			targetKey, targetBlob, err := archiveCursorLeaf(targetCursor)
+			if err != nil {
 				return err
 			}
-		case !forward.ok || reverse.key.Cmp(forward.key) < 0:
-			if err := callback(reverse.key, reverse.blob); err != nil {
+			if baseKey != targetKey {
+				return fmt.Errorf("trie leaves at the same path have different keys: %s and %s", baseKey, targetKey)
+			}
+			if !bytes.Equal(baseBlob, targetBlob) {
+				if err := callback(baseKey, common.CopyBytes(baseBlob)); err != nil {
+					return err
+				}
+			}
+			if err := advanceBoth(true); err != nil {
 				return err
 			}
-			if err := reverse.advance(); err != nil {
+		case baseLeaf:
+			if err := emitArchiveCursorLeaf(baseCursor, true, callback); err != nil {
+				return err
+			}
+			if err := baseCursor.advance(true); err != nil {
+				return err
+			}
+		case targetLeaf:
+			if err := emitArchiveCursorLeaf(targetCursor, false, callback); err != nil {
+				return err
+			}
+			if err := targetCursor.advance(true); err != nil {
 				return err
 			}
 		default:
-			if err := callback(forward.key, reverse.blob); err != nil {
-				return err
-			}
-			if err := forward.advance(); err != nil {
-				return err
-			}
-			if err := reverse.advance(); err != nil {
+			baseHash := baseCursor.it.Hash()
+			targetHash := targetCursor.it.Hash()
+			descend := baseHash == (common.Hash{}) || baseHash != targetHash
+			if err := advanceBoth(descend); err != nil {
 				return err
 			}
 		}

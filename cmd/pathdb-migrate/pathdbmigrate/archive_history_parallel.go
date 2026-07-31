@@ -324,6 +324,9 @@ func (m *Migrator) runArchiveHistoryParallel(
 		)
 	}()
 
+	trieDB := newArchiveTrieDatabase(src, cfg.TrieCleanCache)
+	defer trieDB.Close()
+
 	jobs := make(chan archiveTransitionJob, window)
 	results := make(chan archiveTransitionResult, window)
 	events := make(chan archiveBlockEvent, window)
@@ -335,8 +338,6 @@ func (m *Migrator) runArchiveHistoryParallel(
 		workerWG.Add(1)
 		go func() {
 			defer workerWG.Done()
-			trieDB := triedb.NewDatabase(src, triedb.HashDefaults)
-			defer trieDB.Close()
 			for {
 				select {
 				case job, ok := <-jobs:

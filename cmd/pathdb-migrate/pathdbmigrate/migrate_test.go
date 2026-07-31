@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -218,6 +219,213 @@ func TestArchiveCoverage(t *testing.T) {
 	stats := archiveHistoryStats{availableBlocks: 3, skippedBlocks: 1}
 	if got, want := archiveCoverage(stats), "75.00%"; got != want {
 		t.Fatalf("unexpected coverage: have %q want %q", got, want)
+	}
+}
+
+func TestSinglePassArchiveTrieDiff(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	trieDB := triedb.NewDatabase(db, triedb.HashDefaults)
+	defer trieDB.Close()
+
+	oldRoot, newRoot := buildArchiveHashStatePair(t, db, trieDB)
+	oldTrie, err := trie.New(trie.TrieID(oldRoot), trieDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newTrie, err := trie.New(trie.TrieID(newRoot), trieDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addresses := []common.Address{
+		common.HexToAddress("0x3000"), // updated
+		common.HexToAddress("0x1000"), // deleted
+		common.HexToAddress("0x2000"), // inserted
+	}
+	expected := make(map[common.Hash][]byte, len(addresses))
+	for i, address := range addresses {
+		hash := crypto.Keccak256Hash(address.Bytes())
+		if i == 2 {
+			expected[hash] = nil
+			continue
+		}
+		blob, err := oldTrie.Get(hash.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected[hash] = common.CopyBytes(blob)
+	}
+
+	actual := make(map[common.Hash][]byte)
+	err = forEachChangedLeaf(oldTrie, newTrie, func(key common.Hash, origin []byte) error {
+		if _, exists := actual[key]; exists {
+			t.Fatalf("changed leaf %s was emitted more than once", key)
+		}
+		actual[key] = common.CopyBytes(origin)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actual) != len(expected) {
+		t.Fatalf("unexpected changed leaf count: have %d want %d", len(actual), len(expected))
+	}
+	for key, want := range expected {
+		got, ok := actual[key]
+		if !ok {
+			t.Fatalf("changed leaf %s was not emitted", key)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("wrong origin for %s: have %x want %x", key, got, want)
+		}
+	}
+
+	sameOldTrie, err := trie.New(trie.TrieID(oldRoot), trieDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unchanged := 0
+	if err := forEachChangedLeaf(oldTrie, sameOldTrie, func(common.Hash, []byte) error {
+		unchanged++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if unchanged != 0 {
+		t.Fatalf("identical trie emitted %d changed leaves", unchanged)
+	}
+}
+
+func TestSinglePassArchiveTrieDiffMatchesDirectionalReference(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	trieDB := triedb.NewDatabase(db, triedb.HashDefaults)
+	defer trieDB.Close()
+
+	rng := rand.New(rand.NewSource(1))
+	randomHash := func() common.Hash {
+		var hash common.Hash
+		if _, err := rng.Read(hash[:]); err != nil {
+			t.Fatal(err)
+		}
+		return hash
+	}
+	randomBlob := func() []byte {
+		blob := make([]byte, 1+rng.Intn(96))
+		if _, err := rng.Read(blob); err != nil {
+			t.Fatal(err)
+		}
+		return blob
+	}
+
+	oldState := trie.NewEmpty(trieDB)
+	var oldKeys []common.Hash
+	for i := 0; i < 128; i++ {
+		key := randomHash()
+		oldKeys = append(oldKeys, key)
+		oldState.MustUpdate(key.Bytes(), randomBlob())
+	}
+	oldRoot, oldNodes := oldState.Commit(false)
+	if err := trieDB.Update(oldRoot, types.EmptyRootHash, 0, trienode.NewWithNodeSet(oldNodes), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := trieDB.Commit(oldRoot, false); err != nil {
+		t.Fatal(err)
+	}
+
+	newState, err := trie.New(trie.TrieID(oldRoot), trieDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range oldKeys[:32] {
+		newState.MustUpdate(key.Bytes(), randomBlob())
+	}
+	for _, key := range oldKeys[32:64] {
+		newState.MustDelete(key.Bytes())
+	}
+	for i := 0; i < 32; i++ {
+		key := randomHash()
+		newState.MustUpdate(key.Bytes(), randomBlob())
+	}
+	newRoot, newNodes := newState.Commit(false)
+	if err := trieDB.Update(newRoot, oldRoot, 0, trienode.NewWithNodeSet(newNodes), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := trieDB.Commit(newRoot, false); err != nil {
+		t.Fatal(err)
+	}
+
+	openPair := func() (*trie.Trie, *trie.Trie) {
+		oldTrie, err := trie.New(trie.TrieID(oldRoot), trieDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		newTrie, err := trie.New(trie.TrieID(newRoot), trieDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return oldTrie, newTrie
+	}
+	oldTrie, newTrie := openPair()
+	actual := make(map[common.Hash][]byte)
+	if err := forEachChangedLeaf(oldTrie, newTrie, func(key common.Hash, origin []byte) error {
+		if _, exists := actual[key]; exists {
+			t.Fatalf("changed leaf %s was emitted more than once", key)
+		}
+		actual[key] = common.CopyBytes(origin)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := make(map[common.Hash][]byte)
+	oldTrie, newTrie = openPair()
+	oldIt, err := oldTrie.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newIt, err := newTrie.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forward, _ := trie.NewDifferenceIterator(oldIt, newIt)
+	for forward.Next(true) {
+		if forward.Leaf() {
+			expected[common.BytesToHash(forward.LeafKey())] = nil
+		}
+	}
+	if err := forward.Error(); err != nil {
+		t.Fatal(err)
+	}
+	oldTrie, newTrie = openPair()
+	newIt, err = newTrie.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldIt, err = oldTrie.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reverse, _ := trie.NewDifferenceIterator(newIt, oldIt)
+	for reverse.Next(true) {
+		if reverse.Leaf() {
+			expected[common.BytesToHash(reverse.LeafKey())] = common.CopyBytes(reverse.LeafBlob())
+		}
+	}
+	if err := reverse.Error(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(actual) != len(expected) {
+		t.Fatalf("unexpected changed leaf count: have %d want %d", len(actual), len(expected))
+	}
+	for key, want := range expected {
+		got, ok := actual[key]
+		if !ok {
+			t.Fatalf("changed leaf %s was not emitted", key)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("wrong origin for %s: have %x want %x", key, got, want)
+		}
 	}
 }
 

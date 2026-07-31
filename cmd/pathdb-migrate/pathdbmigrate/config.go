@@ -5,6 +5,7 @@ package pathdbmigrate
 import (
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 
 	"github.com/spf13/pflag"
@@ -98,6 +99,7 @@ type ArchiveHistoryConfig struct {
 	ProgressEvery     uint64 `koanf:"progress-every"`
 	Workers           int    `koanf:"workers"`
 	MaxInFlight       int    `koanf:"max-inflight"`
+	TrieCleanCache    int    `koanf:"trie-clean-cache"`
 	ResultMemoryLimit int    `koanf:"result-memory-limit"`
 	SpillGap          uint64 `koanf:"spill-gap"`
 	SpillDirectory    string `koanf:"spill-directory"`
@@ -157,6 +159,7 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Uint64("archive-history.progress-every", DefaultConfig.ArchiveHistory.ProgressEvery, "log archive-history progress every N blocks")
 	f.Int("archive-history.workers", DefaultConfig.ArchiveHistory.Workers, "number of archive trie-diff workers; results are written in block order")
 	f.Int("archive-history.max-inflight", DefaultConfig.ArchiveHistory.MaxInFlight, "maximum scheduled archive transitions; 0 uses the worker count")
+	f.Int("archive-history.trie-clean-cache", DefaultConfig.ArchiveHistory.TrieCleanCache, "shared hash-trie clean-node cache in megabytes (0 disables)")
 	f.Int("archive-history.result-memory-limit", DefaultConfig.ArchiveHistory.ResultMemoryLimit, "maximum megabytes retained by completed parallel results; excess results spill to disk (0 spills all)")
 	f.Uint64("archive-history.spill-gap", DefaultConfig.ArchiveHistory.SpillGap, "use a disk-backed trie diff when retained states are separated by at least N blocks")
 	f.String("archive-history.spill-directory", DefaultConfig.ArchiveHistory.SpillDirectory, "directory for disk-backed archive trie diffs; defaults beside dst.chain-data")
@@ -215,6 +218,12 @@ func (c *Config) Validate() error {
 		}
 		if c.ArchiveHistory.MaxInFlight != 0 && c.ArchiveHistory.MaxInFlight < c.ArchiveHistory.Workers {
 			return errors.New("archive-history.max-inflight must be at least archive-history.workers")
+		}
+		if c.ArchiveHistory.TrieCleanCache < 0 {
+			return errors.New("archive-history.trie-clean-cache must be non-negative")
+		}
+		if c.ArchiveHistory.TrieCleanCache > math.MaxInt/(1024*1024) {
+			return errors.New("archive-history.trie-clean-cache is too large")
 		}
 		if c.ArchiveHistory.ResultMemoryLimit < 0 {
 			return errors.New("archive-history.result-memory-limit must be non-negative")
