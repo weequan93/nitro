@@ -462,12 +462,11 @@ func ProduceBlockAdvanced(
 
 			computeGas := tx.Gas() - dataGas
 
-			legacyCustomPriceMatch := tx.To() != nil && arbutil.IsCustomPriceAddr(tx.To())
-			upgradedCustomPriceMatch := false
-			if arbosVersion >= params.ArbosVersion_60 {
-				upgradedCustomPriceMatch = buildState.arbState.Pricer().IsCustomPriceTxCheckWithSender(tx, sender) || arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx)
-			}
-			if useDiscountedCustomPriceComputeGas(arbosVersion, legacyCustomPriceMatch, upgradedCustomPriceMatch) {
+			if useDynamicCustomPriceComputeGas(chainConfig.ChainID, header.Number.Uint64(), arbosVersion) {
+				if buildState.arbState.Pricer().IsCustomPriceTxCheckWithSender(tx, sender) || arbutil.IsGaslessTx(tx) || arbutil.IsCustomPriceTx(tx) {
+					computeGas = params.TxGas
+				}
+			} else if tx.To() != nil && arbutil.IsCustomPriceAddr(tx.To()) {
 				computeGas = params.TxGas
 			}
 
