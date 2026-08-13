@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -146,6 +147,11 @@ func (f *DelayedFilteringSequencingHooks) PostTxFilter(header *types.Header, db 
 		// the filter entry has been cleaned up and we're done.
 		var filteredErr *core.ErrFilteredTx
 		if errors.As(result.Err, &filteredErr) {
+			return nil
+		}
+		// DeriwOS has already converted this transaction into a consensus
+		// failed no-op, so the delayed sequencer must not halt for the same address.
+		if errors.Is(result.Err, vm.ErrDeriwBlacklisted) {
 			return nil
 		}
 		// Otherwise, this tx touched a filtered address but wasn't in the

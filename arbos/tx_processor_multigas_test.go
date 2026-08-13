@@ -155,6 +155,13 @@ func TestEndTxHookMultiGasRefundNormalTx(t *testing.T) {
 		finalBalance.ToBig(),
 		expectedRefund,
 	)
+
+	// A full-gas DeriwOS failed no-op must not receive the otherwise available
+	// multi-dimensional discount.
+	evm.StateDB.SubBalance(from, evm.StateDB.GetBalance(from), tracing.BalanceChangeUnspecified)
+	txProcessor.deriwBlacklistViolation = vm.ErrDeriwBlacklisted
+	txProcessor.EndTxHook(gasLeft, usedMultiGas, false)
+	require.True(t, evm.StateDB.GetBalance(from).IsZero(), "blacklist failure received a multi-gas refund")
 }
 
 func TestEndTxHookMultiGasRefundRetryableTx(t *testing.T) {

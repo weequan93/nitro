@@ -302,11 +302,25 @@ func (con ArbOwner) GetInfraFeeAccount(c ctx, evm mech) (addr, error) {
 
 // SetNetworkFeeAccount sets the network fee collector to the new network fee account
 func (con ArbOwner) SetNetworkFeeAccount(c ctx, evm mech, newNetworkFeeAccount addr) error {
+	enforceProtection, err := c.State.DeriwConsensusBlacklistActiveOrScheduled()
+	if err != nil {
+		return err
+	}
+	if enforceProtection && c.State.Blacklist().IsQuarantinedFree(newNetworkFeeAccount) {
+		return errors.New("cannot set a quarantined network fee account")
+	}
 	return c.State.SetNetworkFeeAccount(newNetworkFeeAccount)
 }
 
 // SetInfraFeeAccount sets the infrastructure fee collector address
 func (con ArbOwner) SetInfraFeeAccount(c ctx, evm mech, newInfraFeeAccount addr) error {
+	enforceProtection, err := c.State.DeriwConsensusBlacklistActiveOrScheduled()
+	if err != nil {
+		return err
+	}
+	if enforceProtection && c.State.Blacklist().IsQuarantinedFree(newInfraFeeAccount) {
+		return errors.New("cannot set a quarantined infrastructure fee account")
+	}
 	return c.State.SetInfraFeeAccount(newInfraFeeAccount)
 }
 

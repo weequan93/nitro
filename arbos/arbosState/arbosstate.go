@@ -52,6 +52,10 @@ type ArbosState struct {
 	arbosVersion                    uint64                      // version of the ArbOS storage format and semantics
 	upgradeVersion                  storage.StorageBackedUint64 // version we're planning to upgrade to, or 0 if not planning to upgrade
 	upgradeTimestamp                storage.StorageBackedUint64 // when to do the planned upgrade
+	deriwOSVersion                  uint64                      // independent version for Deriw consensus semantics
+	deriwOSUpgradeVersion           storage.StorageBackedUint64 // DeriwOS version we're planning to upgrade to, or 0
+	deriwOSUpgradeTimestamp         storage.StorageBackedUint64 // when to do the planned DeriwOS upgrade
+	deriwOSUpgradeArbOSVersion      storage.StorageBackedUint64 // ArbOS version recorded when the DeriwOS upgrade was scheduled
 	networkFeeAccount               storage.StorageBackedAddress
 	l1PricingState                  *l1pricing.L1PricingState
 	l2PricingState                  *l2pricing.L2PricingState
@@ -94,10 +98,17 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 	if arbosVersion == 0 {
 		return nil, ErrUninitializedArbOS
 	}
+	// This fixed, bounded read is free so merely opening ArbOS state does not
+	// change historical precompile gas costs under DeriwOS 0.
+	deriwOSVersion := backingStorage.GetFree(util.UintToHash(uint64(deriwOSVersionOffset))).Big().Uint64()
 	return &ArbosState{
 		arbosVersion:                    arbosVersion,
 		upgradeVersion:                  backingStorage.OpenStorageBackedUint64(uint64(upgradeVersionOffset)),
 		upgradeTimestamp:                backingStorage.OpenStorageBackedUint64(uint64(upgradeTimestampOffset)),
+		deriwOSVersion:                  deriwOSVersion,
+		deriwOSUpgradeVersion:           backingStorage.OpenStorageBackedUint64(uint64(deriwOSUpgradeVersionOffset)),
+		deriwOSUpgradeTimestamp:         backingStorage.OpenStorageBackedUint64(uint64(deriwOSUpgradeTimestampOffset)),
+		deriwOSUpgradeArbOSVersion:      backingStorage.OpenStorageBackedUint64(uint64(deriwOSUpgradeArbOSVersionOffset)),
 		networkFeeAccount:               backingStorage.OpenStorageBackedAddress(uint64(networkFeeAccountOffset)),
 		l1PricingState:                  l1pricing.OpenL1PricingState(backingStorage.OpenCachedSubStorage(l1PricingSubspace), arbosVersion),
 		l2PricingState:                  l2pricing.OpenL2PricingState(backingStorage.OpenCachedSubStorage(l2PricingSubspace), arbosVersion),
@@ -221,6 +232,10 @@ const (
 	transactionFilteringEnabledFromTimeOffset
 	filteredFundsRecipientOffset
 	collectTipsOffset
+	deriwOSVersionOffset
+	deriwOSUpgradeVersionOffset
+	deriwOSUpgradeTimestampOffset
+	deriwOSUpgradeArbOSVersionOffset
 )
 
 type SubspaceID []byte
@@ -304,6 +319,24 @@ func InitializeArbosState(stateDB vm.StateDB, burner burn.Burner, chainConfig *p
 		return nil, err
 	}
 	err = sto.SetUint64ByUint64(uint64(upgradeTimestampOffset), 0)
+	if err != nil {
+		return nil, err
+	}
+	// DeriwOS version 0 intentionally preserves all historical execution behavior.
+	// These appended fields also read as zero on databases created by older nodes.
+	err = sto.SetUint64ByUint64(uint64(deriwOSVersionOffset), 0)
+	if err != nil {
+		return nil, err
+	}
+	err = sto.SetUint64ByUint64(uint64(deriwOSUpgradeVersionOffset), 0)
+	if err != nil {
+		return nil, err
+	}
+	err = sto.SetUint64ByUint64(uint64(deriwOSUpgradeTimestampOffset), 0)
+	if err != nil {
+		return nil, err
+	}
+	err = sto.SetUint64ByUint64(uint64(deriwOSUpgradeArbOSVersionOffset), 0)
 	if err != nil {
 		return nil, err
 	}

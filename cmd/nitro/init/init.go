@@ -386,6 +386,14 @@ func ValidateBlockChain(blockChain *core.BlockChain, chainConfig *params.ChainCo
 		}
 
 	}
+	if currentArbosState.DeriwOSVersion() > arbosState.MaxDeriwOSVersionSupported {
+		return fmt.Errorf(
+			"attempted to launch node with DeriwOS version %v on DeriwOS state with version %v (ArbOS version %v)",
+			arbosState.MaxDeriwOSVersionSupported,
+			currentArbosState.DeriwOSVersion(),
+			currentArbosState.ArbOSVersion(),
+		)
+	}
 
 	return nil
 }

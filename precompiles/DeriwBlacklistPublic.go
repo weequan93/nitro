@@ -46,3 +46,21 @@ func (con DeriwBlacklistPublic) IsBlacklistTxFrom(c ctx, evm mech, addr common.A
 func (con DeriwBlacklistPublic) IsBlacklistTxTo(c ctx, evm mech, addr common.Address) (bool, error) {
 	return c.State.Blacklist().TxToAddrs().IsMember(addr)
 }
+
+// GetDeriwOSVersion returns the active ArbOS and DeriwOS versions as a pair.
+func (con DeriwBlacklistPublic) GetDeriwOSVersion(c ctx, evm mech) (uint64, uint64, error) {
+	return c.State.ArbOSVersion(), c.State.DeriwOSVersion(), nil
+}
+
+// GetScheduledDeriwOSUpgrade returns the target DeriwOS version, timestamp,
+// and ArbOS version recorded when the upgrade was scheduled.
+func (con DeriwBlacklistPublic) GetScheduledDeriwOSUpgrade(c ctx, evm mech) (uint64, uint64, uint64, error) {
+	version, timestamp, arbosVersion, err := c.State.GetScheduledDeriwOSUpgrade()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if c.State.DeriwOSVersion() >= version {
+		return 0, 0, 0, nil
+	}
+	return version, timestamp, arbosVersion, nil
+}

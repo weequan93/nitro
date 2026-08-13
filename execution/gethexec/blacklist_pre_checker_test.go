@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
@@ -21,6 +22,19 @@ func blacklistTestTx(target common.Address) *types.Transaction {
 		To:       &target,
 		Gas:      100_000,
 		GasPrice: big.NewInt(0),
+	})
+}
+
+func emergencyRemovalTestTx(target common.Address) *types.Transaction {
+	data := make([]byte, 4+32)
+	copy(data[:4], []byte{0xda, 0xe8, 0x43, 0x49})
+	copy(data[4+12:], target.Bytes())
+	to := types.DeriwBlacklistAddress
+	return types.NewTx(&types.LegacyTx{
+		To:       &to,
+		Gas:      100_000,
+		GasPrice: big.NewInt(0),
+		Data:     data,
 	})
 }
 
@@ -112,4 +126,49 @@ func TestSequencerPreTxFilterRejectsDelegatedParent(t *testing.T) {
 
 	err := (&Sequencer{}).preTxFilter(nil, nil, nil, state, blacklistTestTx(target), nil, child, nil)
 	require.ErrorIs(t, err, ErrTxBlacklist)
+}
+
+func TestPreCheckBlacklistDeriwOSUnionRule(t *testing.T) {
+	state, _ := arbosState.NewArbosMemoryBackedArbOSState()
+	sender := common.HexToAddress("0x1111")
+	target := common.HexToAddress("0x2222")
+	require.NoError(t, state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_ConsensusBlacklist))
+
+	require.NoError(t, state.Blacklist().TxToAddrs().Add(sender))
+	require.ErrorIs(t, preCheckBlacklist(state, blacklistTestTx(target), sender), ErrTxBlacklist)
+	require.NoError(t, state.Blacklist().TxToAddrs().Remove(sender, state.ArbOSVersion()))
+
+	require.NoError(t, state.Blacklist().TxFromAddrs().Add(target))
+	require.ErrorIs(t, preCheckBlacklist(state, blacklistTestTx(target), sender), ErrTxBlacklist)
+}
+
+func TestPreCheckBlacklistAllowsExactAuthorizedEmergencyRemoval(t *testing.T) {
+	state, _ := arbosState.NewArbosMemoryBackedArbOSState()
+	owner := common.HexToAddress("0x1111")
+	target := common.HexToAddress("0x2222")
+	require.NoError(t, state.Blacklist().BlacklistOwner().Add(owner))
+	require.NoError(t, state.Blacklist().TxFromAddrs().Add(owner))
+	require.NoError(t, state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_ConsensusBlacklist))
+
+	require.NoError(t, preCheckBlacklist(state, emergencyRemovalTestTx(target), owner))
+
+	ordinary := blacklistTestTx(types.DeriwBlacklistAddress)
+	require.ErrorIs(t, preCheckBlacklist(state, ordinary, owner), ErrTxBlacklist)
+
+	malformed := emergencyRemovalTestTx(target)
+	malformed.Data()[4] = 1 // non-canonical high-order address padding
+	require.ErrorIs(t, preCheckBlacklist(state, malformed, owner), ErrTxBlacklist)
+
+	emergency := emergencyRemovalTestTx(target)
+	piggyback := types.NewTx(&types.SetCodeTx{
+		ChainID:   uint256.NewInt(1),
+		GasTipCap: uint256.NewInt(0),
+		GasFeeCap: uint256.NewInt(0),
+		Gas:       emergency.Gas(),
+		To:        *emergency.To(),
+		Value:     uint256.NewInt(0),
+		Data:      emergency.Data(),
+		AuthList:  []types.SetCodeAuthorization{{}},
+	})
+	require.ErrorIs(t, preCheckBlacklist(state, piggyback, owner), ErrTxBlacklist)
 }
