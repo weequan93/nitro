@@ -144,6 +144,37 @@ func TestDeriwConsensusBlacklistTopLevelFailedNoop(t *testing.T) {
 	}
 }
 
+func TestDeriwConsensusBlacklistChecksEffectiveSubaccountParent(t *testing.T) {
+	state, stateDB := arbosState.NewArbosMemoryBackedArbOSState()
+	if err := state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_ConsensusBlacklist); err != nil {
+		t.Fatal(err)
+	}
+	key, child := fundedDeriwSender(t, stateDB)
+	parent := common.HexToAddress("0x2102")
+	target := common.HexToAddress("0x3103")
+	if err := state.SubAccount().AllowedAddress().Add(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.SubAccount().BindRelation(parent, child, big.NewInt(0)); err != nil {
+		t.Fatal(err)
+	}
+	// The union rule must quarantine the effective sender even when the parent
+	// appears only in the legacy destination list.
+	if err := state.Blacklist().TxToAddrs().Add(parent); err != nil {
+		t.Fatal(err)
+	}
+
+	const gasLimit = uint64(100_000)
+	tx := makeSignedDeriwTx(t, key, state.ArbOSVersion(), 0, &target, big.NewInt(0), gasLimit, nil)
+	receipt, result := applyDeriwConsensusTestTx(t, stateDB, state, tx)
+	if receipt.Status != types.ReceiptStatusFailed || !errors.Is(result.Err, vm.ErrDeriwBlacklisted) {
+		t.Fatalf("result = (%v, %v), want failed parent blacklist result", receipt.Status, result.Err)
+	}
+	if stateDB.GetNonce(child) != 1 || stateDB.GetNonce(parent) != 1 {
+		t.Fatalf("nonces = child %v parent %v, want 1/1", stateDB.GetNonce(child), stateDB.GetNonce(parent))
+	}
+}
+
 func TestDeriwConsensusBlacklistAllowsExactEmergencyRemoval(t *testing.T) {
 	state, stateDB := arbosState.NewArbosMemoryBackedArbOSState()
 	key, owner := fundedDeriwSender(t, stateDB)
