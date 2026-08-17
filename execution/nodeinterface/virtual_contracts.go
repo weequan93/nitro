@@ -85,6 +85,27 @@ func init() {
 		return state.Pricer().IsCustomPriceTxCheckWithSender(tx, sender), nil
 	}
 
+	core.RPCGaslessEstimateGasHook = func(statedb *state.StateDB, to *common.Address) (bool, error) {
+		if to == nil {
+			return false, nil
+		}
+		if arbutil.IsCustomPriceAddr(to) {
+			return true, nil
+		}
+		if statedb == nil {
+			return false, nil
+		}
+		arbosVersion := arbosState.ArbOSVersion(statedb)
+		if arbosVersion == 0 {
+			return false, nil
+		}
+		state, err := arbosState.OpenSystemArbosState(statedb, nil, true)
+		if err != nil {
+			return false, err
+		}
+		return state.Pricer().TxToAddrs().IsMember(*to)
+	}
+
 	core.InterceptRPCMessage = func(
 		msg *core.Message,
 		ctx context.Context,
