@@ -328,3 +328,126 @@ governance flow in this checkout. They do not replace state-root replay,
 delayed-inbox, deployed-router callback, governance-Safe, or post-activation
 end-to-end tests. The control should not be activated until the outstanding
 activation gates above are satisfied.
+
+## Combined branch and submodule verification (2026-08-18)
+
+### Verdict
+
+The combined source at root commit
+`befa9dc97192589649ea78d06b57f9e74c78f86a` contains the consensus blacklist,
+ArbSys router-only restriction, and gasless `eth_estimateGas` changes. The root
+merge graph is correct: its parents are the ArbSys/blacklist line at
+`d8ad7ef2cd4b4d9dc179fe03e95f39e69eeb9248` and `fix/estimate-gas` at
+`727d5440bfb90bfc2a165677fb889761e4a4e9ac`.
+
+The initial verification found that two gitlink commits were not remotely
+fetchable, the committed go-ethereum URL named the upstream repository, and the
+test-node submodule contained uncommitted generated ABI updates. Those release
+blockers were resolved on consistent `fix/blacklist-subaccount` branches before
+the root packaging commit was created.
+
+### SCM-001: Consensus-critical go-ethereum gitlink was not fetchable
+
+- Rule ID: SCM-001
+- Severity: High (release blocker)
+- Status: resolved.
+- Location: root gitlink `go-ethereum`; `.gitmodules:1-3`
+- Original evidence: the root pointed to
+  `cd17872f174a58c08c8dc84c1f4d04547b7f88e9`, a local merge of blacklist gas
+  handling parent `f9b2467411` and estimate-gas parent `5bd9de018f`. The commit
+  was not advertised by any branch or tag on the Deriw go-ethereum remote. A
+  fetch by exact hash from a new empty repository failed with
+  `upload-pack: not our ref`. In addition, `.gitmodules` named
+  `https://github.com/OffchainLabs/go-ethereum.git`; only this workstation's
+  local `.git/config` overrode it to the Deriw fork.
+- Impact: a clean recursive clone, CI runner, or dev deployment cannot obtain
+  the exact consensus/RPC source recorded by the published root branch.
+- Resolution applied: `go-ethereum/fix/blacklist-subaccount` now points to
+  `52064791ab`, which contains blacklist gas handling `f9b2467411`, the original
+  estimate-gas commit `5bd9de018f`, and its published follow-up `ec2aa50276`.
+  The root gitlink was advanced to that tip and `.gitmodules` now names
+  `https://github.com/weequan93/go-ethereum.git`.
+- False positive notes: none; remote advertisement and an empty-repository
+  exact-hash fetch were both checked before remediation.
+
+### SCM-002: ArbSys governance-interface gitlink was not fetchable
+
+- Rule ID: SCM-002
+- Severity: High (release blocker)
+- Status: resolved.
+- Location: root commit `d8ad7ef2`, gitlink
+  `contracts-local/src/precompiles`
+- Original evidence: the root pointed to
+  `f87337228eac115d92ff35ce37474b3e644b72d7`, which adds the router-config
+  methods to `ArbOwner.sol` and `ArbOwnerPublic.sol`. The Deriw precompile
+  interface remote advertised `fix/blacklist-subaccount` only through its
+  parent `b6b357c2`; it did not advertise `f8733722`. An exact-hash fetch from
+  a new empty repository failed with `upload-pack: not our ref`.
+- Impact: a clean build cannot reproduce the ABI inputs used by this checkout,
+  even though the already-generated Go bindings present locally compile.
+- Resolution applied: `nitro-precompile-interfaces/fix/blacklist-subaccount`
+  now advertises `f87337228`; its parent `b6b357c2` carries the earlier
+  DeriwOS/blacklist interfaces and `f87337228` adds the ArbSys route-governance
+  interfaces.
+- False positive notes: none; the exact remote fetch failed before remediation.
+
+### SCM-003: Test-node explorer ABI changes were uncommitted
+
+- Rule ID: SCM-003
+- Severity: Medium (release packaging)
+- Status: resolved.
+- Location: `nitro-testnode/blockscout/init/data/ArbOwner.abi:1`,
+  `ArbOwnerPublic.abi:1`, `DeriwBlacklist.abi:1`, and
+  `DeriwBlacklistPublic.abi:1`
+- Original evidence: the root recorded test-node commit `e96bfabd85`, while the
+  nested blockscout checkout had four modified ABI files. They contained the
+  DeriwOS scheduling/query and router-config scheduling/query methods and were
+  not represented by either the nested or parent gitlink.
+- Impact: the running local test stack may expose newer ABIs than a clean dev
+  deployment, causing explorer/tooling behavior to differ despite identical
+  root commits.
+- Resolution applied: `blockscout/fix/blacklist-subaccount` publishes the four
+  ABI updates at `6283e561a`; `nitro-testnode/fix/blacklist-subaccount` records
+  that gitlink at `a8f5f3c`, and the root gitlink was advanced to that commit.
+- False positive notes: these files do not alter Nitro consensus execution, but
+  they do affect reproducibility and governance-method discoverability.
+
+### Combined implementation checks
+
+- Blacklist: DeriwOS 1 applies the union of the legacy from/to sets to the
+  signed sender, effective subaccount parent, explicit top-level destination,
+  and both aliased/unaliased L1 sender identities. It executes during state
+  transition, so delayed normal transactions cannot bypass sequencer admission.
+  The documented funding-only and protocol-internal transaction exclusions are
+  intentional, and retryable execution is checked at its actual destination.
+- ArbSys: DeriwOS 2 runs the route guard as the first operation in
+  `SendTxToL1`; `WithdrawEth` funnels through it. It reads the active route from
+  consensus state, enforces exact normalized suffixes, caller agreement,
+  protected-address uniqueness, and an explicit gateway allowlist. Dev/prod
+  bootstraps are chain-ID selected; test fails closed until governance stages a
+  route. Route replacement is atomic and delayed seven days.
+- Estimate gas: the RPC-only hook zeroes legacy and EIP-1559 fee fields before
+  estimation for statically configured or on-chain target-allowlisted gasless
+  contracts. It deliberately does not treat sender-only allowlisting as
+  sufficient. It does not change transaction consensus pricing.
+- The consolidated go-ethereum branch contains all feature parents without
+  source conflicts: the blacklist failed-no-op gas accounting touches
+  `core/state_transition.go` and `core/vm/errors.go`, while estimate-gas touches
+  `core/arbitrum_hooks.go` and `internal/ethapi`. It also includes the later
+  fee-variant normalization tests from `ec2aa50276`.
+
+### Combined verification run
+
+- `go test ./arbos/... ./precompiles ./gethhook`: pass.
+- `go test ./execution/nodeinterface ./execution/gethexec`: pass.
+- In go-ethereum, `go test ./internal/ethapi ./core`: pass.
+- Nitro vet on the scoped consensus, precompile, execution, and hook packages:
+  pass.
+- go-ethereum vet on `./core ./internal/ethapi`: pass.
+- `git diff --check`: pass.
+- Linker warnings report that the existing `libstylus.a` was built for macOS
+  26.2 while this run linked for macOS 26.0; the tests still passed.
+
+These checks support correctness of the scoped implementation, but they do not
+remove the existing live-router, governance, canonical recovery-route, or
+post-activation end-to-end findings above.
