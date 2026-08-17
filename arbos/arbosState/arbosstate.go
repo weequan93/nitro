@@ -84,6 +84,7 @@ type ArbosState struct {
 	gaslessOwners                   *addressSet.AddressSet
 	subAccountState                 *subAccount.SubAccountState
 	blacklist                       *blacklist.Blacklist
+	deriwRouterConfig               *DeriwRouterConfigState
 }
 
 var ErrUninitializedArbOS = errors.New("ArbOS uninitialized")
@@ -137,6 +138,7 @@ func OpenArbosState(stateDB vm.StateDB, burner burn.Burner) (*ArbosState, error)
 		gaslessOwners:                   addressSet.OpenAddressSet(backingStorage.OpenCachedSubStorage(gaslessSubspace)),
 		subAccountState:                 subAccount.OpenSubAccountState(backingStorage.OpenSubStorage(subAccountSubspace)),
 		blacklist:                       blacklist.OpenBlacklist(backingStorage.OpenSubStorage(blacklistSubspace)),
+		deriwRouterConfig:               openDeriwRouterConfigState(backingStorage.OpenSubStorage(deriwRouterConfigSubspace)),
 	}, nil
 
 }
@@ -258,6 +260,7 @@ var (
 	featuresSubspace            SubspaceID = []byte{13}
 	nativeTokenOwnerSubspace    SubspaceID = []byte{14}
 	transactionFiltererSubspace SubspaceID = []byte{15}
+	deriwRouterConfigSubspace   SubspaceID = []byte{16}
 )
 
 var PrecompileMinArbOSVersions = make(map[common.Address]uint64)

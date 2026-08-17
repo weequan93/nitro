@@ -17,6 +17,38 @@ type ArbOwnerPublic struct {
 	ChainOwnerRectifiedGasCost func(addr) (uint64, error)
 }
 
+// GetDeriwRouterConfig returns the route currently enforced by ArbSys and its
+// monotonically increasing revision. An uninitialized route returns zero
+// addresses, an empty gateway list, and revision zero.
+func (con ArbOwnerPublic) GetDeriwRouterConfig(
+	c ctx,
+	evm mech,
+) (addr, addr, []common.Address, uint64, error) {
+	routes, revision, configured, err := c.State.ActiveDeriwRouterConfig()
+	if err != nil || !configured {
+		return addr{}, addr{}, []common.Address{}, 0, err
+	}
+	return routes.Router, routes.CanonicalGatewayRouter, routes.ApprovedTokenGateways, revision, nil
+}
+
+// GetScheduledDeriwRouterConfig returns the staged replacement, revision, and
+// activation timestamp. With no pending update, all values are zero/empty.
+func (con ArbOwnerPublic) GetScheduledDeriwRouterConfig(
+	c ctx,
+	evm mech,
+) (addr, addr, []common.Address, uint64, uint64, error) {
+	routes, revision, activationTimestamp, configured, err := c.State.PendingDeriwRouterConfig()
+	if err != nil || !configured {
+		return addr{}, addr{}, []common.Address{}, 0, 0, err
+	}
+	return routes.Router,
+		routes.CanonicalGatewayRouter,
+		routes.ApprovedTokenGateways,
+		revision,
+		activationTimestamp,
+		nil
+}
+
 // GetAllChainOwners retrieves the list of chain owners
 func (con ArbOwnerPublic) GetAllChainOwners(c ctx, evm mech) ([]common.Address, error) {
 	return c.State.ChainOwners().AllMembers(maxGetAllMembers)

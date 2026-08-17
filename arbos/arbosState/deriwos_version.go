@@ -10,6 +10,7 @@ import (
 
 	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"github.com/offchainlabs/nitro/arbos/burn"
+	"github.com/offchainlabs/nitro/arbos/deriwpolicy"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbos/storage"
 )
@@ -20,8 +21,15 @@ const (
 	// DeriwOSVersion_ConsensusBlacklist enables consensus checks for top-level
 	// transaction sender, destination, and subaccount parent addresses.
 	DeriwOSVersion_ConsensusBlacklist uint64 = 1
+	// DeriwOSVersion_RouterOnlySends restricts ArbSys L3-to-parent sends to the
+	// approved chain-specific Deriw router and canonical ERC-20 routes.
+	DeriwOSVersion_RouterOnlySends uint64 = 2
 
-	MaxDeriwOSVersionSupported = DeriwOSVersion_ConsensusBlacklist
+	MaxDeriwOSVersionSupported = DeriwOSVersion_RouterOnlySends
+
+	DeriwDevChainID  = deriwpolicy.DevChainID
+	DeriwTestChainID = deriwpolicy.TestChainID
+	DeriwProdChainID = deriwpolicy.ProdChainID
 )
 
 // DeriwOSVersion reads the independent Deriw consensus version from state.
@@ -72,11 +80,18 @@ func (state *ArbosState) UpgradeDeriwOSVersion(upgradeTo uint64) error {
 			ErrFatalNodeOutOfDate,
 		)
 	}
+	if err := state.validateDeriwOSUpgrade(upgradeTo); err != nil {
+		return err
+	}
 	for state.deriwOSVersion < upgradeTo {
 		nextVersion := state.deriwOSVersion + 1
 		switch nextVersion {
 		case DeriwOSVersion_ConsensusBlacklist:
-			if err := state.validateConsensusBlacklistActivation(); err != nil {
+			// Activation requirements were checked before changing any version state.
+		case DeriwOSVersion_RouterOnlySends:
+			// Persist a chain-specific compiled default exactly once. If governance
+			// already activated an on-chain configuration, it is preserved.
+			if err := state.initializeDeriwRouterConfigForActivation(); err != nil {
 				return err
 			}
 		default:
@@ -85,6 +100,20 @@ func (state *ArbosState) UpgradeDeriwOSVersion(upgradeTo uint64) error {
 		state.deriwOSVersion = nextVersion
 	}
 	return state.backingStorage.SetUint64ByUint64(uint64(deriwOSVersionOffset), state.deriwOSVersion)
+}
+
+func (state *ArbosState) validateDeriwOSUpgrade(upgradeTo uint64) error {
+	if state.deriwOSVersion < DeriwOSVersion_ConsensusBlacklist && upgradeTo >= DeriwOSVersion_ConsensusBlacklist {
+		if err := state.validateConsensusBlacklistActivation(); err != nil {
+			return err
+		}
+	}
+	if state.deriwOSVersion < DeriwOSVersion_RouterOnlySends && upgradeTo >= DeriwOSVersion_RouterOnlySends {
+		if err := state.canInitializeDeriwRouterConfig(); err != nil {
+			return fmt.Errorf("DeriwOS router-only sends have no valid active route: %w", err)
+		}
+	}
+	return nil
 }
 
 func (state *ArbosState) validateConsensusBlacklistActivation() error {
@@ -112,10 +141,8 @@ func (state *ArbosState) ScheduleDeriwOSUpgrade(newVersion uint64, timestamp uin
 	if newVersion > MaxDeriwOSVersionSupported {
 		return fmt.Errorf("cannot schedule unsupported DeriwOS version %v; this node supports up to version %v", newVersion, MaxDeriwOSVersionSupported)
 	}
-	if state.deriwOSVersion < DeriwOSVersion_ConsensusBlacklist && newVersion >= DeriwOSVersion_ConsensusBlacklist {
-		if err := state.validateConsensusBlacklistActivation(); err != nil {
-			return fmt.Errorf("cannot schedule DeriwOS consensus blacklist: %w", err)
-		}
+	if err := state.validateDeriwOSUpgrade(newVersion); err != nil {
+		return fmt.Errorf("cannot schedule DeriwOS upgrade %v: %w", newVersion, err)
 	}
 	if err := state.deriwOSUpgradeVersion.Set(newVersion); err != nil {
 		return err

@@ -5,12 +5,14 @@ package arbosState
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/offchainlabs/nitro/arbos/burn"
+	"github.com/offchainlabs/nitro/cmd/chaininfo"
 )
 
 func TestDeriwOSVersionDefaultsToLegacy(t *testing.T) {
@@ -57,6 +59,52 @@ func TestScheduleAndActivateDeriwOSUpgradeRecordsArbOSVersion(t *testing.T) {
 	}
 	if reopened.DeriwOSVersion() != DeriwOSVersion_ConsensusBlacklist {
 		t.Fatalf("reopened DeriwOS version = %v, want %v", reopened.DeriwOSVersion(), DeriwOSVersion_ConsensusBlacklist)
+	}
+}
+
+func TestScheduleAndActivateRouterOnlySendsOnConfiguredChains(t *testing.T) {
+	for _, chainID := range []uint64{DeriwDevChainID, DeriwProdChainID} {
+		t.Run(new(big.Int).SetUint64(chainID).String(), func(t *testing.T) {
+			chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+			chainConfig.ChainID = new(big.Int).SetUint64(chainID)
+			state, stateDB := NewArbosMemoryBackedArbOSStateWithConfig(chainConfig)
+			activationTime := uint64(12345)
+			if err := state.ScheduleDeriwOSUpgrade(DeriwOSVersion_RouterOnlySends, activationTime); err != nil {
+				t.Fatal(err)
+			}
+			if err := state.UpgradeDeriwOSVersionIfNecessary(activationTime); err != nil {
+				t.Fatal(err)
+			}
+			if state.DeriwOSVersion() != DeriwOSVersion_RouterOnlySends || DeriwOSVersion(stateDB) != DeriwOSVersion_RouterOnlySends {
+				t.Fatalf("DeriwOS version = memory %v / storage %v, want %v", state.DeriwOSVersion(), DeriwOSVersion(stateDB), DeriwOSVersion_RouterOnlySends)
+			}
+		})
+	}
+}
+
+func TestRouterOnlySendsRejectsUnconfiguredChainsWithoutStateChange(t *testing.T) {
+	for _, chainID := range []uint64{DeriwTestChainID, 1337} {
+		t.Run(new(big.Int).SetUint64(chainID).String(), func(t *testing.T) {
+			chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+			chainConfig.ChainID = new(big.Int).SetUint64(chainID)
+			state, stateDB := NewArbosMemoryBackedArbOSStateWithConfig(chainConfig)
+			if err := state.UpgradeDeriwOSVersion(DeriwOSVersion_RouterOnlySends); err == nil {
+				t.Fatal("activated router-only sends without a route configuration")
+			}
+			if state.DeriwOSVersion() != DeriwOSVersion_Legacy || DeriwOSVersion(stateDB) != DeriwOSVersion_Legacy {
+				t.Fatalf("failed upgrade changed DeriwOS version to memory %v / storage %v", state.DeriwOSVersion(), DeriwOSVersion(stateDB))
+			}
+			if err := state.ScheduleDeriwOSUpgrade(DeriwOSVersion_RouterOnlySends, 12345); err == nil {
+				t.Fatal("scheduled router-only sends without a route configuration")
+			}
+			version, timestamp, arbosVersion, err := state.GetScheduledDeriwOSUpgrade()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if version != 0 || timestamp != 0 || arbosVersion != 0 {
+				t.Fatalf("failed schedule changed state to (%v, %v, %v)", version, timestamp, arbosVersion)
+			}
+		})
 	}
 }
 

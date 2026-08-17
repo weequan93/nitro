@@ -21,10 +21,88 @@ import (
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/burn"
+	"github.com/offchainlabs/nitro/arbos/deriwpolicy"
 	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/cmd/chaininfo"
 	"github.com/offchainlabs/nitro/util/testhelpers"
 )
+
+func TestArbOwnerSchedulesDeriwRouterConfig(t *testing.T) {
+	evm := newMockEVMForTesting()
+	owner := testhelpers.RandomAddress()
+	callCtx := testContext(owner, evm)
+	routes := deriwpolicy.RouterOnlySendConfig{
+		Router:                 common.HexToAddress("0x2001"),
+		CanonicalGatewayRouter: common.HexToAddress("0x2002"),
+		ApprovedTokenGateways: []common.Address{
+			common.HexToAddress("0x2003"),
+			common.HexToAddress("0x2004"),
+		},
+	}
+	ownerPrecompile := &ArbOwner{}
+	activationTimestamp := evm.Context.Time + arbosState.DeriwRouterConfigUpdateDelay
+	if err := ownerPrecompile.ScheduleDeriwRouterConfig(
+		callCtx,
+		evm,
+		routes.Router,
+		routes.CanonicalGatewayRouter,
+		routes.ApprovedTokenGateways,
+		activationTimestamp,
+	); err == nil {
+		t.Fatal("scheduled a Deriw route containing addresses without deployed code")
+	}
+	for _, routeAddress := range append(
+		[]common.Address{routes.Router, routes.CanonicalGatewayRouter},
+		routes.ApprovedTokenGateways...,
+	) {
+		evm.StateDB.SetCode(routeAddress, []byte{byte(vm.INVALID)}, tracing.CodeChangeUnspecified)
+	}
+	if err := ownerPrecompile.ScheduleDeriwRouterConfig(
+		callCtx,
+		evm,
+		routes.Router,
+		routes.CanonicalGatewayRouter,
+		routes.ApprovedTokenGateways,
+		activationTimestamp,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	public := &ArbOwnerPublic{}
+	router, canonicalRouter, gateways, revision, scheduledFor, err := public.GetScheduledDeriwRouterConfig(callCtx, evm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if router != routes.Router || canonicalRouter != routes.CanonicalGatewayRouter ||
+		len(gateways) != len(routes.ApprovedTokenGateways) || revision != 1 || scheduledFor != activationTimestamp {
+		t.Fatalf("unexpected pending route: router=%v canonical=%v gateways=%v revision=%v scheduled=%v", router, canonicalRouter, gateways, revision, scheduledFor)
+	}
+	if err := callCtx.State.ActivateDeriwRouterConfigIfNecessary(activationTimestamp); err != nil {
+		t.Fatal(err)
+	}
+	router, canonicalRouter, gateways, revision, err = public.GetDeriwRouterConfig(callCtx, evm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if router != routes.Router || canonicalRouter != routes.CanonicalGatewayRouter ||
+		len(gateways) != len(routes.ApprovedTokenGateways) || revision != 1 {
+		t.Fatalf("unexpected active route: router=%v canonical=%v gateways=%v revision=%v", router, canonicalRouter, gateways, revision)
+	}
+
+	// Even if governance accidentally grants a route contract chain-owner
+	// status, that protected contract cannot alter its own allowlist.
+	protectedCaller := testContext(routes.Router, evm)
+	if err := ownerPrecompile.ScheduleDeriwRouterConfig(
+		protectedCaller,
+		evm,
+		routes.Router,
+		routes.CanonicalGatewayRouter,
+		routes.ApprovedTokenGateways,
+		activationTimestamp+arbosState.DeriwRouterConfigUpdateDelay,
+	); err == nil {
+		t.Fatal("active Deriw router was allowed to modify its route configuration")
+	}
+}
 
 func TestArbOwner(t *testing.T) {
 	evm := newMockEVMForTesting()
