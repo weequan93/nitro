@@ -64,7 +64,9 @@ Use this order for every environment:
 15. Schedule and verify DeriwOS 2 (router-only ArbSys sends).
 16. Schedule and verify DeriwOS 3 (direct `withdrawEth` restored; raw messages
     and ERC-20 sends remain route-restricted).
-17. Run the full acceptance suite and complete the soak period before promoting
+17. Schedule and verify DeriwOS 4 (DeriwOS scheduling moved to chain-owner-only
+    `ArbOwner`; the legacy blacklist scheduler cannot schedule version 4+).
+18. Run the full acceptance suite and complete the soak period before promoting
     the same release to the next environment.
 
 Never activate DeriwOS before all execution and validation roles run compatible
@@ -743,6 +745,7 @@ the next wave only after the preceding postcondition is verified:
 | L4 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 1 | Blacklist behavior passes after activation |
 | L5 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 2 | Router-only positive and negative tests pass |
 | L6 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 3 | Direct ETH works; raw messages and ERC-20 restrictions still pass |
+| L7 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 4 through `ArbOwner` | Owner-only scheduling and legacy-endpoint rejection pass |
 
 P1 and P2 remain separate so the parent-contract upgrade can be verified
 before changing the official machine root. L1 and L2 must never share a batch:
@@ -1191,11 +1194,11 @@ After compatible nodes are deployed, also capture:
 
 ```bash
 cast call --rpc-url "$L3_RPC" \
-  0x00000000000000000000000000000000000007EB \
+  0x000000000000000000000000000000000000006b \
   "getDeriwOSVersion()(uint64,uint64)"
 
 cast call --rpc-url "$L3_RPC" \
-  0x00000000000000000000000000000000000007EB \
+  0x000000000000000000000000000000000000006b \
   "getScheduledDeriwOSUpgrade()(uint64,uint64,uint64)"
 
 cast call --rpc-url "$L3_RPC" \
@@ -1873,16 +1876,23 @@ A pending route can be cancelled before activation by sending
 `cancelScheduledDeriwRouterConfig()` through the same ArbOwner/UpgradeExecutor
 path.
 
-## 16. Activate DeriwOS 1, then DeriwOS 2, then DeriwOS 3
+## 16. Activate DeriwOS 1, then 2, then 3, then 4
 
-Do not activate versions 1, 2, and 3 in one jump for the first environment
+Do not activate versions 1, 2, 3, and 4 in one jump for the first environment
 rollout. Activate and verify each version before scheduling the next one.
 
-Current code exposes scheduling on `DeriwBlacklist` at `0x07EC`. Development
-retains its standalone blacklist owner on chain, but this runbook never uses it
-directly. DeriwOS version scheduling is release governance and must always use
-one of the approved environment Safes through the UpgradeExecutor path shown
-here.
+The canonical scheduler is `ArbOwner` at `0x70`, protected by the chain-owner
+wrapper. Every schedule and cancellation must travel through an approved Safe,
+the environment's UpgradeExecutor, and `ArbOwner`. The old selector remains at
+`DeriwBlacklist` `0x07EC` only so historical DeriwOS 1-3 transactions replay
+identically. It rejects DeriwOS 4 and all later versions. Never use `0x07EC`
+for a new deployment transaction.
+
+Until DeriwOS 4 is active, replay compatibility necessarily leaves versions
+1-3 callable through the legacy selector when the requested target is newer
+than the active version. This is a transition-only residual permission. Keep
+the rollout window short, submit every new schedule through `ArbOwner`, and
+complete versions 1, 2, 3, and 4 in sequence.
 
 Recommended minimum operator windows, even if the current contract does not
 enforce them:
@@ -1910,7 +1920,7 @@ L4 at `https://safe.deriw.com`:
 ```bash
 export L3_EXECUTOR_CALLDATA="$(cast calldata \
   "executeCall(address,bytes)" \
-  0x00000000000000000000000000000000000007EC \
+  0x0000000000000000000000000000000000000070 \
   "$DERIWOS_CALLDATA")"
 ```
 
@@ -1931,7 +1941,7 @@ After DeriwOS 2 activation, confirm:
 
 ```bash
 cast call --rpc-url "$L3_RPC" \
-  0x00000000000000000000000000000000000007EB \
+  0x000000000000000000000000000000000000006b \
   "getDeriwOSVersion()(uint64,uint64)"
 
 cast call --rpc-url "$L3_RPC" \
@@ -1946,6 +1956,62 @@ configuration: it exempts only the `withdrawEth(address)` ABI entry point.
 Raw `sendTxToL1(address,bytes)` and every ERC-20 gateway send remain subject to
 the DeriwOS 2 exact-route policy. Production prepares this separate action as
 proposal wave L6 at `https://safe.deriw.com`.
+
+Once all DeriwOS 3 acceptance checks pass, schedule target version `4` through
+the same Safe → UpgradeExecutor → `ArbOwner` path as a separate transaction.
+DeriwOS 4 has no route or blacklist state migration; it records that future
+DeriwOS scheduling is governed by `ArbOwner`. Production prepares this as
+proposal wave L7.
+
+Before submitting the DeriwOS 4 proposal, prove that an active blacklist owner
+cannot schedule the boundary version through the legacy endpoint. Use a future
+timestamp and perform this as an `eth_call` only:
+
+```bash
+export DERIWOS4_TIMESTAMP="<approved future Unix timestamp>"
+export BLACKLIST_OWNER_TEST_ADDRESS="<active blacklist owner used only as eth_call from>"
+
+cast call --rpc-url "$L3_RPC" \
+  --from "$BLACKLIST_OWNER_TEST_ADDRESS" \
+  0x00000000000000000000000000000000000007EC \
+  "scheduleDeriwOSUpgrade(uint64,uint64)" \
+  4 \
+  "$DERIWOS4_TIMESTAMP"
+```
+
+The simulation must revert while DeriwOS 3 is active. Do not send that negative
+test as a transaction. Then prepare and submit the approved owner-only action:
+
+```bash
+export DERIWOS4_CALLDATA="$(cast calldata \
+  "scheduleDeriwOSUpgrade(uint64,uint64)" \
+  4 \
+  "$DERIWOS4_TIMESTAMP")"
+export DERIWOS4_EXECUTOR_CALLDATA="$(cast calldata \
+  "executeCall(address,bytes)" \
+  0x0000000000000000000000000000000000000070 \
+  "$DERIWOS4_CALLDATA")"
+```
+
+Submit `DERIWOS4_EXECUTOR_CALLDATA` to `L3_UPGRADE_EXECUTOR` through the
+environment Safe. After activation, the version read must report DeriwOS 4:
+
+```bash
+cast call --rpc-url "$L3_RPC" \
+  0x000000000000000000000000000000000000006b \
+  "getDeriwOSVersion()(uint64,uint64)"
+```
+
+A pending upgrade can be cancelled only through the approved governance path:
+
+```bash
+export CANCEL_DERIWOS_CALLDATA="$(cast calldata \
+  "cancelScheduledDeriwOSUpgrade()")"
+export CANCEL_DERIWOS_EXECUTOR_CALLDATA="$(cast calldata \
+  "executeCall(address,bytes)" \
+  0x0000000000000000000000000000000000000070 \
+  "$CANCEL_DERIWOS_CALLDATA")"
+```
 
 ## 17. Acceptance tests
 
@@ -2063,7 +2129,8 @@ Use a separate change ticket and transaction set for each environment.
    300M block limit is unchanged.
 5. Exercise every negative and positive acceptance test through both approved
    L3 Safes.
-6. Soak for at least 24 hours after DeriwOS 3 before approving test.
+6. Activate DeriwOS 4 through `ArbOwner`, verify the `0x07EC` legacy scheduler
+   rejects version 4, then soak for at least 24 hours before approving test.
 
 ### Test
 
@@ -2081,7 +2148,9 @@ Use a separate change ticket and transaction set for each environment.
 5. Stage and activate the complete test router route at least seven days before
    DeriwOS 2; test has no compiled bootstrap.
 6. Activate and verify DeriwOS 3 only after DeriwOS 2 acceptance passes.
-7. Repeat all tests using test deployments and soak for at least 72 hours.
+7. Activate DeriwOS 4 through `ArbOwner` and verify the legacy blacklist
+   scheduler rejects version 4.
+8. Repeat all tests using test deployments and soak for at least 72 hours.
 
 ### Production
 
@@ -2100,7 +2169,8 @@ Use a separate change ticket and transaction set for each environment.
    security owners.
 8. Use a minimum seven-day activation window and avoid other upgrades in that
    window.
-9. Activate and verify DeriwOS 1, 2, and 3 as separate proposal waves.
+9. Activate and verify DeriwOS 1, 2, 3, and 4 as separate proposal waves. All
+   schedules use `ArbOwner`; DeriwOS 4 must be proposal wave L7.
 10. Keep a staffed monitoring window through activation and the relevant
    assertion/challenge period.
 

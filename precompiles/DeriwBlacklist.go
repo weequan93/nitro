@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 )
@@ -126,8 +127,12 @@ func (con DeriwBlacklist) RemoveBlacklistTxTo(c ctx, evm mech, addr common.Addre
 	return nil
 }
 
-// ScheduleDeriwOSUpgrade schedules independent Deriw consensus semantics and
-// records the active ArbOS version alongside the schedule.
+// ScheduleDeriwOSUpgrade is retained only so historical DeriwOS 1-3
+// transactions replay identically. DeriwOS 4 and all future versions must be
+// scheduled through the chain-owner-only ArbOwner precompile.
 func (con DeriwBlacklist) ScheduleDeriwOSUpgrade(c ctx, evm mech, newVersion uint64, timestamp uint64) error {
+	if newVersion >= arbosState.DeriwOSVersion_ChainOwnerUpgradeScheduling {
+		return errors.New("DeriwOS 4 and later upgrades must be scheduled through ArbOwner")
+	}
 	return c.State.ScheduleDeriwOSUpgrade(newVersion, timestamp)
 }

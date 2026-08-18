@@ -1,6 +1,7 @@
 package arbutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -26,6 +27,32 @@ func TestParseTypeDataNSignatureRejectsInvalidSignatureLength(t *testing.T) {
 	_, _, validSignature, err := ParseTypeDataNSignature(signData, []byte{1, 2, 3})
 	require.Error(t, err)
 	require.False(t, validSignature)
+}
+
+func TestParseTypeDataNSignatureCanonicalizesRecoveryIDWithoutMutatingInput(t *testing.T) {
+	signature, expectedAddress := signTypedDataForTest(t, signData)
+	originalSignature := bytes.Clone(signature)
+
+	_, address27, digest27, validSignature, err := ParseTypeDataNSignatureWithDigest(signData, signature)
+	require.NoError(t, err)
+	require.True(t, validSignature)
+	require.Equal(t, expectedAddress, *address27)
+	require.Equal(t, originalSignature, signature)
+
+	signature[64] -= 27
+	_, address0, digest0, validSignature, err := ParseTypeDataNSignatureWithDigest(signData, signature)
+	require.NoError(t, err)
+	require.True(t, validSignature)
+	require.Equal(t, expectedAddress, *address0)
+	require.Equal(t, digest27, digest0)
+}
+
+func TestParseTypeDataNSignatureRejectsUnknownJSONFields(t *testing.T) {
+	unknownFieldData := []byte(`{"types":{},"primaryType":"Message","domain":{},"message":{},"unknown":true}`)
+	_, _, _, validSignature, err := ParseTypeDataNSignatureWithDigest(unknownFieldData, make([]byte, 65))
+	require.Error(t, err)
+	require.False(t, validSignature)
+	require.Contains(t, err.Error(), "unknown field")
 }
 
 func signTypedDataForTest(t *testing.T, signData []byte) ([]byte, common.Address) {

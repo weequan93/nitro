@@ -116,6 +116,45 @@ func TestScheduleAndActivateDirectETHWithdrawals(t *testing.T) {
 	}
 }
 
+func TestScheduleCancelAndActivateChainOwnerUpgradeScheduling(t *testing.T) {
+	chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+	chainConfig.ChainID = new(big.Int).SetUint64(DeriwDevChainID)
+	state, stateDB := NewArbosMemoryBackedArbOSStateWithConfig(chainConfig)
+
+	if err := state.UpgradeDeriwOSVersion(DeriwOSVersion_DirectETHWithdrawals); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.ScheduleDeriwOSUpgrade(DeriwOSVersion_ChainOwnerUpgradeScheduling, 12345); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.CancelScheduledDeriwOSUpgrade(); err != nil {
+		t.Fatal(err)
+	}
+	version, timestamp, arbosVersion, err := state.GetScheduledDeriwOSUpgrade()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != 0 || timestamp != 0 || arbosVersion != 0 {
+		t.Fatalf("cancelled schedule = (%v, %v, %v), want all zero", version, timestamp, arbosVersion)
+	}
+
+	if err := state.ScheduleDeriwOSUpgrade(DeriwOSVersion_ChainOwnerUpgradeScheduling, 23456); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.UpgradeDeriwOSVersionIfNecessary(23456); err != nil {
+		t.Fatal(err)
+	}
+	if state.DeriwOSVersion() != DeriwOSVersion_ChainOwnerUpgradeScheduling ||
+		DeriwOSVersion(stateDB) != DeriwOSVersion_ChainOwnerUpgradeScheduling {
+		t.Fatalf(
+			"DeriwOS version = memory %v / storage %v, want %v",
+			state.DeriwOSVersion(),
+			DeriwOSVersion(stateDB),
+			DeriwOSVersion_ChainOwnerUpgradeScheduling,
+		)
+	}
+}
+
 func TestRouterOnlySendsRejectsUnconfiguredChainsWithoutStateChange(t *testing.T) {
 	for _, chainID := range []uint64{DeriwTestChainID, 1337} {
 		t.Run(new(big.Int).SetUint64(chainID).String(), func(t *testing.T) {

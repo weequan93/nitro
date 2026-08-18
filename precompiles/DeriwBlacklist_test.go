@@ -89,3 +89,25 @@ func TestDeriwBlacklistVersionQueriesReturnArbOSPair(t *testing.T) {
 		t.Fatalf("scheduled tuple = (%v, %v, %v), want (%v, %v, %v)", target, timestamp, scheduledAtArbOS, arbosState.DeriwOSVersion_ConsensusBlacklist, activationTime, arbOSVersion)
 	}
 }
+
+func TestLegacyBlacklistSchedulerCannotScheduleChainOwnerGovernance(t *testing.T) {
+	evm := newMockEVMForTesting()
+	ctx := testContext(common.HexToAddress("0x1001"), evm)
+	legacy := &DeriwBlacklist{}
+
+	if err := legacy.ScheduleDeriwOSUpgrade(
+		ctx,
+		evm,
+		arbosState.DeriwOSVersion_ChainOwnerUpgradeScheduling,
+		1234,
+	); err == nil {
+		t.Fatal("legacy blacklist scheduler accepted DeriwOS 4")
+	}
+	version, timestamp, arbosVersion, err := ctx.State.GetScheduledDeriwOSUpgrade()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != 0 || timestamp != 0 || arbosVersion != 0 {
+		t.Fatalf("rejected legacy schedule changed state to (%v, %v, %v)", version, timestamp, arbosVersion)
+	}
+}

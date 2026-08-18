@@ -28,8 +28,12 @@ const (
 	// while preserving router-only enforcement for raw sendTxToL1 calls and
 	// canonical ERC-20 gateway sends.
 	DeriwOSVersion_DirectETHWithdrawals uint64 = 3
+	// DeriwOSVersion_ChainOwnerUpgradeScheduling moves DeriwOS upgrade
+	// scheduling to the chain-owner-only ArbOwner precompile. The legacy
+	// blacklist endpoint cannot schedule this or any later version.
+	DeriwOSVersion_ChainOwnerUpgradeScheduling uint64 = 4
 
-	MaxDeriwOSVersionSupported = DeriwOSVersion_DirectETHWithdrawals
+	MaxDeriwOSVersionSupported = DeriwOSVersion_ChainOwnerUpgradeScheduling
 
 	DeriwDevChainID  = deriwpolicy.DevChainID
 	DeriwTestChainID = deriwpolicy.TestChainID
@@ -101,6 +105,9 @@ func (state *ArbosState) UpgradeDeriwOSVersion(upgradeTo uint64) error {
 		case DeriwOSVersion_DirectETHWithdrawals:
 			// No state migration is required. ArbSys uses this version to exempt
 			// only its withdrawEth ABI entry point from route enforcement.
+		case DeriwOSVersion_ChainOwnerUpgradeScheduling:
+			// No state migration is required. Authorization is enforced by the
+			// ArbOwner precompile wrapper and the legacy scheduler's version cap.
 		default:
 			return fmt.Errorf("missing DeriwOS upgrade implementation for version %v", nextVersion)
 		}
@@ -158,6 +165,18 @@ func (state *ArbosState) ScheduleDeriwOSUpgrade(newVersion uint64, timestamp uin
 		return err
 	}
 	return state.deriwOSUpgradeArbOSVersion.Set(state.arbosVersion)
+}
+
+// CancelScheduledDeriwOSUpgrade clears a pending DeriwOS upgrade. This state
+// operation must only be exposed through a chain-owner-authorized precompile.
+func (state *ArbosState) CancelScheduledDeriwOSUpgrade() error {
+	if err := state.deriwOSUpgradeVersion.Set(0); err != nil {
+		return err
+	}
+	if err := state.deriwOSUpgradeTimestamp.Set(0); err != nil {
+		return err
+	}
+	return state.deriwOSUpgradeArbOSVersion.Set(0)
 }
 
 // GetScheduledDeriwOSUpgrade returns the target DeriwOS version, activation

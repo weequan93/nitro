@@ -49,6 +49,25 @@ func (con ArbOwnerPublic) GetScheduledDeriwRouterConfig(
 		nil
 }
 
+// GetDeriwOSVersion returns the active ArbOS and DeriwOS versions as a pair.
+func (con ArbOwnerPublic) GetDeriwOSVersion(c ctx, evm mech) (uint64, uint64, error) {
+	return c.State.ArbOSVersion(), c.State.DeriwOSVersion(), nil
+}
+
+// GetScheduledDeriwOSUpgrade returns the target DeriwOS version, timestamp,
+// and ArbOS version recorded when the upgrade was scheduled. Once the target
+// is active, the canonical public API reports no pending upgrade.
+func (con ArbOwnerPublic) GetScheduledDeriwOSUpgrade(c ctx, evm mech) (uint64, uint64, uint64, error) {
+	version, timestamp, arbosVersion, err := c.State.GetScheduledDeriwOSUpgrade()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if c.State.DeriwOSVersion() >= version {
+		return 0, 0, 0, nil
+	}
+	return version, timestamp, arbosVersion, nil
+}
+
 // GetAllChainOwners retrieves the list of chain owners
 func (con ArbOwnerPublic) GetAllChainOwners(c ctx, evm mech) ([]common.Address, error) {
 	return c.State.ChainOwners().AllMembers(maxGetAllMembers)

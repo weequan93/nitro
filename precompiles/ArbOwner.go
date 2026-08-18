@@ -144,6 +144,17 @@ func (con ArbOwner) CancelScheduledDeriwRouterConfig(c ctx, evm mech) error {
 	return c.State.CancelScheduledDeriwRouterConfig()
 }
 
+// ScheduleDeriwOSUpgrade schedules independent Deriw consensus semantics.
+// The ownerOnly wrapper around ArbOwner makes this a chain-owner-only action.
+func (con ArbOwner) ScheduleDeriwOSUpgrade(c ctx, evm mech, newVersion uint64, timestamp uint64) error {
+	return c.State.ScheduleDeriwOSUpgrade(newVersion, timestamp)
+}
+
+// CancelScheduledDeriwOSUpgrade clears a pending DeriwOS upgrade.
+func (con ArbOwner) CancelScheduledDeriwOSUpgrade(c ctx, evm mech) error {
+	return c.State.CancelScheduledDeriwOSUpgrade()
+}
+
 // AddChainOwner adds account as a chain owner
 func (con ArbOwner) AddChainOwner(c ctx, evm mech, newOwner addr) error {
 	if err := c.State.ChainOwners().Add(newOwner); err != nil {

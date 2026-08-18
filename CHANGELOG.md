@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## Deriw DER-2646 consolidated release - 2026-08-19
+
+### Added
+
+- Add independently scheduled DeriwOS consensus versions 1 through 4.
+- Add consensus blacklist enforcement, state-backed ArbSys route governance,
+  router-only ERC-20 outbound sends, and the DeriwOS 3 direct-ETH exception.
+- Add gasless-target-aware `eth_estimateGas` handling.
+- Add multi-environment deployment, Safe proposal, governance migration, and
+  WASM module-root validation tooling.
+
+### Changed
+
+- Publish the consolidated `go-ethereum`, precompile-interface, contracts, and
+  test-node submodule revisions required by the release.
+- Harden blacklist failure gas accounting, protected-address handling,
+  subaccount-parent enforcement, and recovery behavior.
+- Move future DeriwOS scheduling and cancellation to chain-owner-only
+  `ArbOwner`; retain the blacklist selector only for DeriwOS 1-3 replay.
+
+### Deployment
+
+- Development is active at internal ArbOS 60 / DeriwOS 3 with WASM module root
+  `0x92f0edc340cef91223a492f0efe03b53616ed9a91ec0a67361ac5c794d1071a7`.
+- Test and production activation remain separate controlled rollouts.
+
+See [the detailed DER-2646 changelog](docs/DER-2646-v3.10.0-changelog.md)
+for behavior, provenance, validation evidence, deployment status, and known
+limitations.
+
 ## [v3.10.0-rc.9](https://github.com/OffchainLabs/nitro-private/compare/v3.10.0-rc.8...v3.10.0-rc.9) - 2026-04-30
 
 ### Added
