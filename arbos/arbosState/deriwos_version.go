@@ -24,8 +24,12 @@ const (
 	// DeriwOSVersion_RouterOnlySends restricts ArbSys L3-to-parent sends to the
 	// approved chain-specific Deriw router and canonical ERC-20 routes.
 	DeriwOSVersion_RouterOnlySends uint64 = 2
+	// DeriwOSVersion_DirectETHWithdrawals restores direct ArbSys.withdrawEth
+	// while preserving router-only enforcement for raw sendTxToL1 calls and
+	// canonical ERC-20 gateway sends.
+	DeriwOSVersion_DirectETHWithdrawals uint64 = 3
 
-	MaxDeriwOSVersionSupported = DeriwOSVersion_RouterOnlySends
+	MaxDeriwOSVersionSupported = DeriwOSVersion_DirectETHWithdrawals
 
 	DeriwDevChainID  = deriwpolicy.DevChainID
 	DeriwTestChainID = deriwpolicy.TestChainID
@@ -94,6 +98,9 @@ func (state *ArbosState) UpgradeDeriwOSVersion(upgradeTo uint64) error {
 			if err := state.initializeDeriwRouterConfigForActivation(); err != nil {
 				return err
 			}
+		case DeriwOSVersion_DirectETHWithdrawals:
+			// No state migration is required. ArbSys uses this version to exempt
+			// only its withdrawEth ABI entry point from route enforcement.
 		default:
 			return fmt.Errorf("missing DeriwOS upgrade implementation for version %v", nextVersion)
 		}

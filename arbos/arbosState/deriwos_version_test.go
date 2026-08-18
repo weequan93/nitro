@@ -82,6 +82,40 @@ func TestScheduleAndActivateRouterOnlySendsOnConfiguredChains(t *testing.T) {
 	}
 }
 
+func TestScheduleAndActivateDirectETHWithdrawals(t *testing.T) {
+	chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+	chainConfig.ChainID = new(big.Int).SetUint64(DeriwDevChainID)
+	state, stateDB := NewArbosMemoryBackedArbOSStateWithConfig(chainConfig)
+	activationTime := uint64(12345)
+
+	if err := state.UpgradeDeriwOSVersion(DeriwOSVersion_RouterOnlySends); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.ScheduleDeriwOSUpgrade(DeriwOSVersion_DirectETHWithdrawals, activationTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.UpgradeDeriwOSVersionIfNecessary(activationTime); err != nil {
+		t.Fatal(err)
+	}
+	if state.DeriwOSVersion() != DeriwOSVersion_DirectETHWithdrawals ||
+		DeriwOSVersion(stateDB) != DeriwOSVersion_DirectETHWithdrawals {
+		t.Fatalf(
+			"DeriwOS version = memory %v / storage %v, want %v",
+			state.DeriwOSVersion(),
+			DeriwOSVersion(stateDB),
+			DeriwOSVersion_DirectETHWithdrawals,
+		)
+	}
+
+	_, revision, configured, err := state.ActiveDeriwRouterConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !configured || revision != 1 {
+		t.Fatalf("router config after DeriwOS 3 activation = configured %v revision %v, want true/1", configured, revision)
+	}
+}
+
 func TestRouterOnlySendsRejectsUnconfiguredChainsWithoutStateChange(t *testing.T) {
 	for _, chainID := range []uint64{DeriwTestChainID, 1337} {
 		t.Run(new(big.Int).SetUint64(chainID).String(), func(t *testing.T) {

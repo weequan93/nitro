@@ -1,6 +1,8 @@
 # ArbSys Router-Only Security Review
 
-Review date: 2026-08-17  
+Review date: 2026-08-17; combined-feature re-review: 2026-08-18; DeriwOS 3
+policy update: 2026-08-19
+
 Scope: Deriw development, test, and production L3 environments,
 `ArbSys.SendTxToL1`, Nitro call-stack tracking, Deriw router and canonical
 ERC-20 routes, upgrade/activation mechanics, and the canonical parent-chain
@@ -8,12 +10,11 @@ receiver.
 
 ## Executive summary
 
-The pre-fix code did not restrict `ArbSys.SendTxToL1`, and the live development
-chain still accepts direct `sendTxToL1`, direct `withdrawEth`, and direct
-canonical-gateway withdrawals in read-only simulations. This review implemented
-an exact normalized route suffix, immediate-caller agreement, and uniqueness
-checks in source. The control is version-gated and is not active on-chain until
-all consensus roles run the new binary and DeriwOS 2 is activated.
+The pre-fix code did not restrict `ArbSys.SendTxToL1`. DeriwOS 2 introduced an
+exact normalized route suffix, immediate-caller agreement, and uniqueness
+checks. The updated policy deliberately restores only the distinct
+`withdrawEth(address)` ABI entry point at DeriwOS 3. Raw `sendTxToL1` and
+canonical ERC-20 gateway sends remain route-restricted.
 
 The proposed control is not sufficient for end-to-end bridge safety. The live
 router is an unverified, upgradeable implementation controlled by a 1-of-4
@@ -23,14 +24,15 @@ without verified source. The canonical router and token gateway are also
 upgradeable.
 
 The repository already has an independent, state-backed DeriwOS consensus
-version. Router-only sends therefore activate as DeriwOS 2, rather than by
-raising the global upstream ArbOS maximum. This avoids changing unrelated
-Orbit-chain semantics. Development and production have chain-ID-selected,
-compiled bootstrap routes that are copied into consensus state exactly once.
-Afterward, a chain owner can stage a complete atomic replacement through
-`ArbOwner`; it activates automatically at a start-block boundary after a
-mandatory seven-day delay. The test chain has no guessed bootstrap and must be
-configured through this delayed governance path before DeriwOS 2 can activate.
+version. Router-only sends activate as DeriwOS 2, and the narrow direct-ETH
+exception activates as DeriwOS 3. This avoids silently changing an already
+activated consensus version or unrelated Orbit-chain semantics. Development
+and production have chain-ID-selected, compiled bootstrap routes that are
+copied into consensus state exactly once. Afterward, a chain owner can stage a
+complete atomic replacement through `ArbOwner`; it activates automatically at
+a start-block boundary after a mandatory seven-day delay. The test chain has
+no guessed bootstrap and must be configured through this delayed governance
+path before DeriwOS 2 can activate.
 
 Activation has an important availability consequence: canonical token-gateway
 error-recovery withdrawals that originate directly inside the gateway do not
@@ -98,17 +100,20 @@ call trace.
 - Severity: High
 - Location: `precompiles/ArbSys.go:112-117` and
   `precompiles/ArbSysRouter.go:60-115`
-- Status: remediated in the checked-out source; not active on the live chain.
+- Status: remediated in the checked-out source and refined by DeriwOS 3.
 - Evidence: before this change the function began with `L1BlockNumber` lookup
   and had no caller or route check. Live direct simulations of both functions
-  succeeded. The first operation is now the DeriwOS-versioned route guard;
-  `WithdrawEth` continues to funnel through the guarded method.
+  succeeded. The first operation is now an operation-aware,
+  DeriwOS-versioned route guard. `WithdrawEth` remains guarded at DeriwOS 2 and
+  receives its explicit entry-point-only exemption at DeriwOS 3.
 - Impact: any L3 account or contract can bypass the Deriw router and create an
   outbound message. Exploitability against parent assets depends on the parent
   receiver, but the stated route-integrity invariant is absent.
 - Fix applied: DeriwOS 2 requires an exact normalized direct or ERC-20 route,
   immediate-caller agreement, and unique protected addresses. Delegate/callcode
-  frames are ignored, while equal ordinary frames remain visible.
+  frames are ignored, while equal ordinary frames remain visible. DeriwOS 3
+  exempts direct native-ETH withdrawals without using value or empty calldata
+  as a spoofable classifier.
 - Mitigation: do not rely on sequencer admission filters; delay activation
   until all consensus roles and validator machines run the new binary.
 - False positive notes: none. The behavior was confirmed against source and the
@@ -420,12 +425,14 @@ the root packaging commit was created.
   transition, so delayed normal transactions cannot bypass sequencer admission.
   The documented funding-only and protocol-internal transaction exclusions are
   intentional, and retryable execution is checked at its actual destination.
-- ArbSys: DeriwOS 2 runs the route guard as the first operation in
-  `SendTxToL1`; `WithdrawEth` funnels through it. It reads the active route from
-  consensus state, enforces exact normalized suffixes, caller agreement,
-  protected-address uniqueness, and an explicit gateway allowlist. Dev/prod
-  bootstraps are chain-ID selected; test fails closed until governance stages a
-  route. Route replacement is atomic and delayed seven days.
+- ArbSys: DeriwOS 2 runs the route guard as the first operation in the shared
+  send implementation. DeriwOS 3 identifies the original ABI operation and
+  exempts only `withdrawEth`; raw `sendTxToL1` and ERC-20 sends remain guarded.
+  The guard reads the active route from consensus state and enforces exact
+  normalized suffixes, caller agreement, protected-address uniqueness, and an
+  explicit gateway allowlist. Dev/prod bootstraps are chain-ID selected; test
+  fails closed until governance stages a route. Route replacement is atomic
+  and delayed seven days.
 - Estimate gas: the RPC-only hook zeroes legacy and EIP-1559 fee fields before
   estimation for statically configured or on-chain target-allowlisted gasless
   contracts. It deliberately does not treat sender-only allowlisting as
@@ -451,3 +458,139 @@ the root packaging commit was created.
 These checks support correctness of the scoped implementation, but they do not
 remove the existing live-router, governance, canonical recovery-route, or
 post-activation end-to-end findings above.
+
+## Combined-feature security re-review (2026-08-18)
+
+### Re-review verdict
+
+The packaged branch and every nested submodule are clean and pinned to commits
+advertised by their `fix/blacklist-subaccount` remotes. Focused Nitro and
+go-ethereum tests pass from a cold test cache. The branch is nevertheless not
+ready to activate unchanged: the re-review found one consensus-upgrade control
+issue and two gasless-estimation correctness gaps that are not covered by the
+current tests.
+
+The blacklist and ArbSys route-normalization implementations otherwise match
+their documented narrow invariants. This conclusion does not certify the code
+as bug-free and does not resolve the live router/governance/recovery findings
+earlier in this report.
+
+### CMB-001: Blacklist owners can schedule an immediate consensus upgrade
+
+- Rule ID: CMB-001
+- Severity: High
+- Location: `precompiles/DeriwBlacklistWrapper.go:58-72`,
+  `precompiles/DeriwBlacklist.go:129-132`, and
+  `arbos/arbosState/deriwos_version.go:137-153`
+- Evidence: every access-controlled `DeriwBlacklist` method accepts either a
+  blacklist owner or a chain owner. `ScheduleDeriwOSUpgrade` is exposed through
+  that wrapper, and the state method validates the target version and current
+  configuration but imposes no minimum activation delay. A timestamp at or
+  before the current block time therefore activates at the next start-block
+  transition. It also compares the new target only with the active version, so
+  a caller can replace an existing pending version/timestamp.
+- Impact: a lower-scope blacklist operator can activate consensus blacklist or
+  router-only semantics without chain-owner approval and without an enforced
+  validator/user review window. Premature activation can cause a chain halt or
+  split when validator binaries differ, and can disrupt bridge recovery or
+  outbound routes even when all nodes agree.
+- Fix: move consensus-version scheduling to `ArbOwner`, authorize chain owners
+  only, enforce a minimum delay, and define explicit cancel/reschedule rules.
+  Add wrapper-level authorization and boundary tests, including a blacklist
+  owner rejection and past/current timestamp rejection.
+- Mitigation: until fixed, do not grant `DeriwBlacklist` ownership to an
+  operational key with less trust than chain governance and do not activate
+  DeriwOS on a public environment.
+- False positive notes: if blacklist owners are intentionally identical to
+  chain owners, the privilege-expansion part is operationally reduced, but the
+  lack of an enforced activation delay remains.
+
+### CMB-002: Gasless estimation changes `BASEFEE` and `GASPRICE` semantics
+
+- Rule ID: CMB-002
+- Severity: Medium
+- Location: `go-ethereum/internal/ethapi/api.go:959-970`,
+  `go-ethereum/eth/gasestimator/gasestimator.go:262-267`, and
+  `arbos/tx_processor.go:938-950`
+- Evidence: for an allowlisted target, `DoEstimateGas` overwrites legacy and
+  EIP-1559 fee fields with zero. The estimator responds to a zero effective gas
+  price by lowering the EVM block base fee to zero. Normal consensus execution
+  skips fee payment for gasless transactions but does not rewrite the block
+  base fee this way; Nitro's `GASPRICE` hook normally derives its value from the
+  real base fee when tips are not collected.
+- Impact: contracts that branch, calculate, or revert based on `BASEFEE` or
+  `GASPRICE` can produce a different result during `eth_estimateGas` than when
+  the transaction is executed. This can yield a false success, false revert, or
+  materially wrong gas estimate.
+- Fix: preserve the caller's fee fields and EVM fee context. Add an explicit
+  estimator option that bypasses only the sender-balance gas-affordability cap
+  when the exact message satisfies the consensus gasless predicate.
+- Mitigation: do not rely on the modified estimator for fee-opcode-sensitive
+  contracts until fixed; simulate with funded accounts and representative fee
+  fields as a cross-check.
+- False positive notes: ordinary transfers and contracts that never inspect
+  fee opcodes are unaffected, which is why the current tests pass.
+
+### CMB-003: Sender-only gasless accounts are omitted from estimation policy
+
+- Rule ID: CMB-003
+- Severity: Medium
+- Location: `execution/nodeinterface/virtual_contracts.go:88-106`,
+  `arbos/pricer/pricer.go:51-55`, and `arbos/tx_processor.go:964-977`
+- Evidence: the RPC hook receives only `to` and queries only `TxToAddrs`.
+  Consensus execution treats a transaction as custom-price/gasless when either
+  the sender or target is allowlisted. The node-interface test explicitly
+  asserts that sender allowlisting does not affect the RPC hook.
+- Impact: an unfunded sender that is validly gasless by the consensus sender
+  allowlist can still receive an insufficient-funds error from
+  `eth_estimateGas`, depending on supplied fee fields. Wallets and gas-station
+  integrations therefore see inconsistent admission and estimation behavior.
+- Fix: pass the complete estimation message (at least `from`, `to`, and the
+  transaction form) to the hook and mirror the same consensus predicate used by
+  `SkipBaseFeeCheck`; combine this with the balance-cap-only fix in CMB-002.
+- Mitigation: target-allowlist each intended gas-station destination or fund
+  sender accounts used for estimation until fixed.
+- False positive notes: this is not a bug only if the public RPC feature is
+  deliberately specified as target-only rather than as estimation support for
+  all consensus gasless transactions. That narrower contract should then be
+  named and documented explicitly.
+
+### Live environment check
+
+Read-only checks at the 2026-08-18 heads returned:
+
+| Environment | Chain ID | Block | `ArbSys.arbOSVersion()` | Direct `sendTxToL1` |
+|---|---:|---:|---:|---:|
+| Development | `18417507517` | `144480848` | `115` | success, `492` |
+| Test | `2885` | `135158172` | `115` | success, `637` |
+| Production | `2886` | `113232458` | `87` | success, `6641` |
+
+On all three environments, `getDeriwOSVersion()` and
+`getDeriwRouterConfig()` reverted, confirming that the new precompile/state
+surface is not deployed there. No live environment currently enforces the
+router-only invariant.
+
+### Re-review verification run
+
+- Root commit: `73189f61f9bbd3b7f7397d6f9c2625f69fd49e04`.
+- go-ethereum gitlink: `52064791abfa175fb23229c20c11dd84fba894cf`.
+- Precompile-interface gitlink:
+  `f87337228eac115d92ff35ce37474b3e644b72d7`.
+- Test-node gitlink: `a8f5f3c33c11e7bc5dc0b8328acceeb03e847225`.
+- All recursive submodule worktrees: clean.
+- `git diff --check`: pass.
+- Nitro: `go test -count=1 ./arbos/deriwpolicy ./arbos/arbosState
+  ./precompiles ./gethhook ./execution/gethexec ./execution/nodeinterface`:
+  pass.
+- go-ethereum: `go test -count=1 ./internal/ethapi ./core`: pass.
+- Build warnings remain limited to the existing `libstylus.a` macOS 26.2 versus
+  26.0 linker-version mismatch.
+
+### Release-tooling governance guard
+
+The Safe proposal helper requires every proposal transaction to target the
+manifest's `upgradeExecutorAddress` and rejects direct governed-contract or
+precompile targets. It pins the reviewed UpgradeExecutor address for all three
+Deriw L3 chain IDs. Its nine unit tests pass, including wrong-executor and
+direct-target rejection. This is an operational safeguard only and does not
+remediate CMB-001 in consensus execution.

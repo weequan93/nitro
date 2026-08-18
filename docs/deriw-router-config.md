@@ -1,10 +1,16 @@
 # Deriw router-only send configuration
 
+For the complete parent-L2 WASM rollout, environment account matrix, Safe
+transaction paths, ArbOS/DeriwOS activation order, and acceptance checks, see
+[Deriw L3 environment deployment and activation runbook](deriw-l3-environment-deployment-runbook.md).
+
 The node binary contains audited bootstrap routes in
 `arbos/deriwpolicy/router_only_sends.go`. At DeriwOS 2 activation, ArbOS copies
 the matching chain-ID route into consensus state exactly once. Later binary,
 environment-variable, or RPC configuration changes do not change the active
-route.
+route. DeriwOS 3 preserves this route for raw `sendTxToL1` and canonical ERC-20
+sends while restoring direct native-ETH withdrawals through the distinct
+`withdrawEth(address)` ABI entry point.
 
 Each Deriw environment has independent state:
 
@@ -14,8 +20,10 @@ Each Deriw environment has independent state:
 | Test | `https://rpc.test.deriw.com` | `2885` | No; configure on-chain after verifying deployments |
 | Production | `https://rpc.deriw.com` | `2886` | Yes |
 
-Only a chain owner can stage or cancel a change. The management precompile is
-`ArbOwner` at `0x0000000000000000000000000000000000000070`. A staged change
+Only a chain owner can stage or cancel a change. In steady state, each L3
+UpgradeExecutor is the chain owner and an approved Safe has its
+`EXECUTOR_ROLE`. The management precompile is `ArbOwner` at
+`0x0000000000000000000000000000000000000070`. A staged change
 replaces the router, canonical gateway router, and complete token-gateway list
 as one unit. It becomes active automatically at a start-block boundary after a
 minimum seven-day delay.
@@ -53,20 +61,24 @@ distinct, and contain deployed code. The gateway array must contain between one
 and 32 addresses.
 
 ```bash
-cast send \
-  --rpc-url "$DERIW_RPC_URL" \
-  --private-key "$DERIW_CHAIN_OWNER_PRIVATE_KEY" \
-  0x0000000000000000000000000000000000000070 \
+export ROUTE_CALLDATA="$(cast calldata \
   "scheduleDeriwRouterConfig(address,address,address[],uint64)" \
   "$DERIW_ROUTER" \
   "$DERIW_CANONICAL_GATEWAY_ROUTER" \
   "[$DERIW_TOKEN_GATEWAYS]" \
-  "$DERIW_ACTIVATION_TIMESTAMP"
+  "$DERIW_ACTIVATION_TIMESTAMP")"
+
+export L3_EXECUTOR_CALLDATA="$(cast calldata \
+  "executeCall(address,bytes)" \
+  0x0000000000000000000000000000000000000070 \
+  "$ROUTE_CALLDATA")"
 ```
 
-For production, submit the same calldata through the chain-owner governance
-Safe or timelock instead of exporting an owner key. The transaction is bound to
-one chain by normal Ethereum transaction signing, so it cannot update the other
+Submit a Safe transaction with `to = L3_UPGRADE_EXECUTOR`, `value = 0`,
+`operation = CALL`, and `data = L3_EXECUTOR_CALLDATA`. The approved environment
+UpgradeExecutors are listed in the main runbook. Never send directly from an
+EOA to the UpgradeExecutor or `ArbOwner`. The transaction is bound to one chain
+by normal Ethereum transaction signing, so it cannot update the other
 environments.
 
 ## Cancel a staged replacement
@@ -74,14 +86,20 @@ environments.
 Cancellation leaves the active route unchanged:
 
 ```bash
-cast send \
-  --rpc-url "$DERIW_RPC_URL" \
-  --private-key "$DERIW_CHAIN_OWNER_PRIVATE_KEY" \
+export CANCEL_ROUTE_CALLDATA="$(cast calldata \
+  "cancelScheduledDeriwRouterConfig()")"
+
+export L3_EXECUTOR_CALLDATA="$(cast calldata \
+  "executeCall(address,bytes)" \
   0x0000000000000000000000000000000000000070 \
-  "cancelScheduledDeriwRouterConfig()"
+  "$CANCEL_ROUTE_CALLDATA")"
 ```
+
+Submit this outer calldata through the same approved Safe and L3
+UpgradeExecutor path used to stage the route.
 
 Before scheduling, verify proxy implementations, code hashes, gateway routing,
 parent-chain receiver authentication, and the governance transaction calldata.
-After activation, verify direct ArbSys calls revert and approved ETH/ERC-20
-routes still succeed.
+After DeriwOS 3 activation, verify raw `sendTxToL1` and unapproved ERC-20 routes
+still revert, direct `withdrawEth` succeeds, and approved ERC-20 routes still
+succeed.

@@ -15,6 +15,13 @@ import (
 
 var errUnauthorizedDeriwSendPath = errors.New("unauthorized L3-to-parent send path")
 
+type deriwSendOperation uint8
+
+const (
+	deriwSendOperationRaw deriwSendOperation = iota
+	deriwSendOperationETHWithdrawal
+)
+
 // deriwSendPathFrame is the subset of an EVM contract frame used to normalize
 // the route to ArbSys. Generic input keeps the consensus code tied to the real
 // vm.Contract API while allowing focused tests of delegate/callcode handling.
@@ -96,11 +103,16 @@ func authorizedDeriwSendPath(c ctx, routes deriwpolicy.RouterOnlySendConfig) boo
 	return authorizedNormalizedDeriwSendPath(stack, c.caller, routes)
 }
 
-func enforceDeriwSendPath(c ctx) error {
+func enforceDeriwSendPathForOperation(c ctx, operation deriwSendOperation) error {
 	if c == nil || c.State == nil {
 		return errUnauthorizedDeriwSendPath
 	}
-	if c.State.DeriwOSVersion() < arbosState.DeriwOSVersion_RouterOnlySends {
+	deriwOSVersion := c.State.DeriwOSVersion()
+	if deriwOSVersion < arbosState.DeriwOSVersion_RouterOnlySends {
+		return nil
+	}
+	if operation == deriwSendOperationETHWithdrawal &&
+		deriwOSVersion >= arbosState.DeriwOSVersion_DirectETHWithdrawals {
 		return nil
 	}
 	routes, _, configured, err := c.State.ActiveDeriwRouterConfig()
@@ -111,4 +123,8 @@ func enforceDeriwSendPath(c ctx) error {
 		return errUnauthorizedDeriwSendPath
 	}
 	return nil
+}
+
+func enforceDeriwSendPath(c ctx) error {
+	return enforceDeriwSendPathForOperation(c, deriwSendOperationRaw)
 }

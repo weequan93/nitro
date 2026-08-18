@@ -234,6 +234,9 @@ func TestEnforceDeriwSendPathIsVersionedAndFirst(t *testing.T) {
 	if err := enforceDeriwSendPath(nil); !errors.Is(err, errUnauthorizedDeriwSendPath) {
 		t.Fatalf("nil context error = %v, want %v", err, errUnauthorizedDeriwSendPath)
 	}
+	if err := enforceDeriwSendPathForOperation(nil, deriwSendOperationETHWithdrawal); !errors.Is(err, errUnauthorizedDeriwSendPath) {
+		t.Fatalf("nil ETH withdrawal context error = %v, want %v", err, errUnauthorizedDeriwSendPath)
+	}
 
 	chainConfig := chaininfo.ArbitrumDevTestChainConfig()
 	chainConfig.ChainID = new(big.Int).SetUint64(arbosState.DeriwDevChainID)
@@ -241,6 +244,9 @@ func TestEnforceDeriwSendPathIsVersionedAndFirst(t *testing.T) {
 	legacy := &Context{State: state}
 	if err := enforceDeriwSendPath(legacy); err != nil {
 		t.Fatalf("legacy DeriwOS rejected send path: %v", err)
+	}
+	if err := enforceDeriwSendPathForOperation(legacy, deriwSendOperationETHWithdrawal); err != nil {
+		t.Fatalf("legacy DeriwOS rejected ETH withdrawal: %v", err)
 	}
 
 	if err := state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_RouterOnlySends); err != nil {
@@ -250,11 +256,30 @@ func TestEnforceDeriwSendPathIsVersionedAndFirst(t *testing.T) {
 	if err := enforceDeriwSendPath(unauthorized); !errors.Is(err, errUnauthorizedDeriwSendPath) {
 		t.Fatalf("unauthorized error = %v, want %v", err, errUnauthorizedDeriwSendPath)
 	}
+	if err := enforceDeriwSendPathForOperation(unauthorized, deriwSendOperationETHWithdrawal); !errors.Is(err, errUnauthorizedDeriwSendPath) {
+		t.Fatalf("DeriwOS 2 ETH withdrawal error = %v, want %v", err, errUnauthorizedDeriwSendPath)
+	}
 
 	// The guard must reject before SendTxToL1 attempts its first existing state
 	// lookup. This deliberately incomplete context would otherwise be unusable.
 	if _, err := (&ArbSys{}).SendTxToL1(unauthorized, nil, big.NewInt(0), common.Address{}, nil); !errors.Is(err, errUnauthorizedDeriwSendPath) {
 		t.Fatalf("SendTxToL1 error = %v, want %v", err, errUnauthorizedDeriwSendPath)
+	}
+
+	if err := state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_DirectETHWithdrawals); err != nil {
+		t.Fatal(err)
+	}
+	if err := enforceDeriwSendPathForOperation(unauthorized, deriwSendOperationETHWithdrawal); err != nil {
+		t.Fatalf("DeriwOS 3 rejected direct ETH withdrawal: %v", err)
+	}
+	if err := enforceDeriwSendPath(unauthorized); !errors.Is(err, errUnauthorizedDeriwSendPath) {
+		t.Fatalf("DeriwOS 3 raw send error = %v, want %v", err, errUnauthorizedDeriwSendPath)
+	}
+	if err := enforceDeriwSendPathForOperation(unauthorized, deriwSendOperation(255)); !errors.Is(err, errUnauthorizedDeriwSendPath) {
+		t.Fatalf("DeriwOS 3 unknown operation error = %v, want %v", err, errUnauthorizedDeriwSendPath)
+	}
+	if _, err := (&ArbSys{}).SendTxToL1(unauthorized, nil, big.NewInt(0), common.Address{}, nil); !errors.Is(err, errUnauthorizedDeriwSendPath) {
+		t.Fatalf("DeriwOS 3 SendTxToL1 error = %v, want %v", err, errUnauthorizedDeriwSendPath)
 	}
 
 	routerFrame := vm.NewContract(
