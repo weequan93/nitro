@@ -338,6 +338,26 @@ func TestBindRelationRebindsChildOneToOne(t *testing.T) {
 	require.Equal(t, common.Address{}, parentOfChild)
 }
 
+func TestBindRelationLegacyPreservesHistoricalChildRebindingBehavior(t *testing.T) {
+	subAccountState := SubAccountForTest(t)
+	parentA := common.HexToAddress("0x1001")
+	parentB := common.HexToAddress("0x1002")
+	child := common.HexToAddress("0x2001")
+
+	require.NoError(t, subAccountState.BindRelationLegacy(parentA, child, big.NewInt(0)))
+	require.NoError(t, subAccountState.BindRelationLegacy(parentB, child, big.NewInt(0)))
+
+	childOfA, err := subAccountState.ReadRelationFromParent(parentA)
+	require.NoError(t, err)
+	require.Equal(t, child, childOfA)
+	childOfB, err := subAccountState.ReadRelationFromParent(parentB)
+	require.NoError(t, err)
+	require.Equal(t, child, childOfB)
+	parentOfChild, err := subAccountState.ReadRelationFromChild(child)
+	require.NoError(t, err)
+	require.Equal(t, parentA, parentOfChild)
+}
+
 func TestBindRelationRebindsParentOneToOne(t *testing.T) {
 	subAccountState := SubAccountForTest(t)
 	parent := common.HexToAddress("0x1001")

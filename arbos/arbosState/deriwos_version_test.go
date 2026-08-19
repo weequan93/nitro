@@ -155,6 +155,38 @@ func TestScheduleCancelAndActivateChainOwnerUpgradeScheduling(t *testing.T) {
 	}
 }
 
+func TestScheduleAndActivateSubAccountAuthorizationHardening(t *testing.T) {
+	chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+	chainConfig.ChainID = new(big.Int).SetUint64(DeriwDevChainID)
+	state, stateDB := NewArbosMemoryBackedArbOSStateWithConfig(chainConfig)
+	activationTime := uint64(34567)
+
+	if err := state.UpgradeDeriwOSVersion(DeriwOSVersion_ChainOwnerUpgradeScheduling); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.ScheduleDeriwOSUpgrade(DeriwOSVersion_SubAccountAuthorizationHardening, activationTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.UpgradeDeriwOSVersionIfNecessary(activationTime - 1); err != nil {
+		t.Fatal(err)
+	}
+	if state.DeriwOSVersion() != DeriwOSVersion_ChainOwnerUpgradeScheduling {
+		t.Fatalf("DeriwOS upgraded before v5 activation: %v", state.DeriwOSVersion())
+	}
+	if err := state.UpgradeDeriwOSVersionIfNecessary(activationTime); err != nil {
+		t.Fatal(err)
+	}
+	if state.DeriwOSVersion() != DeriwOSVersion_SubAccountAuthorizationHardening ||
+		DeriwOSVersion(stateDB) != DeriwOSVersion_SubAccountAuthorizationHardening {
+		t.Fatalf(
+			"DeriwOS version = memory %v / storage %v, want %v",
+			state.DeriwOSVersion(),
+			DeriwOSVersion(stateDB),
+			DeriwOSVersion_SubAccountAuthorizationHardening,
+		)
+	}
+}
+
 func TestRouterOnlySendsRejectsUnconfiguredChainsWithoutStateChange(t *testing.T) {
 	for _, chainID := range []uint64{DeriwTestChainID, 1337} {
 		t.Run(new(big.Int).SetUint64(chainID).String(), func(t *testing.T) {

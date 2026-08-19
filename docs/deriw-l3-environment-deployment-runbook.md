@@ -66,7 +66,9 @@ Use this order for every environment:
     and ERC-20 sends remain route-restricted).
 17. Schedule and verify DeriwOS 4 (DeriwOS scheduling moved to chain-owner-only
     `ArbOwner`; the legacy blacklist scheduler cannot schedule version 4+).
-18. Run the full acceptance suite and complete the soak period before promoting
+18. Upgrade all subaccount signing clients, then schedule and verify DeriwOS 5
+    (strict timestamp-bounded authorization and consistent relationship maps).
+19. Run the full acceptance suite and complete the soak period before promoting
     the same release to the next environment.
 
 Never activate DeriwOS before all execution and validation roles run compatible
@@ -746,6 +748,7 @@ the next wave only after the preceding postcondition is verified:
 | L5 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 2 | Router-only positive and negative tests pass |
 | L6 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 3 | Direct ETH works; raw messages and ERC-20 restrictions still pass |
 | L7 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 4 through `ArbOwner` | Owner-only scheduling and legacy-endpoint rejection pass |
+| L8 | Production L3 Safe `0x2F996b...c4dF` | Schedule DeriwOS 5 through `ArbOwner` | Strict Grant/Revoke and one-to-one relationship tests pass |
 
 P1 and P2 remain separate so the parent-contract upgrade can be verified
 before changing the official machine root. L1 and L2 must never share a batch:
@@ -1876,9 +1879,9 @@ A pending route can be cancelled before activation by sending
 `cancelScheduledDeriwRouterConfig()` through the same ArbOwner/UpgradeExecutor
 path.
 
-## 16. Activate DeriwOS 1, then 2, then 3, then 4
+## 16. Activate DeriwOS 1, then 2, then 3, then 4, then 5
 
-Do not activate versions 1, 2, 3, and 4 in one jump for the first environment
+Do not activate versions 1, 2, 3, 4, and 5 in one jump for the first environment
 rollout. Activate and verify each version before scheduling the next one.
 
 The canonical scheduler is `ArbOwner` at `0x70`, protected by the chain-owner
@@ -1892,7 +1895,8 @@ Until DeriwOS 4 is active, replay compatibility necessarily leaves versions
 1-3 callable through the legacy selector when the requested target is newer
 than the active version. This is a transition-only residual permission. Keep
 the rollout window short, submit every new schedule through `ArbOwner`, and
-complete versions 1, 2, 3, and 4 in sequence.
+complete versions 1, 2, 3, and 4 in sequence. Activate version 5 separately
+only after all subaccount signing clients are compatible.
 
 Recommended minimum operator windows, even if the current contract does not
 enforce them:
@@ -2001,6 +2005,46 @@ cast call --rpc-url "$L3_RPC" \
   0x000000000000000000000000000000000000006b \
   "getDeriwOSVersion()(uint64,uint64)"
 ```
+
+Only after DeriwOS 4 acceptance passes, prepare proposal wave L8 for DeriwOS 5.
+DeriwOS 5 changes subaccount consensus behavior, so every execution,
+validation, and signing client must be upgraded first. Signing clients must
+emit exactly:
+
+- domain fields `name`, `version`, `chainId`, and `verifyingContract`, in that
+  order, with name `DeriwSubAccountSignature`, version `1`, and verifying
+  contract `0x00000000000000000000000000000000000007E9`;
+- Grant fields `Timestamp`, `Operation`, and `Child`, in that order; or Revoke
+  fields `Timestamp` and `Operation`, in that order;
+- `Timestamp` as a canonical base-10 Unix timestamp generated immediately
+  before submission, with no leading zeroes.
+
+At activation, a timestamp may be at most 600 seconds old and at most 30
+seconds ahead of the L3 block timestamp. The signed `chainId` remains part of
+the EIP-712 digest but is deliberately not compared with the node chain ID, and
+this version does not add a signed nonce. Regenerate any authorization that
+does not land within the validity window.
+
+Prepare and submit the separate owner-only action:
+
+```bash
+export DERIWOS5_TIMESTAMP="<approved future Unix timestamp>"
+export DERIWOS5_CALLDATA="$(cast calldata \
+  "scheduleDeriwOSUpgrade(uint64,uint64)" \
+  5 \
+  "$DERIWOS5_TIMESTAMP")"
+export DERIWOS5_EXECUTOR_CALLDATA="$(cast calldata \
+  "executeCall(address,bytes)" \
+  0x0000000000000000000000000000000000000070 \
+  "$DERIWOS5_CALLDATA")"
+```
+
+Submit `DERIWOS5_EXECUTOR_CALLDATA` through the environment Safe. After
+activation, confirm the version reports DeriwOS 5 and run fresh/expired/future,
+malformed-schema, Grant replay, Revoke replay, child-rebinding, revocation, and
+position-cleanup tests. A pre-v5 relationship inconsistency is repaired when
+the affected relationship is rebound or cleaned up; activation does not scan
+or migrate every existing relationship.
 
 A pending upgrade can be cancelled only through the approved governance path:
 
@@ -2129,8 +2173,10 @@ Use a separate change ticket and transaction set for each environment.
    300M block limit is unchanged.
 5. Exercise every negative and positive acceptance test through both approved
    L3 Safes.
-6. Activate DeriwOS 4 through `ArbOwner`, verify the `0x07EC` legacy scheduler
-   rejects version 4, then soak for at least 24 hours before approving test.
+6. Activate DeriwOS 4 through `ArbOwner` and verify the `0x07EC` legacy
+   scheduler rejects version 4.
+7. Upgrade signing clients, activate and verify DeriwOS 5 through `ArbOwner`,
+   then soak for at least 24 hours before approving test.
 
 ### Test
 
@@ -2150,7 +2196,9 @@ Use a separate change ticket and transaction set for each environment.
 6. Activate and verify DeriwOS 3 only after DeriwOS 2 acceptance passes.
 7. Activate DeriwOS 4 through `ArbOwner` and verify the legacy blacklist
    scheduler rejects version 4.
-8. Repeat all tests using test deployments and soak for at least 72 hours.
+8. Upgrade signing clients, activate DeriwOS 5 through `ArbOwner`, and verify
+   strict authorization and relationship-map behavior.
+9. Repeat all tests using test deployments and soak for at least 72 hours.
 
 ### Production
 
@@ -2169,9 +2217,11 @@ Use a separate change ticket and transaction set for each environment.
    security owners.
 8. Use a minimum seven-day activation window and avoid other upgrades in that
    window.
-9. Activate and verify DeriwOS 1, 2, 3, and 4 as separate proposal waves. All
-   schedules use `ArbOwner`; DeriwOS 4 must be proposal wave L7.
-10. Keep a staffed monitoring window through activation and the relevant
+9. Activate and verify DeriwOS 1, 2, 3, 4, and 5 as separate proposal waves.
+   All schedules use `ArbOwner`; DeriwOS 4 must be L7 and DeriwOS 5 must be L8.
+10. Require all subaccount signing clients to pass the DeriwOS 5 schema and
+    timestamp acceptance suite before approving L8.
+11. Keep a staffed monitoring window through activation and the relevant
    assertion/challenge period.
 
 ## 19. Abort and rollback rules

@@ -17,6 +17,56 @@ func ParseTypeDataNSignature(signData []byte, signature []byte) (*apitypes.Typed
 	return typedData, address, valid, err
 }
 
+// ParseTypeDataNSignatureLegacy preserves the historical Deriw signature
+// parser exactly for deterministic replay before the DeriwOS hardening
+// activation. New authorization code must use ParseTypeDataNSignatureWithDigest.
+// Like the historical implementation, this function mutates signature when v
+// is encoded as 27/28.
+func ParseTypeDataNSignatureLegacy(signData []byte, signature []byte) (*apitypes.TypedData, *common.Address, bool, error) {
+	typedData := apitypes.TypedData{}
+	if err := json.Unmarshal(signData, &typedData); err != nil {
+		return nil, nil, false, err
+	}
+
+	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	if err != nil {
+		return nil, nil, false, err
+	}
+	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
+	sighash := crypto.Keccak256(rawData)
+
+	if len(signature) != crypto.SignatureLength {
+		return nil, nil, false, fmt.Errorf("invalid signature length %d", len(signature))
+	}
+	if signature[crypto.RecoveryIDOffset] >= 27 {
+		signature[crypto.RecoveryIDOffset] -= 27
+	}
+	if signature[crypto.RecoveryIDOffset] > 1 {
+		return nil, nil, false, fmt.Errorf("invalid recovery id %d", signature[crypto.RecoveryIDOffset])
+	}
+
+	sigPubkey, err := crypto.Ecrecover(sighash, signature)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	pubkey, err := crypto.UnmarshalPubkey(sigPubkey)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	address := crypto.PubkeyToAddress(*pubkey)
+
+	signatureNoRecoverID := signature[:len(signature)-1]
+	if !crypto.VerifySignature(sigPubkey, sighash, signatureNoRecoverID) {
+		return &typedData, &address, false, errors.New("failed to verify signature")
+	}
+	return &typedData, &address, true, nil
+}
+
 // ParseTypeDataNSignatureWithDigest parses strictly encoded EIP-712 data,
 // canonicalizes the signature recovery byte, and returns the digest that was
 // actually verified. It never mutates the supplied signature.

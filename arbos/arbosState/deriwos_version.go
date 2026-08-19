@@ -32,8 +32,12 @@ const (
 	// scheduling to the chain-owner-only ArbOwner precompile. The legacy
 	// blacklist endpoint cannot schedule this or any later version.
 	DeriwOSVersion_ChainOwnerUpgradeScheduling uint64 = 4
+	// DeriwOSVersion_SubAccountAuthorizationHardening activates strict
+	// sub-account signatures, replay protection, timestamp validation, and
+	// one-to-one parent/child relationship updates at one consensus boundary.
+	DeriwOSVersion_SubAccountAuthorizationHardening uint64 = 5
 
-	MaxDeriwOSVersionSupported = DeriwOSVersion_ChainOwnerUpgradeScheduling
+	MaxDeriwOSVersionSupported = DeriwOSVersion_SubAccountAuthorizationHardening
 
 	DeriwDevChainID  = deriwpolicy.DevChainID
 	DeriwTestChainID = deriwpolicy.TestChainID
@@ -108,6 +112,9 @@ func (state *ArbosState) UpgradeDeriwOSVersion(upgradeTo uint64) error {
 		case DeriwOSVersion_ChainOwnerUpgradeScheduling:
 			// No state migration is required. Authorization is enforced by the
 			// ArbOwner precompile wrapper and the legacy scheduler's version cap.
+		case DeriwOSVersion_SubAccountAuthorizationHardening:
+			// No state migration is required. The sub-account precompiles use this
+			// version as the deterministic legacy-to-hardened execution boundary.
 		default:
 			return fmt.Errorf("missing DeriwOS upgrade implementation for version %v", nextVersion)
 		}

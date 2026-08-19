@@ -5,7 +5,10 @@ package precompiles
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/offchainlabs/nitro/arbos/arbosState"
 )
 
 // ArbOwner precompile provides owners with tools for managing the rollup.
@@ -99,6 +102,8 @@ func (con DeriwSubAccount) GetAllUsdtAddress(c ctx, evm mech) ([]common.Address,
 }
 
 func (con DeriwSubAccount) ResetAllRelationshipByPosition(c ctx, evm mech, addr addr) error {
-
+	if c.State.DeriwOSVersion() < arbosState.DeriwOSVersion_SubAccountAuthorizationHardening {
+		return c.State.SubAccount().ResetAllRelationshipByPositionLegacy(addr)
+	}
 	return c.State.SubAccount().ResetAllRelationshipByPosition(addr)
 }

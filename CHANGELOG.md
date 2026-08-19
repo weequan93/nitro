@@ -8,7 +8,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 
-- Add independently scheduled DeriwOS consensus versions 1 through 4.
+- Add independently scheduled DeriwOS consensus versions 1 through 5.
 - Add consensus blacklist enforcement, state-backed ArbSys route governance,
   router-only ERC-20 outbound sends, and the DeriwOS 3 direct-ETH exception.
 - Add gasless-target-aware `eth_estimateGas` handling.
@@ -23,6 +23,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
   subaccount-parent enforcement, and recovery behavior.
 - Move future DeriwOS scheduling and cancellation to chain-owner-only
   `ArbOwner`; retain the blacklist selector only for DeriwOS 1-3 replay.
+- Activate strict, timestamp-bounded subaccount authorization and consistent
+  one-to-one parent/child updates at the DeriwOS 5 consensus boundary while
+  preserving the historical behavior below that boundary.
 
 ### Deployment
 

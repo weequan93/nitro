@@ -7,8 +7,8 @@ Precompile-interface revision: `f87337228`
 ## Summary
 
 DER-2646 adds eleven function selectors across four precompiles. It also changes
-the versioned behavior of existing `ArbSys`, blacklist, and fee-account methods
-without changing their ABI.
+the versioned behavior of existing `ArbSys`, blacklist, fee-account, and
+subaccount methods without changing their ABI.
 
 | Precompile | Address | New function | Selector | Access |
 |---|---|---|---|---|
@@ -39,6 +39,26 @@ Event topic:
 
 No new event signature was added.
 
+## DeriwOS 5 existing subaccount ABI behavior
+
+No subaccount selector changes at DeriwOS 5. The existing
+`grantAccountControl(bytes,bytes)` and `revokeAccountControl(bytes,bytes)` calls
+at `DeriwSubAccountPublic` `0x07E9`, plus owner-only
+`resetAllRelationshipByPosition(address)` at `0x07EA`, change behavior at the
+scheduled consensus boundary:
+
+- DeriwOS 0-4 preserve the historical parser, Grant replay key, and map update
+  order for deterministic block replay.
+- DeriwOS 5 requires the exact EIP-712 schema, expected domain name/version,
+  fixed `0x07E9` verifying contract, and canonical decimal block-relative
+  timestamp. Authorizations may be at most 600 seconds old or 30 seconds in the
+  future.
+- DeriwOS 5 uses signer-scoped EIP-712 digest replay protection for both Grant
+  and Revoke and updates both relationship maps consistently.
+- The signed domain still contains `chainId`, but the node intentionally does
+  not require it to equal the configured chain ID. This version adds no signed
+  nonce.
+
 ## Solidity interface additions
 
 ### Legacy `DeriwBlacklist` compatibility — `0x07EC`
@@ -67,7 +87,8 @@ Compatibility rules:
 - Replay compatibility means the legacy scheduler can still accept a target in
   the range 1-3 when that target is newer than the active DeriwOS version.
   Treat this as a temporary rollout condition: use `ArbOwner` for all new
-  schedules and complete the sequential activation through DeriwOS 4.
+  schedules, complete the sequential activation through DeriwOS 4, then
+  activate DeriwOS 5 only after every subaccount signing client is compatible.
 
 ### Legacy `DeriwBlacklistPublic` compatibility — `0x07EB`
 
@@ -183,6 +204,77 @@ interface IArbOwnerPublicDeriwGovernance {
 An uninitialized active route returns zero addresses, an empty gateway array,
 and revision zero. No pending route returns zero addresses, an empty array,
 revision zero, and timestamp zero.
+
+## QA validation plan
+
+QA should test both the ABI surface and the consensus activation boundary. All
+state-changing governance calls must be submitted through the environment's
+approved Safe and UpgradeExecutor; direct EOA calls are expected to revert.
+
+### Version and scheduling
+
+```bash
+cast call --rpc-url "$L3_RPC" \
+  0x000000000000000000000000000000000000006B \
+  'getDeriwOSVersion()(uint64,uint64)'
+cast call --rpc-url "$L3_RPC" \
+  0x000000000000000000000000000000000000006B \
+  'getScheduledDeriwOSUpgrade()(uint64,uint64,uint64)'
+```
+
+After activation, the first call must report the configured ArbOS/DeriwOS
+versions and the second must return `(0, 0, 0)` when no upgrade is pending.
+Schedule through `ArbOwner`, verify the pending tuple, cancel it, and verify
+that the active version is unchanged.
+
+### Authorization and route configuration
+
+- Direct calls to `ArbOwner` governance methods from an unprivileged address
+  must revert; Safe → UpgradeExecutor → `ArbOwner` must succeed.
+- The legacy `0x07EC` scheduler must reject DeriwOS 4+ while replaying old
+  DeriwOS 1-3 transactions deterministically.
+- `getDeriwRouterConfig()` must return the expected router, canonical gateway,
+  gateway allowlist, and revision. Invalid or duplicate route addresses and
+  more than 32 gateways must revert.
+- A scheduled route must activate only at its timestamp; cancellation must
+  leave the active route unchanged.
+
+### ArbSys behavior
+
+- Direct `sendTxToL1` must revert.
+- Direct `withdrawEth` must retain the documented DeriwOS 3 permissionless
+  behavior.
+- Approved ERC-20 withdrawals must succeed only through the exact router →
+  canonical gateway router → approved token gateway suffix.
+- Direct gateway calls, unknown gateways, and inserted helper contracts must
+  revert.
+
+### Sub-account and blacklist behavior
+
+At DeriwOS 5, test exact EIP-712 schema/domain checks, timestamp expiry and
+future skew, child-sender matching, duplicate digest rejection, replay marking
+before relationship mutation, and one-to-one parent/child map invariants.
+The accepted design limitation is that no signed monotonic nonce is used and
+the signed `chainId` is not compared with the node chain ID.
+
+For the blacklist, test direct top-level calls from/to listed addresses, the
+authorized recovery exception, and protected system-address exclusions. Nested
+calls, ERC-20 calldata, and funding/retryable paths are intentionally outside
+the DeriwOS 1 full-quarantine scope.
+
+### Node and WASM rollout
+
+Before activation, every validator/sequencer image must contain the target
+machine root. After activation:
+
+```bash
+cast rpc --rpc-url "$L3_RPC" eth_syncing
+cast block-number --rpc-url "$L3_RPC"
+```
+
+`eth_syncing` must be `false`, blocks must advance, batch posting must work,
+and logs must show `validated execution` with the active `WasmRoots=[...]`.
+There must be no `cannot validate WasmModuleRoot` or replay-divergence errors.
 
 ## Minimal JSON ABI
 

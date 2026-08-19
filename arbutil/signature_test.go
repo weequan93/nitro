@@ -55,6 +55,23 @@ func TestParseTypeDataNSignatureRejectsUnknownJSONFields(t *testing.T) {
 	require.Contains(t, err.Error(), "unknown field")
 }
 
+func TestParseTypeDataNSignatureLegacyPreservesPermissiveJSONAndSignatureMutation(t *testing.T) {
+	var encoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(signData, &encoded))
+	encoded["unknown"] = true
+	unknownFieldData, err := json.Marshal(encoded)
+	require.NoError(t, err)
+
+	signature, expectedAddress := signTypedDataForTest(t, unknownFieldData)
+	require.GreaterOrEqual(t, signature[crypto.RecoveryIDOffset], byte(27))
+
+	_, address, validSignature, err := ParseTypeDataNSignatureLegacy(unknownFieldData, signature)
+	require.NoError(t, err)
+	require.True(t, validSignature)
+	require.Equal(t, expectedAddress, *address)
+	require.LessOrEqual(t, signature[crypto.RecoveryIDOffset], byte(1))
+}
+
 func signTypedDataForTest(t *testing.T, signData []byte) ([]byte, common.Address) {
 	t.Helper()
 

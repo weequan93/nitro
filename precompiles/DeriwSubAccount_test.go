@@ -4,10 +4,14 @@
 package precompiles
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
+
+	"github.com/offchainlabs/nitro/arbos/arbosState"
 )
 
 func TestDeriwSubAccount(t *testing.T) {
@@ -167,5 +171,42 @@ func TestDeriwAllowedAddress(t *testing.T) {
 	}
 	if all[0] != addr2 && all[1] != addr2 {
 		Fail(t)
+	}
+}
+
+func TestDeriwSubAccountPositionCleanupActivationBoundary(t *testing.T) {
+	for _, test := range []struct {
+		name                  string
+		version               uint64
+		expectedParentOfChild common.Address
+	}{
+		{
+			name:                  "DeriwOS 4 preserves legacy cleanup",
+			version:               arbosState.DeriwOSVersion_ChainOwnerUpgradeScheduling,
+			expectedParentOfChild: common.HexToAddress("0x1001"),
+		},
+		{
+			name:    "DeriwOS 5 removes matching counterpart",
+			version: arbosState.DeriwOSVersion_SubAccountAuthorizationHardening,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			parent := common.HexToAddress("0x1001")
+			child := common.HexToAddress("0x2001")
+			evm, callCtx := newDeriwSubAccountTestContext(t, parent, test.version)
+			state := callCtx.State.SubAccount()
+
+			if test.version < arbosState.DeriwOSVersion_SubAccountAuthorizationHardening {
+				require.NoError(t, state.BindRelationLegacy(parent, child, big.NewInt(0)))
+			} else {
+				require.NoError(t, state.BindRelation(parent, child, big.NewInt(0)))
+			}
+
+			prec := &DeriwSubAccount{}
+			require.NoError(t, prec.ResetAllRelationshipByPosition(callCtx, evm, parent))
+			parentOfChild, err := state.ReadRelationFromChild(child)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedParentOfChild, parentOfChild)
+		})
 	}
 }

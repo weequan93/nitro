@@ -4,6 +4,29 @@ Review date: 2026-08-19
 Branch: `fix/blacklist-subaccount`  
 Live environment checked: Deriw development L3 (`https://rpc.dev.deriw.com`)
 
+## Post-review remediation status
+
+The findings below describe the reviewed pre-remediation behavior. The current
+working tree adds a separate DeriwOS 5 consensus boundary while preserving the
+historical behavior through DeriwOS 4:
+
+- SA-001 is remediated at DeriwOS 5 by signer-scoped EIP-712 digest replay
+  keys, including checks for both legacy recovery-byte encodings.
+- SA-002 is partially remediated at DeriwOS 5 by exact schema/domain checks,
+  the fixed `0x07E9` verifying contract, canonical timestamps, a 600-second
+  maximum age, 30-second future skew, and Grant/Revoke digest consumption.
+  The signed `chainId` is deliberately not compared with the node chain ID and
+  no signed monotonic nonce is added, so those two recommended controls remain
+  accepted limitations.
+- SA-003 is remediated at DeriwOS 5 by consistent one-to-one bind, revoke, and
+  position-cleanup updates. Activation performs no global state scan; affected
+  legacy inconsistencies are repaired when rebound or explicitly cleaned up.
+
+All execution and validation nodes must support DeriwOS 5 before it is
+scheduled, and signing clients must be updated before activation. These
+working-tree changes are not evidence that DeriwOS 5 is deployed on the live
+development chain.
+
 ## Executive summary
 
 The ERC-20 `ArbSys` route matcher is structurally strong and no permissionless
@@ -339,13 +362,12 @@ Explorer references:
 
 ## Test status
 
-`go test ./arbutil ./arbos/subAccount -count=1` passed in a disposable Go
-1.25 container. The larger `execution/gethexec`, `gethhook`, and `precompiles`
-test packages could not be linked in the generic container because the local
-workspace native Stylus/Brotli libraries do not export the required test
-symbols. That is a test-environment limitation, not a passing result. These
-packages must be rerun in the repository's complete release builder before
-release.
+After the DeriwOS 5 remediation, `go test ./arbutil ./arbos/subAccount
+./arbos/arbosState ./precompiles -count=1` passed locally with Go 1.25.9. The
+linker emitted existing warnings because the local `libstylus.a` was built for
+macOS 26.2 while the linker targeted macOS 26.0; all four packages completed
+successfully. The complete release-builder and end-to-end suites remain
+required before deployment.
 
 ## Required release gates
 

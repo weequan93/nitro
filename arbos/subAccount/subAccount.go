@@ -74,6 +74,26 @@ func OpenSubAccountState(sto *storage.Storage) *SubAccountState {
 	}
 }
 
+// BindRelationLegacy preserves the historical map update order for block
+// replay before DeriwOS sub-account hardening activates. It must not be used by
+// post-activation authorization paths.
+func (subAccountState *SubAccountState) BindRelationLegacy(parentAccount common.Address, subAccount common.Address, timestamp *big.Int) (err error) {
+	oldSubAccount, err := subAccountState.ReadRelationFromParent(parentAccount)
+	if err != nil {
+		return err
+	}
+	if err = subAccountState.childParentRelation.Remove(oldSubAccount, 16); err != nil {
+		return err
+	}
+	if err = subAccountState.parentChildRelation.Remove(parentAccount, 16); err != nil {
+		return err
+	}
+	if err = subAccountState.parentChildRelation.Add(parentAccount, subAccount); err != nil {
+		return err
+	}
+	return subAccountState.childParentRelation.Add(subAccount, parentAccount)
+}
+
 func (subAccountState *SubAccountState) BindRelation(parentAccount common.Address, subAccount common.Address, timestamp *big.Int) (err error) {
 	// Read every affected relationship before mutating either direction. This
 	// makes the intended one-to-one transition explicit and lets an EVM state
@@ -129,6 +149,19 @@ func (subAccountState *SubAccountState) BindRelation(parentAccount common.Addres
 		return err
 	}
 	return subAccountState.childParentRelation.Add(subAccount, parentAccount)
+}
+
+// RevokeRelationLegacy preserves the historical removal order for block
+// replay before DeriwOS sub-account hardening activates.
+func (subAccountState *SubAccountState) RevokeRelationLegacy(parentAccount common.Address) (err error) {
+	subAccount, err := subAccountState.ReadRelationFromParent(parentAccount)
+	if err != nil {
+		return err
+	}
+	if err = subAccountState.childParentRelation.Remove(subAccount, 16); err != nil {
+		return err
+	}
+	return subAccountState.parentChildRelation.Remove(parentAccount, 16)
 }
 
 func (subAccountState *SubAccountState) RevokeRelation(parentAccount common.Address) (err error) {
@@ -254,6 +287,15 @@ func (subAccountState *SubAccountState) ResetAllRelationshipByPosition(addr comm
 		}
 	}
 	return nil
+}
+
+// ResetAllRelationshipByPositionLegacy preserves the historical cleanup
+// behavior for deterministic replay before DeriwOS sub-account hardening.
+func (subAccountState *SubAccountState) ResetAllRelationshipByPositionLegacy(addr common.Address) error {
+	if err := subAccountState.childParentRelation.Remove(addr, 16); err != nil {
+		return err
+	}
+	return subAccountState.parentChildRelation.Remove(addr, 16)
 }
 
 func (subAccountState *SubAccountState) HasUsedHash(hash common.Hash) (bool, error) {

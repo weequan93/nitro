@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbutil"
 )
 
@@ -50,6 +51,58 @@ type DeriwSubAccountPublic struct {
 
 // AddChainOwner adds account as a chain owner
 func (con DeriwSubAccountPublic) GrantAccountControl(c ctx, evm mech, signData []byte, signature []byte) error {
+	if c.State.DeriwOSVersion() < arbosState.DeriwOSVersion_SubAccountAuthorizationHardening {
+		return con.grantAccountControlLegacy(c, evm, signData, signature)
+	}
+	return con.grantAccountControlHardened(c, evm, signData, signature)
+}
+
+// grantAccountControlLegacy is consensus compatibility code for blocks before
+// DeriwOS 5. Keep its ordering and permissive validation aligned with the
+// historical implementation.
+func (con DeriwSubAccountPublic) grantAccountControlLegacy(c ctx, evm mech, signData []byte, signature []byte) error {
+	signatureUse := bytes.Clone(signature)
+	hasUsed, err := c.State.SubAccount().HasUsedHash(common.BytesToHash(signatureUse))
+	if err != nil {
+		return err
+	}
+	if err = c.State.SubAccount().SetUsedHash(common.BytesToHash(signatureUse)); err != nil {
+		return err
+	}
+	if hasUsed {
+		return errors.New("GrantAccountControl Signature already used")
+	}
+
+	typedData, parent, validSignature, err := arbutil.ParseTypeDataNSignatureLegacy(signData, signatureUse)
+	if err != nil {
+		return err
+	}
+	if !validSignature {
+		return errors.New("GrantAccountControl failed to verify signature")
+	}
+
+	timestamp := big.NewInt(0)
+	if signedTimestamp, ok := typedData.Message["Timestamp"].(string); ok {
+		timestamp.SetString(signedTimestamp, 10)
+	} else {
+		return errors.New("GrantAccountControl timestamp casting error")
+	}
+	if typedData.Message["Operation"] != "Grant" {
+		return errors.New("GrantAccountControl operation not supported")
+	}
+
+	childAddrString, ok := typedData.Message["Child"].(string)
+	if !ok {
+		return errors.New("Cast child address failed")
+	}
+	childAddress := common.HexToAddress(childAddrString)
+	if childAddress.Cmp(c.caller) != 0 {
+		return errors.New("GrantAccountControl address validation fail ")
+	}
+	return c.State.SubAccount().BindRelationLegacy(*parent, childAddress, timestamp)
+}
+
+func (con DeriwSubAccountPublic) grantAccountControlHardened(c ctx, evm mech, signData []byte, signature []byte) error {
 	typedData, parent, digest, validSignature, err := arbutil.ParseTypeDataNSignatureWithDigest(signData, signature)
 	if err != nil {
 		return err
@@ -85,6 +138,30 @@ func (con DeriwSubAccountPublic) GrantAccountControl(c ctx, evm mech, signData [
 
 // RemoveGaslessOwner removes account from the list of chain owners
 func (con DeriwSubAccountPublic) RevokeAccountControl(c ctx, evm mech, signData []byte, signature []byte) error {
+	if c.State.DeriwOSVersion() < arbosState.DeriwOSVersion_SubAccountAuthorizationHardening {
+		return con.revokeAccountControlLegacy(c, evm, signData, signature)
+	}
+	return con.revokeAccountControlHardened(c, evm, signData, signature)
+}
+
+// revokeAccountControlLegacy is consensus compatibility code for blocks
+// before DeriwOS 5.
+func (con DeriwSubAccountPublic) revokeAccountControlLegacy(c ctx, evm mech, signData []byte, signature []byte) error {
+	signatureUse := bytes.Clone(signature)
+	typedData, parent, validSignature, err := arbutil.ParseTypeDataNSignatureLegacy(signData, signatureUse)
+	if err != nil {
+		return err
+	}
+	if !validSignature {
+		return errors.New("failed to verify signature")
+	}
+	if typedData.Message["Operation"] != "Revoke" {
+		return errors.New("operation not supported")
+	}
+	return c.State.SubAccount().RevokeRelationLegacy(*parent)
+}
+
+func (con DeriwSubAccountPublic) revokeAccountControlHardened(c ctx, evm mech, signData []byte, signature []byte) error {
 	typedData, parent, digest, validSignature, err := arbutil.ParseTypeDataNSignatureWithDigest(signData, signature)
 	if err != nil {
 		return err
