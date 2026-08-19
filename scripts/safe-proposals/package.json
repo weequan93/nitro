@@ -1,0 +1,17 @@
+{
+  "name": "deriw-safe-proposals",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12.2"
+  },
+  "scripts": {
+    "test": "node --test safe-proposal.test.mjs"
+  },
+  "dependencies": {
+    "@safe-global/api-kit": "5.0.2",
+    "@safe-global/protocol-kit": "8.0.6",
+    "ethers": "6.17.0"
+  }
+}

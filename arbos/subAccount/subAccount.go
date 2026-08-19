@@ -74,64 +74,116 @@ func OpenSubAccountState(sto *storage.Storage) *SubAccountState {
 	}
 }
 
-func (subAccountState *SubAccountState) BindRelation(parentAccount common.Address, subAccount common.Address, timestamp *big.Int) (err error) {
-	// revalidate old-sub-account
+// BindRelationLegacy preserves the historical map update order for block
+// replay before DeriwOS sub-account hardening activates. It must not be used by
+// post-activation authorization paths.
+func (subAccountState *SubAccountState) BindRelationLegacy(parentAccount common.Address, subAccount common.Address, timestamp *big.Int) (err error) {
 	oldSubAccount, err := subAccountState.ReadRelationFromParent(parentAccount)
 	if err != nil {
 		return err
 	}
-	//parentAccount, err := subAccountState.childParentRelation.GetMember(subAccount)
-	err = subAccountState.childParentRelation.Remove(oldSubAccount, 16)
-	if err != nil {
+	if err = subAccountState.childParentRelation.Remove(oldSubAccount, 16); err != nil {
 		return err
 	}
-
-	err = subAccountState.parentChildRelation.Remove(parentAccount, 16)
-	if err != nil {
+	if err = subAccountState.parentChildRelation.Remove(parentAccount, 16); err != nil {
 		return err
 	}
-
-	//err = subAccountState.parentChildRelation.Set(common.BytesToHash(parentAccount.Bytes()), common.BytesToHash(subAccount.Bytes()))
-	err = subAccountState.parentChildRelation.Add(parentAccount, subAccount)
-	if err != nil {
+	if err = subAccountState.parentChildRelation.Add(parentAccount, subAccount); err != nil {
 		return err
 	}
-
-	//err = subAccountState.childParentRelation.Set(common.BytesToHash(subAccount.Bytes()), common.BytesToHash(parentAccount.Bytes()))
-	err = subAccountState.childParentRelation.Add(subAccount, parentAccount)
-	if err != nil {
-		return err
-	}
-
-	//err = subAccountState.relationTimer.Set(common.BytesToHash(subAccount.Bytes()), common.BytesToHash(timestamp.Bytes()))
-	//if err != nil {
-	//	return err
-	//}
-
-	return nil
+	return subAccountState.childParentRelation.Add(subAccount, parentAccount)
 }
 
-func (subAccountState *SubAccountState) RevokeRelation(parentAccount common.Address) (err error) {
+func (subAccountState *SubAccountState) BindRelation(parentAccount common.Address, subAccount common.Address, timestamp *big.Int) (err error) {
+	// Read every affected relationship before mutating either direction. This
+	// makes the intended one-to-one transition explicit and lets an EVM state
+	// snapshot roll the complete operation back if a storage write fails.
+	oldSubAccount, err := subAccountState.ReadRelationFromParent(parentAccount)
+	if err != nil {
+		return err
+	}
+	oldParentAccount, err := subAccountState.ReadRelationFromChild(subAccount)
+	if err != nil {
+		return err
+	}
 
-	// get child account
+	removeOldSubAccountReverse := false
+	if oldSubAccount != (common.Address{}) {
+		oldSubAccountParent, err := subAccountState.ReadRelationFromChild(oldSubAccount)
+		if err != nil {
+			return err
+		}
+		removeOldSubAccountReverse = oldSubAccountParent == parentAccount
+	}
+
+	removeOldParentAccountForward := false
+	if oldParentAccount != (common.Address{}) {
+		oldParentAccountChild, err := subAccountState.ReadRelationFromParent(oldParentAccount)
+		if err != nil {
+			return err
+		}
+		removeOldParentAccountForward = oldParentAccountChild == subAccount
+	}
+
+	// Remove the direct entries first, then only matching reverse counterparts.
+	// The conditional counterpart removals repair legacy inconsistent state
+	// without deleting an unrelated relationship.
+	if err := subAccountState.parentChildRelation.Remove(parentAccount, 16); err != nil {
+		return err
+	}
+	if err := subAccountState.childParentRelation.Remove(subAccount, 16); err != nil {
+		return err
+	}
+	if removeOldSubAccountReverse {
+		if err := subAccountState.childParentRelation.Remove(oldSubAccount, 16); err != nil {
+			return err
+		}
+	}
+	if removeOldParentAccountForward {
+		if err := subAccountState.parentChildRelation.Remove(oldParentAccount, 16); err != nil {
+			return err
+		}
+	}
+
+	if err := subAccountState.parentChildRelation.Add(parentAccount, subAccount); err != nil {
+		return err
+	}
+	return subAccountState.childParentRelation.Add(subAccount, parentAccount)
+}
+
+// RevokeRelationLegacy preserves the historical removal order for block
+// replay before DeriwOS sub-account hardening activates.
+func (subAccountState *SubAccountState) RevokeRelationLegacy(parentAccount common.Address) (err error) {
 	subAccount, err := subAccountState.ReadRelationFromParent(parentAccount)
 	if err != nil {
 		return err
 	}
-	//err = subAccountState.childParentRelation.Clear(common.BytesToHash(subAccount.Bytes()))
-	err = subAccountState.childParentRelation.Remove(subAccount, 16)
+	if err = subAccountState.childParentRelation.Remove(subAccount, 16); err != nil {
+		return err
+	}
+	return subAccountState.parentChildRelation.Remove(parentAccount, 16)
+}
+
+func (subAccountState *SubAccountState) RevokeRelation(parentAccount common.Address) (err error) {
+	subAccount, err := subAccountState.ReadRelationFromParent(parentAccount)
+	if err != nil {
+		return err
+	}
+	if subAccount == (common.Address{}) {
+		return nil
+	}
+
+	reverseParent, err := subAccountState.ReadRelationFromChild(subAccount)
 	if err != nil {
 		return err
 	}
 
-	//err = subAccountState.parentChildRelation.Clear(common.BytesToHash(parentAccount.Bytes()))
-	err = subAccountState.parentChildRelation.Remove(parentAccount, 16)
-	if err != nil {
+	if err := subAccountState.parentChildRelation.Remove(parentAccount, 16); err != nil {
 		return err
 	}
-
-	//subAccountState.relationTimer.Set(common.BytesToHash(subAccount.Bytes()), common.BytesToHash(util.Int64ToBytes(0)))
-
+	if reverseParent == parentAccount {
+		return subAccountState.childParentRelation.Remove(subAccount, 16)
+	}
 	return nil
 }
 
@@ -192,18 +244,58 @@ func (subAccountState *SubAccountState) ResetAllRelationshipByIndex(size uint64)
 }
 
 func (subAccountState *SubAccountState) ResetAllRelationshipByPosition(addr common.Address) error {
-
-	err := subAccountState.childParentRelation.Remove(addr, 16)
+	child, err := subAccountState.ReadRelationFromParent(addr)
+	if err != nil {
+		return err
+	}
+	parent, err := subAccountState.ReadRelationFromChild(addr)
 	if err != nil {
 		return err
 	}
 
-	err = subAccountState.parentChildRelation.Remove(addr, 16)
-	if err != nil {
-		return err
+	removeChildReverse := false
+	if child != (common.Address{}) {
+		reverseParent, err := subAccountState.ReadRelationFromChild(child)
+		if err != nil {
+			return err
+		}
+		removeChildReverse = reverseParent == addr
+	}
+	removeParentForward := false
+	if parent != (common.Address{}) {
+		forwardChild, err := subAccountState.ReadRelationFromParent(parent)
+		if err != nil {
+			return err
+		}
+		removeParentForward = forwardChild == addr
 	}
 
-	return err
+	if err := subAccountState.parentChildRelation.Remove(addr, 16); err != nil {
+		return err
+	}
+	if err := subAccountState.childParentRelation.Remove(addr, 16); err != nil {
+		return err
+	}
+	if removeChildReverse {
+		if err := subAccountState.childParentRelation.Remove(child, 16); err != nil {
+			return err
+		}
+	}
+	if removeParentForward {
+		if err := subAccountState.parentChildRelation.Remove(parent, 16); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ResetAllRelationshipByPositionLegacy preserves the historical cleanup
+// behavior for deterministic replay before DeriwOS sub-account hardening.
+func (subAccountState *SubAccountState) ResetAllRelationshipByPositionLegacy(addr common.Address) error {
+	if err := subAccountState.childParentRelation.Remove(addr, 16); err != nil {
+		return err
+	}
+	return subAccountState.parentChildRelation.Remove(addr, 16)
 }
 
 func (subAccountState *SubAccountState) HasUsedHash(hash common.Hash) (bool, error) {

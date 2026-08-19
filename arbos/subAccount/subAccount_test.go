@@ -2,12 +2,14 @@ package subAccount
 
 import (
 	"encoding/hex"
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/offchainlabs/nitro/arbos/burn"
 	"github.com/offchainlabs/nitro/arbos/storage"
 	"github.com/offchainlabs/nitro/util/testhelpers"
-	"math/big"
-	"testing"
+	"github.com/stretchr/testify/require"
 )
 
 // Copyright 2021-2022, Offchain Labs, Inc.
@@ -306,6 +308,148 @@ func TestBindRelation(t *testing.T) {
 		Fail(t, "Check relationship from child fail, expected = %s, actual = %s", common.Address{}, parent)
 	}
 
+}
+
+func TestBindRelationRebindsChildOneToOne(t *testing.T) {
+	subAccountState := SubAccountForTest(t)
+	parentA := common.HexToAddress("0x1001")
+	parentB := common.HexToAddress("0x1002")
+	child := common.HexToAddress("0x2001")
+
+	require.NoError(t, subAccountState.BindRelation(parentA, child, big.NewInt(0)))
+	require.NoError(t, subAccountState.BindRelation(parentB, child, big.NewInt(0)))
+
+	childOfA, err := subAccountState.ReadRelationFromParent(parentA)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, childOfA)
+	childOfB, err := subAccountState.ReadRelationFromParent(parentB)
+	require.NoError(t, err)
+	require.Equal(t, child, childOfB)
+	parentOfChild, err := subAccountState.ReadRelationFromChild(child)
+	require.NoError(t, err)
+	require.Equal(t, parentB, parentOfChild)
+
+	require.NoError(t, subAccountState.RevokeRelation(parentB))
+	childOfB, err = subAccountState.ReadRelationFromParent(parentB)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, childOfB)
+	parentOfChild, err = subAccountState.ReadRelationFromChild(child)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, parentOfChild)
+}
+
+func TestBindRelationLegacyPreservesHistoricalChildRebindingBehavior(t *testing.T) {
+	subAccountState := SubAccountForTest(t)
+	parentA := common.HexToAddress("0x1001")
+	parentB := common.HexToAddress("0x1002")
+	child := common.HexToAddress("0x2001")
+
+	require.NoError(t, subAccountState.BindRelationLegacy(parentA, child, big.NewInt(0)))
+	require.NoError(t, subAccountState.BindRelationLegacy(parentB, child, big.NewInt(0)))
+
+	childOfA, err := subAccountState.ReadRelationFromParent(parentA)
+	require.NoError(t, err)
+	require.Equal(t, child, childOfA)
+	childOfB, err := subAccountState.ReadRelationFromParent(parentB)
+	require.NoError(t, err)
+	require.Equal(t, child, childOfB)
+	parentOfChild, err := subAccountState.ReadRelationFromChild(child)
+	require.NoError(t, err)
+	require.Equal(t, parentA, parentOfChild)
+}
+
+func TestBindRelationRebindsParentOneToOne(t *testing.T) {
+	subAccountState := SubAccountForTest(t)
+	parent := common.HexToAddress("0x1001")
+	childA := common.HexToAddress("0x2001")
+	childB := common.HexToAddress("0x2002")
+
+	require.NoError(t, subAccountState.BindRelation(parent, childA, big.NewInt(0)))
+	require.NoError(t, subAccountState.BindRelation(parent, childB, big.NewInt(0)))
+
+	parentOfA, err := subAccountState.ReadRelationFromChild(childA)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, parentOfA)
+	parentOfB, err := subAccountState.ReadRelationFromChild(childB)
+	require.NoError(t, err)
+	require.Equal(t, parent, parentOfB)
+	childOfParent, err := subAccountState.ReadRelationFromParent(parent)
+	require.NoError(t, err)
+	require.Equal(t, childB, childOfParent)
+}
+
+func TestBindRelationRepairsLegacyInconsistentRebind(t *testing.T) {
+	subAccountState := SubAccountForTest(t)
+	parentA := common.HexToAddress("0x1001")
+	parentB := common.HexToAddress("0x1002")
+	child := common.HexToAddress("0x2001")
+
+	// Reproduce the state created by the old implementation: both parents
+	// point to the child while the reverse map points only to parent A.
+	require.NoError(t, subAccountState.parentChildRelation.Add(parentA, child))
+	require.NoError(t, subAccountState.parentChildRelation.Add(parentB, child))
+	require.NoError(t, subAccountState.childParentRelation.Add(child, parentA))
+
+	require.NoError(t, subAccountState.BindRelation(parentB, child, big.NewInt(0)))
+
+	childOfA, err := subAccountState.ReadRelationFromParent(parentA)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, childOfA)
+	childOfB, err := subAccountState.ReadRelationFromParent(parentB)
+	require.NoError(t, err)
+	require.Equal(t, child, childOfB)
+	parentOfChild, err := subAccountState.ReadRelationFromChild(child)
+	require.NoError(t, err)
+	require.Equal(t, parentB, parentOfChild)
+}
+
+func TestRevokeRelationPreservesMismatchedReverseOwner(t *testing.T) {
+	subAccountState := SubAccountForTest(t)
+	parentA := common.HexToAddress("0x1001")
+	parentB := common.HexToAddress("0x1002")
+	child := common.HexToAddress("0x2001")
+
+	// Reproduce a legacy inconsistent state, then make sure parent B cannot
+	// delete the reverse relationship that belongs to parent A.
+	require.NoError(t, subAccountState.parentChildRelation.Add(parentA, child))
+	require.NoError(t, subAccountState.parentChildRelation.Add(parentB, child))
+	require.NoError(t, subAccountState.childParentRelation.Add(child, parentA))
+
+	require.NoError(t, subAccountState.RevokeRelation(parentB))
+
+	childOfA, err := subAccountState.ReadRelationFromParent(parentA)
+	require.NoError(t, err)
+	require.Equal(t, child, childOfA)
+	childOfB, err := subAccountState.ReadRelationFromParent(parentB)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, childOfB)
+	parentOfChild, err := subAccountState.ReadRelationFromChild(child)
+	require.NoError(t, err)
+	require.Equal(t, parentA, parentOfChild)
+}
+
+func TestResetAllRelationshipByPositionRemovesMatchingCounterpart(t *testing.T) {
+	for _, removeAddress := range []string{"parent", "child"} {
+		t.Run(removeAddress, func(t *testing.T) {
+			subAccountState := SubAccountForTest(t)
+			parent := common.HexToAddress("0x1001")
+			child := common.HexToAddress("0x2001")
+			require.NoError(t, subAccountState.BindRelation(parent, child, big.NewInt(0)))
+
+			address := parent
+			if removeAddress == "child" {
+				address = child
+			}
+			require.NoError(t, subAccountState.ResetAllRelationshipByPosition(address))
+
+			childOfParent, err := subAccountState.ReadRelationFromParent(parent)
+			require.NoError(t, err)
+			require.Equal(t, common.Address{}, childOfParent)
+			parentOfChild, err := subAccountState.ReadRelationFromChild(child)
+			require.NoError(t, err)
+			require.Equal(t, common.Address{}, parentOfChild)
+		})
+	}
 }
 
 func TestSession(t *testing.T) {

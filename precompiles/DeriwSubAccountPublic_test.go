@@ -4,78 +4,338 @@
 package precompiles
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
+	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	commonmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/stretchr/testify/require"
+
+	"github.com/offchainlabs/nitro/arbos/arbosState"
+	"github.com/offchainlabs/nitro/cmd/chaininfo"
 )
 
+const deriwSubAccountTestTimestamp = uint64(1_800_000_000)
+
 func TestDeriwSubAccountPublic(t *testing.T) {
-	evm := newMockEVMForTesting()
-	caller := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
-
-	var signData = common.FromHex("0x7b227479706573223a7b22454950373132446f6d61696e223a5b7b226e616d65223a226e616d65222c2274797065223a22737472696e67227d2c7b226e616d65223a2276657273696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a22636861696e4964222c2274797065223a2275696e74323536227d2c7b226e616d65223a22766572696679696e67436f6e7472616374222c2274797065223a2261646472657373227d5d2c224d657373616765223a5b7b226e616d65223a2254696d657374616d70222c2274797065223a22737472696e67227d2c7b226e616d65223a224f7065726174696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a224368696c64222c2274797065223a2261646472657373227d5d7d2c227072696d61727954797065223a224d657373616765222c22646f6d61696e223a7b226e616d65223a2244657269775375624163636f756e745369676e6174757265222c2276657273696f6e223a2231222c22636861696e4964223a35353939303737333933372c22766572696679696e67436f6e7472616374223a22307830303030303030303030303030303030303030303030303030303030303030303030303030374539227d2c226d657373616765223a7b2254696d657374616d70223a2231373336313633353231222c224f7065726174696f6e223a224772616e74222c224368696c64223a22307838663438313633643139333264633232383663633764316632363065303963366564303761316530227d7d")
-	var signature, parent = signDeriwSubAccountTypedData(t, signData)
-
 	child := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
+	evm, callCtx := newDeriwSubAccountTestContext(
+		t,
+		child,
+		arbosState.DeriwOSVersion_SubAccountAuthorizationHardening,
+	)
+	evm.Context.Time = deriwSubAccountTestTimestamp
+	prec := &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}
 
-	prec := &DeriwSubAccountPublic{}
-	// gasInfo := &ArbGasInfo{}
-	callCtx := testContext(caller, evm)
-
-	// the zero address is an owner by default
-	Require(t, prec.GrantAccountControl(callCtx, evm, signData, signature))
+	grantData := marshalDeriwSubAccountTypedData(t, newDeriwSubAccountTypedData(
+		evm.ChainConfig().ChainID,
+		strconv.FormatUint(evm.Context.Time, 10),
+		"Grant",
+		&child,
+	))
+	grantSignature, parent := signDeriwSubAccountTypedData(t, grantData)
+	require.NoError(t, prec.GrantAccountControl(callCtx, evm, grantData, grantSignature))
 
 	parentAddress, err := prec.ReadAccountControl(callCtx, evm, child)
-	Require(t, err)
-	if parentAddress.Cmp(parent) != 0 {
-		Fail(t)
-	}
+	require.NoError(t, err)
+	require.Equal(t, parent, parentAddress)
 
-	signData = common.FromHex("0x7b227479706573223a7b22454950373132446f6d61696e223a5b7b226e616d65223a226e616d65222c2274797065223a22737472696e67227d2c7b226e616d65223a2276657273696f6e222c2274797065223a22737472696e67227d2c7b226e616d65223a22636861696e4964222c2274797065223a2275696e74323536227d2c7b226e616d65223a22766572696679696e67436f6e7472616374222c2274797065223a2261646472657373227d5d2c224d657373616765223a5b7b226e616d65223a2254696d657374616d70222c2274797065223a22737472696e67227d2c7b226e616d65223a224f7065726174696f6e222c2274797065223a22737472696e67227d5d7d2c227072696d61727954797065223a224d657373616765222c22646f6d61696e223a7b226e616d65223a2244657269775375624163636f756e745369676e6174757265222c2276657273696f6e223a2231222c22636861696e4964223a35353939303737333933372c22766572696679696e67436f6e7472616374223a22307830303030303030303030303030303030303030303030303030303030303030303030303030374539227d2c226d657373616765223a7b2254696d657374616d70223a2231373336313633353231222c224f7065726174696f6e223a225265766f6b65227d7d")
-	signature, _ = signDeriwSubAccountTypedData(t, signData)
+	// The equivalent 0/1 recovery-byte representation is the same signed
+	// authorization and must not bypass replay protection.
+	alternateGrantSignature := bytes.Clone(grantSignature)
+	alternateGrantSignature[crypto.RecoveryIDOffset] -= 27
+	err = prec.GrantAccountControl(callCtx, evm, grantData, alternateGrantSignature)
+	require.ErrorContains(t, err, "authorization already used")
 
-	Require(t, prec.RevokeAccountControl(callCtx, evm, signData, signature))
+	revokeData := marshalDeriwSubAccountTypedData(t, newDeriwSubAccountTypedData(
+		evm.ChainConfig().ChainID,
+		strconv.FormatUint(evm.Context.Time, 10),
+		"Revoke",
+		nil,
+	))
+	revokeSignature, _ := signDeriwSubAccountTypedData(t, revokeData)
+	require.NoError(t, prec.RevokeAccountControl(callCtx, evm, revokeData, revokeSignature))
 
 	parentAddress, err = prec.ReadAccountControl(callCtx, evm, child)
-	Require(t, err)
-	if parentAddress.Cmp(common.Address{}) != 0 {
-		Fail(t)
+	require.NoError(t, err)
+	require.Equal(t, common.Address{}, parentAddress)
+
+	// A fresh timestamp creates a new grant authorization. Replaying the old,
+	// already-consumed revoke must not revoke this later relationship.
+	evm.Context.Time++
+	secondGrantData := marshalDeriwSubAccountTypedData(t, newDeriwSubAccountTypedData(
+		evm.ChainConfig().ChainID,
+		strconv.FormatUint(evm.Context.Time, 10),
+		"Grant",
+		&child,
+	))
+	secondGrantSignature, _ := signDeriwSubAccountTypedData(t, secondGrantData)
+	require.NoError(t, prec.GrantAccountControl(callCtx, evm, secondGrantData, secondGrantSignature))
+	require.ErrorContains(t, prec.RevokeAccountControl(callCtx, evm, revokeData, revokeSignature), "authorization already used")
+
+	parentAddress, err = prec.ReadAccountControl(callCtx, evm, child)
+	require.NoError(t, err)
+	require.Equal(t, parent, parentAddress)
+}
+
+func TestDeriwSubAccountPublicRejectsInvalidAuthorizationContext(t *testing.T) {
+	tests := []struct {
+		name          string
+		timestamp     string
+		mutate        func(*apitypes.TypedData, *big.Int)
+		expectedError string
+	}{
+		{
+			name: "wrong verifying contract",
+			mutate: func(typedData *apitypes.TypedData, _ *big.Int) {
+				typedData.Domain.VerifyingContract = common.HexToAddress("0x1234").Hex()
+			},
+			expectedError: "verifying contract",
+		},
+		{
+			name:          "expired timestamp",
+			timestamp:     strconv.FormatUint(deriwSubAccountTestTimestamp-deriwSubAccountMaxAgeSeconds-1, 10),
+			expectedError: "expired",
+		},
+		{
+			name:          "timestamp too far in future",
+			timestamp:     strconv.FormatUint(deriwSubAccountTestTimestamp+deriwSubAccountFutureSkewSeconds+1, 10),
+			expectedError: "future",
+		},
+		{
+			name:          "noncanonical timestamp",
+			timestamp:     "01800000000",
+			expectedError: "invalid Timestamp",
+		},
+		{
+			name: "extra signed field",
+			mutate: func(typedData *apitypes.TypedData, _ *big.Int) {
+				typedData.Types["Message"] = append(typedData.Types["Message"], apitypes.Type{Name: "Extra", Type: "string"})
+				typedData.Message["Extra"] = "unexpected"
+			},
+			expectedError: "message schema",
+		},
 	}
 
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			child := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
+			evm, callCtx := newDeriwSubAccountTestContext(
+				t,
+				child,
+				arbosState.DeriwOSVersion_SubAccountAuthorizationHardening,
+			)
+			evm.Context.Time = deriwSubAccountTestTimestamp
+			prec := &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}
+
+			timestamp := test.timestamp
+			if timestamp == "" {
+				timestamp = strconv.FormatUint(evm.Context.Time, 10)
+			}
+			typedData := newDeriwSubAccountTypedData(evm.ChainConfig().ChainID, timestamp, "Grant", &child)
+			if test.mutate != nil {
+				test.mutate(&typedData, evm.ChainConfig().ChainID)
+			}
+			signData := marshalDeriwSubAccountTypedData(t, typedData)
+			signature, _ := signDeriwSubAccountTypedData(t, signData)
+
+			err := prec.GrantAccountControl(callCtx, evm, signData, signature)
+			require.ErrorContains(t, err, test.expectedError)
+		})
+	}
+}
+
+func TestDeriwSubAccountPublicDoesNotEnforceSignedChainID(t *testing.T) {
+	child := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
+	evm, callCtx := newDeriwSubAccountTestContext(
+		t,
+		child,
+		arbosState.DeriwOSVersion_SubAccountAuthorizationHardening,
+	)
+	evm.Context.Time = deriwSubAccountTestTimestamp
+	prec := &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}
+
+	// Existing clients sign a domain chain ID that may differ from the Deriw
+	// node's configured chain ID. That value is signed but is not enforced.
+	signerChainID := new(big.Int).Add(evm.ChainConfig().ChainID, big.NewInt(1))
+	signData := marshalDeriwSubAccountTypedData(t, newDeriwSubAccountTypedData(
+		signerChainID,
+		strconv.FormatUint(evm.Context.Time, 10),
+		"Grant",
+		&child,
+	))
+	signature, parent := signDeriwSubAccountTypedData(t, signData)
+
+	require.NoError(t, prec.GrantAccountControl(callCtx, evm, signData, signature))
+	actualParent, err := prec.ReadAccountControl(callCtx, evm, child)
+	require.NoError(t, err)
+	require.Equal(t, parent, actualParent)
+}
+
+func TestDeriwSubAccountPublicChecksBothLegacyRecoveryByteKeys(t *testing.T) {
+	child := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
+	evm, callCtx := newDeriwSubAccountTestContext(
+		t,
+		child,
+		arbosState.DeriwOSVersion_SubAccountAuthorizationHardening,
+	)
+	evm.Context.Time = deriwSubAccountTestTimestamp
+	prec := &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}
+
+	signData := marshalDeriwSubAccountTypedData(t, newDeriwSubAccountTypedData(
+		evm.ChainConfig().ChainID,
+		strconv.FormatUint(evm.Context.Time, 10),
+		"Grant",
+		&child,
+	))
+	signature, _ := signDeriwSubAccountTypedData(t, signData)
+	legacyKey, _, err := deriwSubAccountLegacySignatureKeys(signature)
+	require.NoError(t, err)
+	require.NoError(t, callCtx.State.SubAccount().SetUsedHash(legacyKey))
+
+	alternateSignature := bytes.Clone(signature)
+	alternateSignature[crypto.RecoveryIDOffset] -= 27
+	err = prec.GrantAccountControl(callCtx, evm, signData, alternateSignature)
+	require.ErrorContains(t, err, "authorization already used")
+}
+
+func TestDeriwSubAccountPublicDeriwOSActivationBoundary(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		version       uint64
+		expectedError string
+	}{
+		{
+			name:    "DeriwOS 4 preserves legacy authorization",
+			version: arbosState.DeriwOSVersion_ChainOwnerUpgradeScheduling,
+		},
+		{
+			name:          "DeriwOS 5 enforces hardened authorization",
+			version:       arbosState.DeriwOSVersion_SubAccountAuthorizationHardening,
+			expectedError: "expired",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			child := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
+			evm, callCtx := newDeriwSubAccountTestContext(t, child, test.version)
+			evm.Context.Time = deriwSubAccountTestTimestamp
+			prec := &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}
+
+			signData := marshalDeriwSubAccountTypedData(t, newDeriwSubAccountTypedData(
+				evm.ChainConfig().ChainID,
+				strconv.FormatUint(evm.Context.Time-deriwSubAccountMaxAgeSeconds-1, 10),
+				"Grant",
+				&child,
+			))
+			signature, _ := signDeriwSubAccountTypedData(t, signData)
+
+			err := prec.GrantAccountControl(callCtx, evm, signData, signature)
+			if test.expectedError == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, test.expectedError)
+		})
+	}
+}
+
+func TestDeriwSubAccountPublicLegacyRecoveryByteReplayBeforeDeriwOS5(t *testing.T) {
+	child := common.HexToAddress("0x8f48163d1932dc2286cc7d1f260e09c6ed07a1e0")
+	evm, callCtx := newDeriwSubAccountTestContext(
+		t,
+		child,
+		arbosState.DeriwOSVersion_ChainOwnerUpgradeScheduling,
+	)
+	evm.Context.Time = deriwSubAccountTestTimestamp
+	prec := &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}
+
+	signData := marshalDeriwSubAccountTypedData(t, newDeriwSubAccountTypedData(
+		evm.ChainConfig().ChainID,
+		strconv.FormatUint(evm.Context.Time, 10),
+		"Grant",
+		&child,
+	))
+	signature, _ := signDeriwSubAccountTypedData(t, signData)
+	require.NoError(t, prec.GrantAccountControl(callCtx, evm, signData, signature))
+
+	alternateSignature := bytes.Clone(signature)
+	alternateSignature[crypto.RecoveryIDOffset] -= 27
+	require.NoError(t, prec.GrantAccountControl(callCtx, evm, signData, alternateSignature))
+}
+
+func newDeriwSubAccountTestContext(t *testing.T, caller common.Address, deriwOSVersion uint64) (mech, ctx) {
+	t.Helper()
+	chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+	chainConfig.ChainID = new(big.Int).SetUint64(arbosState.DeriwDevChainID)
+	evm := newMockEVMForTestingWithConfigs(chainConfig, chainConfig)
+	callCtx := testContext(caller, evm)
+	require.NoError(t, callCtx.State.UpgradeDeriwOSVersion(deriwOSVersion))
+	return evm, callCtx
+}
+
+func newDeriwSubAccountTypedData(chainID *big.Int, timestamp string, operation string, child *common.Address) apitypes.TypedData {
+	typedChainID := commonmath.HexOrDecimal256(*new(big.Int).Set(chainID))
+	messageTypes := []apitypes.Type{
+		{Name: "Timestamp", Type: "string"},
+		{Name: "Operation", Type: "string"},
+	}
+	message := apitypes.TypedDataMessage{
+		"Timestamp": timestamp,
+		"Operation": operation,
+	}
+	if child != nil {
+		messageTypes = append(messageTypes, apitypes.Type{Name: "Child", Type: "address"})
+		message["Child"] = child.Hex()
+	}
+
+	return apitypes.TypedData{
+		Types: apitypes.Types{
+			"EIP712Domain": {
+				{Name: "name", Type: "string"},
+				{Name: "version", Type: "string"},
+				{Name: "chainId", Type: "uint256"},
+				{Name: "verifyingContract", Type: "address"},
+			},
+			"Message": messageTypes,
+		},
+		PrimaryType: "Message",
+		Domain: apitypes.TypedDataDomain{
+			Name:              "DeriwSubAccountSignature",
+			Version:           "1",
+			ChainId:           &typedChainID,
+			VerifyingContract: types.DeriwSubAccountPublicAddress.Hex(),
+		},
+		Message: message,
+	}
+}
+
+func marshalDeriwSubAccountTypedData(t *testing.T, typedData apitypes.TypedData) []byte {
+	t.Helper()
+	signData, err := json.Marshal(typedData)
+	require.NoError(t, err)
+	return signData
 }
 
 func signDeriwSubAccountTypedData(t *testing.T, signData []byte) ([]byte, common.Address) {
 	t.Helper()
 
 	privateKey, err := crypto.HexToECDSA("59c6995e998f97a5a0044966f094538e3878c9e59085909bc4fe6b3a7f7f6d3b")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	typedData := apitypes.TypedData{}
-	if err := json.Unmarshal(signData, &typedData); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, json.Unmarshal(signData, &typedData))
+	digest, _, err := apitypes.TypedDataAndHash(typedData)
+	require.NoError(t, err)
 
-	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-	if err != nil {
-		t.Fatal(err)
-	}
-	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
-	signature, err := crypto.Sign(crypto.Keccak256(rawData), privateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signature[64] += 27
+	signature, err := crypto.Sign(digest, privateKey)
+	require.NoError(t, err)
+	signature[crypto.RecoveryIDOffset] += 27
 
 	return signature, crypto.PubkeyToAddress(privateKey.PublicKey)
 }

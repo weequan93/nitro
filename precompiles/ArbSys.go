@@ -110,6 +110,21 @@ func (con *ArbSys) MyCallersAddressWithoutAliasing(c ctx, evm mech) (addr, error
 
 // SendTxToL1 sends a transaction to L1, adding it to the outbox
 func (con *ArbSys) SendTxToL1(c ctx, evm mech, value huge, destination addr, calldataForL1 []byte) (huge, error) {
+	return con.sendTxToL1(c, evm, value, destination, calldataForL1, deriwSendOperationRaw)
+}
+
+func (con *ArbSys) sendTxToL1(
+	c ctx,
+	evm mech,
+	value huge,
+	destination addr,
+	calldataForL1 []byte,
+	operation deriwSendOperation,
+) (huge, error) {
+	if err := enforceDeriwSendPathForOperation(c, operation); err != nil {
+		return nil, err
+	}
+
 	l1BlockNum, err := c.txProcessor.L1BlockNumber(vm.BlockContext{})
 	if err != nil {
 		return nil, err
@@ -231,7 +246,7 @@ func (con ArbSys) SendMerkleTreeState(c ctx, evm mech) (huge, bytes32, []bytes32
 
 // WithdrawEth send paid eth to the destination on L1
 func (con ArbSys) WithdrawEth(c ctx, evm mech, value huge, destination addr) (huge, error) {
-	return con.SendTxToL1(c, evm, value, destination, []byte{})
+	return (&con).sendTxToL1(c, evm, value, destination, []byte{}, deriwSendOperationETHWithdrawal)
 }
 
 func (con ArbSys) isTopLevel(c ctx, evm mech) bool {

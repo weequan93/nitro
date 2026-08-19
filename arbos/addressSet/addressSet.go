@@ -45,6 +45,13 @@ func (as *AddressSet) IsMember(addr common.Address) (bool, error) {
 	return value != (common.Hash{}), err
 }
 
+// IsMemberFree checks membership without charging through the storage burner.
+// Callers must charge deterministic gas separately; this is intended for
+// execution hooks that maintain their own per-transaction lookup cache.
+func (as *AddressSet) IsMemberFree(addr common.Address) bool {
+	return as.byAddress.GetFree(util.AddressToHash(addr)) != (common.Hash{})
+}
+
 func (as *AddressSet) GetAnyMember() (*common.Address, error) {
 	size, err := as.size.Get()
 	if err != nil || size == 0 {

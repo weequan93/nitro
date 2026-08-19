@@ -182,7 +182,7 @@ func TestPrecompilesPerArbosVersion(t *testing.T) {
 	// Each new precompile contract and each method on new or existing precompile
 	// contracts should be counted.
 	expectedNewEntriesPerArbosVersion := map[uint64]int{
-		0:                      174,
+		0:                      177,
 		params.ArbosVersion_5:  3,
 		params.ArbosVersion_10: 2,
 		params.ArbosVersion_11: 4,
@@ -193,7 +193,7 @@ func TestPrecompilesPerArbosVersion(t *testing.T) {
 		params.ArbosVersion_41: 10,
 		params.ArbosVersion_50: 9,
 		params.ArbosVersion_59: 2,
-		params.ArbosVersion_60: 22,
+		params.ArbosVersion_60: 30,
 	}
 
 	precompiles := Precompiles()

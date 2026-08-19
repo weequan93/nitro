@@ -38,6 +38,7 @@ const GasEstimationL1PricePadding arbmath.Bips = 11000 // pad estimates by 10%
 // Public fields are accessible in precompiles.
 type TxProcessor struct {
 	msg              *core.Message
+	originalFrom     common.Address
 	state            *arbosState.ArbosState
 	PosterFee        *big.Int // set once in GasChargingHook to track L1 calldata costs
 	posterGas        uint64
@@ -52,6 +53,8 @@ type TxProcessor struct {
 	CurrentRetryable *common.Hash
 	CurrentRefundTo  *common.Address
 
+	deriwBlacklistViolation error
+
 	// Caches for the latest L1 block number and hash,
 	// for the NUMBER and BLOCKHASH opcodes.
 	cachedL1BlockNumber *uint64
@@ -63,6 +66,7 @@ func NewTxProcessor(evm *vm.EVM, msg *core.Message) *TxProcessor {
 	arbosState := arbosState.OpenSystemArbosStateOrPanic(evm.StateDB, tracingInfo, false)
 	return &TxProcessor{
 		msg:                 msg,
+		originalFrom:        msg.From,
 		state:               arbosState,
 		PosterFee:           new(big.Int),
 		posterGas:           0,
@@ -629,7 +633,7 @@ func (p *TxProcessor) EndTxHook(gasLeft uint64, usedMultiGas multigas.MultiGas, 
 
 	var multiDimensionalCost *big.Int
 	var err error
-	if p.state.L2PricingState().ArbosVersion >= params.ArbosVersion_MultiGasConstraintsVersion {
+	if p.deriwBlacklistViolation == nil && p.state.L2PricingState().ArbosVersion >= params.ArbosVersion_MultiGasConstraintsVersion {
 		multiDimensionalCost, err = p.state.L2PricingState().MultiDimensionalPriceForRefund(usedMultiGas)
 		p.state.Restrict(err)
 	}
@@ -1030,6 +1034,14 @@ func (p *TxProcessor) RevertedTxHook(gasRemaining *uint64, usedMultiGas multigas
 		usedMultiGas = usedMultiGas.SaturatingAdd(multigas.ComputationGas(usedGas))
 
 		return usedMultiGas, &core.ErrFilteredTx{TxHash: txHash}
+	}
+
+	if p.state.DeriwOSVersion() >= arbosState.DeriwOSVersion_ConsensusBlacklist {
+		checkGas, err := p.checkTopLevelDeriwBlacklist(gasRemaining)
+		usedMultiGas = usedMultiGas.SaturatingAdd(checkGas)
+		if err != nil {
+			return usedMultiGas, err
+		}
 	}
 
 	return usedMultiGas, nil

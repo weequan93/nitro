@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
+	"github.com/offchainlabs/nitro/arbos/deriwpolicy"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/programs"
 	"github.com/offchainlabs/nitro/arbos/storage"
@@ -60,6 +61,99 @@ var (
 	ErrDelay       = errors.New("feature must be enabled at least 7 days in the future")
 	ErrBackward    = errors.New("feature cannot be updated to a time earlier than the current scheduled enable time")
 )
+
+func deriwRouteContains(routes deriwpolicy.RouterOnlySendConfig, target common.Address) bool {
+	if target == routes.Router || target == routes.CanonicalGatewayRouter {
+		return true
+	}
+	for _, gateway := range routes.ApprovedTokenGateways {
+		if target == gateway {
+			return true
+		}
+	}
+	return false
+}
+
+func rejectProtectedDeriwRouteCaller(c ctx, proposed *deriwpolicy.RouterOnlySendConfig) error {
+	if c == nil || c.State == nil {
+		return errors.New("missing ArbOS state")
+	}
+	if proposed != nil && deriwRouteContains(*proposed, c.caller) {
+		return errors.New("a protected Deriw route contract cannot schedule its own configuration")
+	}
+	active, _, configured, err := c.State.ActiveDeriwRouterConfig()
+	if err != nil {
+		return err
+	}
+	if configured && deriwRouteContains(active, c.caller) {
+		return errors.New("an active Deriw route contract cannot modify its own configuration")
+	}
+	pending, _, _, configured, err := c.State.PendingDeriwRouterConfig()
+	if err != nil {
+		return err
+	}
+	if configured && deriwRouteContains(pending, c.caller) {
+		return errors.New("a pending Deriw route contract cannot modify its own configuration")
+	}
+	return nil
+}
+
+// ScheduleDeriwRouterConfig stages a complete router-only send configuration.
+// The OwnerPrecompile wrapper admits chain owners only, and ArbOS keeps the
+// current configuration active until the mandatory delay has elapsed.
+func (con ArbOwner) ScheduleDeriwRouterConfig(
+	c ctx,
+	evm mech,
+	router addr,
+	canonicalGatewayRouter addr,
+	approvedTokenGateways []common.Address,
+	activationTimestamp uint64,
+) error {
+	if evm == nil {
+		return errors.New("missing EVM context")
+	}
+	routes := deriwpolicy.RouterOnlySendConfig{
+		Router:                 router,
+		CanonicalGatewayRouter: canonicalGatewayRouter,
+		ApprovedTokenGateways:  approvedTokenGateways,
+	}
+	if err := deriwpolicy.ValidateRouterOnlySendConfig(routes); err != nil {
+		return err
+	}
+	protectedAddresses := append(
+		[]common.Address{routes.Router, routes.CanonicalGatewayRouter},
+		routes.ApprovedTokenGateways...,
+	)
+	for _, protectedAddress := range protectedAddresses {
+		if evm.StateDB.GetCodeSize(protectedAddress) == 0 {
+			return fmt.Errorf("Deriw route address %v has no deployed code", protectedAddress)
+		}
+	}
+	if err := rejectProtectedDeriwRouteCaller(c, &routes); err != nil {
+		return err
+	}
+	return c.State.ScheduleDeriwRouterConfig(routes, evm.Context.Time, activationTimestamp)
+}
+
+// CancelScheduledDeriwRouterConfig discards a staged change without changing
+// the active route.
+func (con ArbOwner) CancelScheduledDeriwRouterConfig(c ctx, evm mech) error {
+	if err := rejectProtectedDeriwRouteCaller(c, nil); err != nil {
+		return err
+	}
+	return c.State.CancelScheduledDeriwRouterConfig()
+}
+
+// ScheduleDeriwOSUpgrade schedules independent Deriw consensus semantics.
+// The ownerOnly wrapper around ArbOwner makes this a chain-owner-only action.
+func (con ArbOwner) ScheduleDeriwOSUpgrade(c ctx, evm mech, newVersion uint64, timestamp uint64) error {
+	return c.State.ScheduleDeriwOSUpgrade(newVersion, timestamp)
+}
+
+// CancelScheduledDeriwOSUpgrade clears a pending DeriwOS upgrade.
+func (con ArbOwner) CancelScheduledDeriwOSUpgrade(c ctx, evm mech) error {
+	return c.State.CancelScheduledDeriwOSUpgrade()
+}
 
 // AddChainOwner adds account as a chain owner
 func (con ArbOwner) AddChainOwner(c ctx, evm mech, newOwner addr) error {
@@ -302,11 +396,25 @@ func (con ArbOwner) GetInfraFeeAccount(c ctx, evm mech) (addr, error) {
 
 // SetNetworkFeeAccount sets the network fee collector to the new network fee account
 func (con ArbOwner) SetNetworkFeeAccount(c ctx, evm mech, newNetworkFeeAccount addr) error {
+	enforceProtection, err := c.State.DeriwConsensusBlacklistActiveOrScheduled()
+	if err != nil {
+		return err
+	}
+	if enforceProtection && c.State.Blacklist().IsQuarantinedFree(newNetworkFeeAccount) {
+		return errors.New("cannot set a quarantined network fee account")
+	}
 	return c.State.SetNetworkFeeAccount(newNetworkFeeAccount)
 }
 
 // SetInfraFeeAccount sets the infrastructure fee collector address
 func (con ArbOwner) SetInfraFeeAccount(c ctx, evm mech, newInfraFeeAccount addr) error {
+	enforceProtection, err := c.State.DeriwConsensusBlacklistActiveOrScheduled()
+	if err != nil {
+		return err
+	}
+	if enforceProtection && c.State.Blacklist().IsQuarantinedFree(newInfraFeeAccount) {
+		return errors.New("cannot set a quarantined infrastructure fee account")
+	}
 	return c.State.SetInfraFeeAccount(newInfraFeeAccount)
 }
 

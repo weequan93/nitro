@@ -7,6 +7,10 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/offchainlabs/nitro/arbos/arbosState"
+	"github.com/offchainlabs/nitro/arbos/blacklist"
+	"github.com/offchainlabs/nitro/arbos/l1pricing"
 )
 
 // ArbOwner precompile provides owners with tools for managing the rollup.
@@ -52,11 +56,45 @@ func (con DeriwBlacklist) GetBlacklistTxTo(c ctx, evm mech) ([]common.Address, e
 }
 
 func (con DeriwBlacklist) AddBlacklistTxFrom(c ctx, evm mech, addr common.Address) error {
-	return c.State.Blacklist().TxFromAddrs().Add(addr)
+	if err := rejectProtectedBlacklistAddress(c, addr); err != nil {
+		return err
+	}
+	if err := c.State.Blacklist().TxFromAddrs().Add(addr); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (con DeriwBlacklist) AddBlacklistTxTo(c ctx, evm mech, addr common.Address) error {
-	return c.State.Blacklist().TxToAddrs().Add(addr)
+	if err := rejectProtectedBlacklistAddress(c, addr); err != nil {
+		return err
+	}
+	if err := c.State.Blacklist().TxToAddrs().Add(addr); err != nil {
+		return err
+	}
+	return nil
+}
+
+func rejectProtectedBlacklistAddress(c ctx, address common.Address) error {
+	enforceProtection, err := c.State.DeriwConsensusBlacklistActiveOrScheduled()
+	if err != nil {
+		return err
+	}
+	if !enforceProtection {
+		return nil
+	}
+	networkFeeAccount, err := c.State.NetworkFeeAccount()
+	if err != nil {
+		return err
+	}
+	infraFeeAccount, err := c.State.InfraFeeAccount()
+	if err != nil {
+		return err
+	}
+	if blacklist.IsProtectedSystemAddress(address, networkFeeAccount, infraFeeAccount, l1pricing.BatchPosterAddress) {
+		return errors.New("cannot quarantine a protected system address")
+	}
+	return nil
 }
 
 func (con DeriwBlacklist) IsBlacklistTxFrom(c ctx, evm mech, addr common.Address) (bool, error) {
@@ -72,7 +110,10 @@ func (con DeriwBlacklist) RemoveBlacklistTxFrom(c ctx, evm mech, addr common.Add
 	if !member {
 		return errors.New("tried to remove non-tx-from")
 	}
-	return c.State.Blacklist().TxFromAddrs().Remove(addr, c.State.ArbOSVersion())
+	if err := c.State.Blacklist().TxFromAddrs().Remove(addr, c.State.ArbOSVersion()); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (con DeriwBlacklist) RemoveBlacklistTxTo(c ctx, evm mech, addr common.Address) error {
@@ -80,5 +121,18 @@ func (con DeriwBlacklist) RemoveBlacklistTxTo(c ctx, evm mech, addr common.Addre
 	if !member {
 		return errors.New("tried to remove non-tx-to")
 	}
-	return c.State.Blacklist().TxToAddrs().Remove(addr, c.State.ArbOSVersion())
+	if err := c.State.Blacklist().TxToAddrs().Remove(addr, c.State.ArbOSVersion()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ScheduleDeriwOSUpgrade is retained only so historical DeriwOS 1-3
+// transactions replay identically. DeriwOS 4 and all future versions must be
+// scheduled through the chain-owner-only ArbOwner precompile.
+func (con DeriwBlacklist) ScheduleDeriwOSUpgrade(c ctx, evm mech, newVersion uint64, timestamp uint64) error {
+	if newVersion >= arbosState.DeriwOSVersion_ChainOwnerUpgradeScheduling {
+		return errors.New("DeriwOS 4 and later upgrades must be scheduled through ArbOwner")
+	}
+	return c.State.ScheduleDeriwOSUpgrade(newVersion, timestamp)
 }

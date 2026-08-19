@@ -127,6 +127,14 @@ func MakeNonceError(sender common.Address, txNonce uint64, stateNonce uint64) er
 }
 
 func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *types.Header, statedb *state.StateDB, arbos *arbosState.ArbosState, tx *types.Transaction, options *arbitrum_types.ConditionalOptions, config *TxPreCheckerConfig) error {
+	sender, err := types.Sender(types.MakeSigner(chainConfig, header.Number, header.Time, arbos.ArbOSVersion()), tx)
+	if err != nil {
+		return err
+	}
+	if err := preCheckBlacklist(arbos, tx, sender); err != nil {
+		return err
+	}
+
 	if config.Strictness < TxPreCheckerStrictnessAlwaysCompatible {
 		return nil
 	}
@@ -137,13 +145,6 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 		// Should be unreachable for Arbitrum types due to UnmarshalBinary not accepting Arbitrum internal txs
 		// and we want to disallow BlobTxType since Arbitrum doesn't support EIP-4844 txs yet.
 		return types.ErrTxTypeNotSupported
-	}
-	sender, err := types.Sender(types.MakeSigner(chainConfig, header.Number, header.Time, arbos.ArbOSVersion()), tx)
-	if err != nil {
-		return err
-	}
-	if arbos.Blacklist().IsBlacklistTxCheck(&sender, tx) {
-		return fmt.Errorf("PreCheckTx() transaction blacklisted: from %v to %v", sender, tx.To())
 	}
 	baseFee := header.BaseFee
 	if config.Strictness < TxPreCheckerStrictnessLikelyCompatible {

@@ -98,11 +98,12 @@ func TestDERSnapshotSubspaces(t *testing.T) {
 		subspace SubspaceID
 		slot     byte
 	}{
-		"pricer":     {pricerSubspace, 8},
-		"gasless":    {gaslessSubspace, 9},
-		"subAccount": {subAccountSubspace, 10},
-		"programs":   {programsSubspace, 11},
-		"blacklist":  {blacklistSubspace, 12},
+		"pricer":            {pricerSubspace, 8},
+		"gasless":           {gaslessSubspace, 9},
+		"subAccount":        {subAccountSubspace, 10},
+		"programs":          {programsSubspace, 11},
+		"blacklist":         {blacklistSubspace, 12},
+		"deriwRouterConfig": {deriwRouterConfigSubspace, 16},
 	}
 	for name, item := range expected {
 		if len(item.subspace) != 1 || item.subspace[0] != item.slot {

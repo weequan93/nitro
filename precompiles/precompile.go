@@ -563,6 +563,10 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbOwnerPublic.methodsByName["GetAllNativeTokenOwners"].arbosVersion = params.ArbosVersion_41
 	ArbOwnerPublic.methodsByName["GetParentGasFloorPerToken"].arbosVersion = params.ArbosVersion_50
 	ArbOwnerPublic.methodsByName["GetMaxStylusContractFragments"].arbosVersion = params.ArbosVersion_StylusContractLimit
+	ArbOwnerPublic.methodsByName["GetDeriwRouterConfig"].arbosVersion = params.ArbosVersion_60
+	ArbOwnerPublic.methodsByName["GetScheduledDeriwRouterConfig"].arbosVersion = params.ArbosVersion_60
+	ArbOwnerPublic.methodsByName["GetDeriwOSVersion"].arbosVersion = params.ArbosVersion_60
+	ArbOwnerPublic.methodsByName["GetScheduledDeriwOSUpgrade"].arbosVersion = params.ArbosVersion_60
 
 	ArbWasmImpl := &ArbWasm{Address: types.ArbWasmAddress}
 	ArbWasm := insert(MakePrecompile(precompilesgen.ArbWasmMetaData, ArbWasmImpl))
@@ -631,6 +635,10 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbOwner.methodsByName["SetMultiGasPricingConstraints"].arbosVersion = params.ArbosVersion_60
 	ArbOwner.methodsByName["SetMaxStylusContractFragments"].arbosVersion = params.ArbosVersion_60
 	ArbOwner.methodsByName["SetCollectTips"].arbosVersion = params.ArbosVersion_60
+	ArbOwner.methodsByName["ScheduleDeriwRouterConfig"].arbosVersion = params.ArbosVersion_60
+	ArbOwner.methodsByName["CancelScheduledDeriwRouterConfig"].arbosVersion = params.ArbosVersion_60
+	ArbOwner.methodsByName["ScheduleDeriwOSUpgrade"].arbosVersion = params.ArbosVersion_60
+	ArbOwner.methodsByName["CancelScheduledDeriwOSUpgrade"].arbosVersion = params.ArbosVersion_60
 	stylusMethods := []string{
 		"SetInkPrice", "SetWasmMaxStackDepth", "SetWasmFreePages", "SetWasmPageGas",
 		"SetWasmPageLimit", "SetWasmMinInitGas", "SetWasmInitCostScalar",

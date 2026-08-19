@@ -21,10 +21,198 @@ import (
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/burn"
+	"github.com/offchainlabs/nitro/arbos/deriwpolicy"
 	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/cmd/chaininfo"
+	"github.com/offchainlabs/nitro/solgen/go/precompilesgen"
 	"github.com/offchainlabs/nitro/util/testhelpers"
 )
+
+func TestArbOwnerSchedulesDeriwRouterConfig(t *testing.T) {
+	evm := newMockEVMForTesting()
+	owner := testhelpers.RandomAddress()
+	callCtx := testContext(owner, evm)
+	routes := deriwpolicy.RouterOnlySendConfig{
+		Router:                 common.HexToAddress("0x2001"),
+		CanonicalGatewayRouter: common.HexToAddress("0x2002"),
+		ApprovedTokenGateways: []common.Address{
+			common.HexToAddress("0x2003"),
+			common.HexToAddress("0x2004"),
+		},
+	}
+	ownerPrecompile := &ArbOwner{}
+	activationTimestamp := evm.Context.Time + arbosState.DeriwRouterConfigUpdateDelay
+	if err := ownerPrecompile.ScheduleDeriwRouterConfig(
+		callCtx,
+		evm,
+		routes.Router,
+		routes.CanonicalGatewayRouter,
+		routes.ApprovedTokenGateways,
+		activationTimestamp,
+	); err == nil {
+		t.Fatal("scheduled a Deriw route containing addresses without deployed code")
+	}
+	for _, routeAddress := range append(
+		[]common.Address{routes.Router, routes.CanonicalGatewayRouter},
+		routes.ApprovedTokenGateways...,
+	) {
+		evm.StateDB.SetCode(routeAddress, []byte{byte(vm.INVALID)}, tracing.CodeChangeUnspecified)
+	}
+	if err := ownerPrecompile.ScheduleDeriwRouterConfig(
+		callCtx,
+		evm,
+		routes.Router,
+		routes.CanonicalGatewayRouter,
+		routes.ApprovedTokenGateways,
+		activationTimestamp,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	public := &ArbOwnerPublic{}
+	router, canonicalRouter, gateways, revision, scheduledFor, err := public.GetScheduledDeriwRouterConfig(callCtx, evm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if router != routes.Router || canonicalRouter != routes.CanonicalGatewayRouter ||
+		len(gateways) != len(routes.ApprovedTokenGateways) || revision != 1 || scheduledFor != activationTimestamp {
+		t.Fatalf("unexpected pending route: router=%v canonical=%v gateways=%v revision=%v scheduled=%v", router, canonicalRouter, gateways, revision, scheduledFor)
+	}
+	if err := callCtx.State.ActivateDeriwRouterConfigIfNecessary(activationTimestamp); err != nil {
+		t.Fatal(err)
+	}
+	router, canonicalRouter, gateways, revision, err = public.GetDeriwRouterConfig(callCtx, evm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if router != routes.Router || canonicalRouter != routes.CanonicalGatewayRouter ||
+		len(gateways) != len(routes.ApprovedTokenGateways) || revision != 1 {
+		t.Fatalf("unexpected active route: router=%v canonical=%v gateways=%v revision=%v", router, canonicalRouter, gateways, revision)
+	}
+
+	// Even if governance accidentally grants a route contract chain-owner
+	// status, that protected contract cannot alter its own allowlist.
+	protectedCaller := testContext(routes.Router, evm)
+	if err := ownerPrecompile.ScheduleDeriwRouterConfig(
+		protectedCaller,
+		evm,
+		routes.Router,
+		routes.CanonicalGatewayRouter,
+		routes.ApprovedTokenGateways,
+		activationTimestamp+arbosState.DeriwRouterConfigUpdateDelay,
+	); err == nil {
+		t.Fatal("active Deriw router was allowed to modify its route configuration")
+	}
+}
+
+func TestArbOwnerSchedulesAndCancelsDeriwOSUpgrade(t *testing.T) {
+	evm := newMockEVMForTesting()
+	owner := testhelpers.RandomAddress()
+	callCtx := testContext(owner, evm)
+	ownerPrecompile := &ArbOwner{}
+	public := &ArbOwnerPublic{}
+
+	if err := ownerPrecompile.ScheduleDeriwOSUpgrade(
+		callCtx,
+		evm,
+		arbosState.DeriwOSVersion_ConsensusBlacklist,
+		1234,
+	); err != nil {
+		t.Fatal(err)
+	}
+	arbOSVersion, deriwOSVersion, err := public.GetDeriwOSVersion(callCtx, evm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if arbOSVersion != callCtx.State.ArbOSVersion() || deriwOSVersion != arbosState.DeriwOSVersion_Legacy {
+		t.Fatalf("version pair = ArbOS %v / DeriwOS %v", arbOSVersion, deriwOSVersion)
+	}
+	target, timestamp, scheduledAtArbOS, err := public.GetScheduledDeriwOSUpgrade(callCtx, evm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != arbosState.DeriwOSVersion_ConsensusBlacklist || timestamp != 1234 || scheduledAtArbOS != arbOSVersion {
+		t.Fatalf("scheduled tuple = (%v, %v, %v)", target, timestamp, scheduledAtArbOS)
+	}
+
+	if err := ownerPrecompile.CancelScheduledDeriwOSUpgrade(callCtx, evm); err != nil {
+		t.Fatal(err)
+	}
+	target, timestamp, scheduledAtArbOS, err = public.GetScheduledDeriwOSUpgrade(callCtx, evm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != 0 || timestamp != 0 || scheduledAtArbOS != 0 {
+		t.Fatalf("cancelled scheduled tuple = (%v, %v, %v), want all zero", target, timestamp, scheduledAtArbOS)
+	}
+}
+
+func TestArbOwnerWrapperRestrictsDeriwOSSchedulingToChainOwners(t *testing.T) {
+	evm := newMockEVMForTesting()
+	chainOwner := testhelpers.RandomAddress()
+	unauthorized := testhelpers.RandomAddress()
+	// The newly exposed ArbOwner methods are available from internal ArbOS 60.
+	// Set the persisted version before opening the state used by the wrapper.
+	callCtx := testContextWithVersion(chainOwner, evm, params.ArbosVersion_60)
+	state := callCtx.State
+	if err := state.ChainOwners().Add(chainOwner); err != nil {
+		t.Fatal(err)
+	}
+	abi, err := precompilesgen.ArbOwnerMetaData.GetAbi()
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := abi.Pack(
+		"scheduleDeriwOSUpgrade",
+		arbosState.DeriwOSVersion_ConsensusBlacklist,
+		uint64(1234),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract := Precompiles()[types.ArbOwnerAddress]
+	if contract == nil {
+		t.Fatal("ArbOwner precompile is not registered")
+	}
+
+	if _, _, _, err := contract.Call(
+		input,
+		types.ArbOwnerAddress,
+		unauthorized,
+		common.Big0,
+		false,
+		10_000_000,
+		evm,
+	); err == nil {
+		t.Fatal("non-chain-owner scheduled a DeriwOS upgrade through ArbOwner")
+	}
+	version, timestamp, scheduledAtArbOS, err := state.GetScheduledDeriwOSUpgrade()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != 0 || timestamp != 0 || scheduledAtArbOS != 0 {
+		t.Fatalf("unauthorized call changed schedule to (%v, %v, %v)", version, timestamp, scheduledAtArbOS)
+	}
+
+	if _, _, _, err := contract.Call(
+		input,
+		types.ArbOwnerAddress,
+		chainOwner,
+		common.Big0,
+		false,
+		10_000_000,
+		evm,
+	); err != nil {
+		t.Fatal(err)
+	}
+	version, timestamp, scheduledAtArbOS, err = state.GetScheduledDeriwOSUpgrade()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != arbosState.DeriwOSVersion_ConsensusBlacklist || timestamp != 1234 || scheduledAtArbOS != state.ArbOSVersion() {
+		t.Fatalf("authorized schedule = (%v, %v, %v)", version, timestamp, scheduledAtArbOS)
+	}
+}
 
 func TestArbOwner(t *testing.T) {
 	evm := newMockEVMForTesting()
