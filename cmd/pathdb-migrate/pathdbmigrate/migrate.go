@@ -637,8 +637,8 @@ func (m *Migrator) copyAccountTrieParallel(ctx context.Context, writer *pathWrit
 	queueSize := maxInFlight - m.config.StateWorkers
 	jobs := make(chan storageTrieJob, queueSize)
 	var (
-		workers  sync.WaitGroup
-		errOnce  sync.Once
+		workers   sync.WaitGroup
+		errOnce   sync.Once
 		workerErr error
 	)
 	recordWorkerError := func(err error) {
