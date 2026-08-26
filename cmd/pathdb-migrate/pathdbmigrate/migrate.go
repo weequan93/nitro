@@ -326,9 +326,9 @@ func (m *Migrator) compareDatabases(ctx context.Context) error {
 		}
 	}
 	log.Info("Source and destination canonical headers match", "start", m.config.CompareStart, "end", end,
-		"sourceHeaderRoot", srcEnd.header.Root,
-		"destinationHeaderRoot", dstEnd.header.Root,
-		"destinationPathRoot", pathAccountRoot(dst))
+		"sourceHeaderRoot", srcEnd.header.Root.Hex(),
+		"destinationHeaderRoot", dstEnd.header.Root.Hex(),
+		"destinationPathRoot", pathAccountRoot(dst).Hex())
 	return nil
 }
 
