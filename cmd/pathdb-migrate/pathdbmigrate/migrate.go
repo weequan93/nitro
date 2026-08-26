@@ -128,6 +128,9 @@ func ensureDestinationReady(db ethdb.Database, expected *selectedState) error {
 }
 
 func (m *Migrator) Run(ctx context.Context) error {
+	if m.config.FindStateRoot != "" {
+		return m.findStateRoot(ctx)
+	}
 	if m.config.AccountHistory.Enable {
 		return m.runAccountHistory(ctx)
 	}
@@ -267,6 +270,45 @@ func (m *Migrator) Run(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// findStateRoot scans canonical headers in a read-only source database. It is
+// intentionally separate from migration so operators can recover the exact
+// end block for an already-converted destination without running an RPC node.
+func (m *Migrator) findStateRoot(ctx context.Context) error {
+	src, err := openChainDB(&m.config.Src, "src-scan", true, false)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	endState, err := selectState(src, m.config.FindEndBlock)
+	if err != nil {
+		return err
+	}
+	start := m.config.FindStartBlock
+	end := endState.header.Number.Uint64()
+	if start > end {
+		return fmt.Errorf("find-start-block %d is greater than end block %d", start, end)
+	}
+	target := common.HexToHash(m.config.FindStateRoot)
+	for number := start; number <= end; number++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		hash := rawdb.ReadCanonicalHash(src, number)
+		if hash != (common.Hash{}) {
+			header := rawdb.ReadHeader(src, hash, number)
+			if header != nil && header.Root == target {
+				log.Info("Found state root", "number", number, "block", hash, "root", target)
+				return nil
+			}
+		}
+		if number%10000 == 0 {
+			log.Info("Scanning canonical headers", "number", number, "end", end)
+		}
+	}
+	return fmt.Errorf("state root %s not found in canonical blocks %d-%d", target, start, end)
 }
 
 func (m *Migrator) convertState(ctx context.Context, src ethdb.Database, dst ethdb.Database, root common.Hash, write bool) error {

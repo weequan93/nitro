@@ -3,10 +3,12 @@
 package pathdbmigrate
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -74,6 +76,9 @@ type Config struct {
 	StrictCleanup    bool                            `koanf:"strict-cleanup"`
 	Compact          bool                            `koanf:"compact"`
 	DiscardSnapshot  bool                            `koanf:"discard-snapshot"`
+	FindStateRoot    string                          `koanf:"find-state-root"`
+	FindStartBlock   uint64                          `koanf:"find-start-block"`
+	FindEndBlock     string                          `koanf:"find-end-block"`
 	IdealBatchSize   int                             `koanf:"ideal-batch-size"`
 	LogLevel         string                          `koanf:"log-level"`
 	LogType          string                          `koanf:"log-type"`
@@ -127,6 +132,7 @@ var DefaultConfig = Config{
 		SpillCache:        64,
 	},
 	Migrate:          false,
+	FindEndBlock:     "latest",
 	Verify:           true,
 	VerifyOnly:       false,
 	IgnoreUnfinished: false,
@@ -172,6 +178,9 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Bool("strict-cleanup", DefaultConfig.StrictCleanup, "after successful pathdb verification, delete legacy hash trie nodes and stale hashdb snapshot flat-state entries")
 	f.Bool("compact", DefaultConfig.Compact, "compact the destination key-value database after migration or cleanup")
 	f.Bool("discard-snapshot", DefaultConfig.DiscardSnapshot, "discard inherited snapshot root/generator metadata so pathdb rebuilds flat snapshots")
+	f.String("find-state-root", DefaultConfig.FindStateRoot, "offline scan: find the canonical block whose state root equals this hash")
+	f.Uint64("find-start-block", DefaultConfig.FindStartBlock, "offline state-root scan start block")
+	f.String("find-end-block", DefaultConfig.FindEndBlock, "offline state-root scan end block ('latest' or a block number)")
 	f.Int("ideal-batch-size", DefaultConfig.IdealBatchSize, "ideal write batch size in bytes")
 	f.String("log-level", DefaultConfig.LogLevel, "log level, valid values are CRIT, ERROR, WARN, INFO, DEBUG, TRACE")
 	f.String("log-type", DefaultConfig.LogType, "log type (plaintext or json)")
@@ -180,6 +189,21 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 }
 
 func (c *Config) Validate() error {
+	if c.FindStateRoot != "" {
+		rootText := strings.TrimPrefix(c.FindStateRoot, "0x")
+		if len(rootText) != 64 {
+			return fmt.Errorf("find-state-root must be a 32-byte hex hash")
+		}
+		if _, err := hex.DecodeString(rootText); err != nil {
+			return fmt.Errorf("find-state-root must be a 32-byte hex hash: %w", err)
+		}
+		if c.Src.ChainData == "" {
+			return errors.New("src.chain-data is required for find-state-root")
+		}
+		if c.Migrate || c.VerifyOnly || c.AccountHistory.Enable || c.ArchiveHistory.Enable || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+			return errors.New("find-state-root cannot be combined with migration, history, verification, cleanup, or compact modes")
+		}
+	}
 	if c.AccountHistory.Enable && c.ArchiveHistory.Enable {
 		return errors.New("account-history.enable and archive-history.enable cannot both be set")
 	}

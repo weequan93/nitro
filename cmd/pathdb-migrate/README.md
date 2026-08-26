@@ -77,6 +77,24 @@ go run ./cmd/pathdb-migrate \
   --verify-only
 ```
 
+## Find a state-root block offline
+
+When a destination was migrated with `--block latest`, the source may later
+advance. Use the read-only scanner to recover the canonical block whose header
+contains the destination's state root; no RPC node is required:
+
+```sh
+go run ./cmd/pathdb-migrate \
+  --src.chain-data /data/node/l2chaindata \
+  --find-state-root <DESTINATION_STATE_ROOT> \
+  --find-start-block 0 \
+  --find-end-block latest
+```
+
+The scanner prints `Found state root` with the block number and block hash.
+Use that number as `--archive-history.end-block`. It opens the source database
+read-only; stop any node that owns the source database before running it.
+
 If an earlier process exited after migration finished but before clean shutdown,
 the unfinished-conversion canary can be cleared after a successful verification:
 
