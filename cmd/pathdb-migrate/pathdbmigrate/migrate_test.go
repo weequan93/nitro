@@ -115,6 +115,31 @@ func TestConvertHashStateToPathState(t *testing.T) {
 	}
 }
 
+func TestConvertHashStateToPathStateParallel(t *testing.T) {
+	src := rawdb.NewMemoryDatabase()
+	dst := rawdb.NewMemoryDatabase()
+	root, _, _ := buildHashState(t, src)
+
+	config := DefaultConfig
+	config.IdealBatchSize = 256
+	config.StateWorkers = 2
+	config.StateMaxInFlight = 2
+	migrator := NewMigrator(&config)
+	migrator.stats.Reset()
+	if err := migrator.convertState(context.Background(), src, dst, root, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrator.writePathMetadata(dst, root); err != nil {
+		t.Fatal(err)
+	}
+	if got := pathAccountRoot(dst); got != root {
+		t.Fatalf("parallel root mismatch: have %s want %s", got, root)
+	}
+	if err := VerifyPathState(context.Background(), dst, root); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRepairPathStateConfigRequiresExplicitBlock(t *testing.T) {
 	config := DefaultConfig
 	config.Src.ChainData = "/source"
@@ -130,6 +155,24 @@ func TestRepairPathStateConfigRequiresExplicitBlock(t *testing.T) {
 	config.Migrate = true
 	if err := config.Validate(); err == nil {
 		t.Fatal("expected repair combined with migration to fail validation")
+	}
+}
+
+func TestStateWorkerConfigValidation(t *testing.T) {
+	config := DefaultConfig
+	config.Src.ChainData = "/source"
+	config.StateWorkers = 0
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected zero state workers to fail validation")
+	}
+	config.StateWorkers = 4
+	config.StateMaxInFlight = 3
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected max-inflight below workers to fail validation")
+	}
+	config.StateMaxInFlight = 8
+	if err := config.Validate(); err != nil {
+		t.Fatalf("valid state worker configuration failed: %v", err)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -226,6 +227,8 @@ func (m *Migrator) Run(ctx context.Context) error {
 		"number", state.header.Number.Uint64(),
 		"block", state.header.Hash(),
 		"root", state.root,
+		"stateWorkers", m.config.StateWorkers,
+		"stateMaxInFlight", m.config.StateMaxInFlight,
 	)
 
 	if !m.config.Migrate {
@@ -345,7 +348,9 @@ func (m *Migrator) repairPathState(ctx context.Context) error {
 	log.Info("PathDB repair preflight",
 		"block", state.header.Number.Uint64(),
 		"canonicalRoot", state.root.Hex(),
-		"currentPathRoot", currentRoot.Hex())
+		"currentPathRoot", currentRoot.Hex(),
+		"stateWorkers", m.config.StateWorkers,
+		"stateMaxInFlight", m.config.StateMaxInFlight)
 	if currentRoot == state.root {
 		log.Info("Destination PathDB already matches the selected canonical state")
 		if err := VerifyPathState(ctx, dst, state.root); err != nil {
@@ -568,6 +573,13 @@ func (m *Migrator) convertState(ctx context.Context, src ethdb.Database, dst eth
 }
 
 func (m *Migrator) copyAccountTrie(ctx context.Context, writer *pathWriter, srcTrieDB *triedb.Database, accountTrie *trie.Trie, stateRoot common.Hash) error {
+	if m.config.StateWorkers == 1 {
+		return m.copyAccountTrieSequential(ctx, writer, srcTrieDB, accountTrie, stateRoot)
+	}
+	return m.copyAccountTrieParallel(ctx, writer, srcTrieDB, accountTrie, stateRoot)
+}
+
+func (m *Migrator) copyAccountTrieSequential(ctx context.Context, writer *pathWriter, srcTrieDB *triedb.Database, accountTrie *trie.Trie, stateRoot common.Hash) error {
 	it, err := accountTrie.NodeIterator(nil)
 	if err != nil {
 		return err
@@ -601,6 +613,118 @@ func (m *Migrator) copyAccountTrie(ctx context.Context, writer *pathWriter, srcT
 		accountHash := common.BytesToHash(accountHashBytes)
 		if err := m.copyStorageTrie(ctx, writer, srcTrieDB, stateRoot, accountHash, account.Root); err != nil {
 			return err
+		}
+	}
+	if err := it.Error(); err != nil {
+		return fmt.Errorf("iterate account trie: %w", err)
+	}
+	return nil
+}
+
+type storageTrieJob struct {
+	accountHash common.Hash
+	storageRoot common.Hash
+}
+
+func (m *Migrator) copyAccountTrieParallel(ctx context.Context, writer *pathWriter, srcTrieDB *triedb.Database, accountTrie *trie.Trie, stateRoot common.Hash) error {
+	workerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	maxInFlight := m.config.StateMaxInFlight
+	if maxInFlight == 0 {
+		maxInFlight = m.config.StateWorkers
+	}
+	queueSize := maxInFlight - m.config.StateWorkers
+	jobs := make(chan storageTrieJob, queueSize)
+	var (
+		workers  sync.WaitGroup
+		errOnce  sync.Once
+		workerErr error
+	)
+	recordWorkerError := func(err error) {
+		errOnce.Do(func() {
+			workerErr = err
+			cancel()
+		})
+	}
+
+	for i := 0; i < m.config.StateWorkers; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			storageWriter := writer.sibling()
+			for job := range jobs {
+				if err := workerCtx.Err(); err != nil {
+					return
+				}
+				if err := m.copyStorageTrie(workerCtx, storageWriter, srcTrieDB, stateRoot, job.accountHash, job.storageRoot); err != nil {
+					recordWorkerError(err)
+					return
+				}
+			}
+			if err := storageWriter.Flush(); err != nil {
+				recordWorkerError(err)
+			}
+		}()
+	}
+
+	producerErr := m.copyAccountTrieAndScheduleStorage(workerCtx, writer, accountTrie, jobs)
+	if producerErr != nil {
+		cancel()
+	}
+	close(jobs)
+	workers.Wait()
+	if workerErr != nil {
+		return workerErr
+	}
+	if producerErr != nil {
+		if errors.Is(producerErr, context.Canceled) && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return producerErr
+	}
+	return nil
+}
+
+func (m *Migrator) copyAccountTrieAndScheduleStorage(ctx context.Context, writer *pathWriter, accountTrie *trie.Trie, jobs chan<- storageTrieJob) error {
+	it, err := accountTrie.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	for it.Next(true) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if blob := it.NodeBlob(); len(blob) > 0 {
+			if err := writer.WriteAccountNode(common.CopyBytes(it.Path()), common.CopyBytes(blob)); err != nil {
+				return err
+			}
+			m.stats.accountNodes.Add(1)
+			m.stats.bytes.Add(uint64(len(blob)))
+		}
+		if !it.Leaf() {
+			continue
+		}
+		m.stats.accountLeaves.Add(1)
+		accountHashBytes := common.CopyBytes(it.LeafKey())
+		if len(accountHashBytes) != common.HashLength {
+			return fmt.Errorf("unexpected account trie leaf key length %d", len(accountHashBytes))
+		}
+		var account types.StateAccount
+		if err := rlp.DecodeBytes(common.CopyBytes(it.LeafBlob()), &account); err != nil {
+			return fmt.Errorf("decode account leaf %x: %w", accountHashBytes, err)
+		}
+		if account.Root == types.EmptyRootHash {
+			continue
+		}
+		job := storageTrieJob{
+			accountHash: common.BytesToHash(accountHashBytes),
+			storageRoot: account.Root,
+		}
+		select {
+		case jobs <- job:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 	if err := it.Error(); err != nil {
@@ -657,6 +781,7 @@ func (m *Migrator) writePathMetadata(dst ethdb.Database, root common.Hash) error
 }
 
 type pathWriter struct {
+	db             ethdb.Database
 	batch          ethdb.Batch
 	idealBatchSize int
 	write          bool
@@ -669,11 +794,16 @@ func newPathWriter(dst ethdb.Database, idealBatchSize int, write bool, stats *St
 		batch = dst.NewBatch()
 	}
 	return &pathWriter{
+		db:             dst,
 		batch:          batch,
 		idealBatchSize: idealBatchSize,
 		write:          write,
 		stats:          stats,
 	}
+}
+
+func (w *pathWriter) sibling() *pathWriter {
+	return newPathWriter(w.db, w.idealBatchSize, w.write, w.stats)
 }
 
 func (w *pathWriter) WriteAccountNode(path []byte, blob []byte) error {

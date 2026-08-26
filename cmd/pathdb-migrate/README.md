@@ -136,7 +136,9 @@ go run ./cmd/pathdb-migrate \
   --src.chain-data /data/node/l2chaindata \
   --dst.chain-data /data/node-path/l2chaindata \
   --repair-path-state \
-  --block 123600452
+  --block 123600452 \
+  --state-workers 4 \
+  --state-max-inflight 8
 ```
 
 This mode requires matching source and destination canonical headers at the
@@ -149,6 +151,13 @@ history and therefore refuses to run when history entries already exist.
 If an interrupted repair left the conversion canary behind, restore the backup
 or rerun the same repair with `--ignore-unfinished-conversion`; the canary is
 still removed only after full verification succeeds.
+
+Normal migration and PathDB repair can process independent account storage
+tries concurrently. Account-trie traversal remains sequential, while each
+storage worker uses its own bounded write batch. Start with four workers and an
+in-flight limit of eight; increase one worker at a time only when storage has
+spare random-read capacity and RSS remains safely below the host limit. These
+flags are separate from `--archive-history.workers`.
 
 ## Archive history with missing states
 

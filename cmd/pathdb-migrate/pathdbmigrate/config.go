@@ -84,6 +84,8 @@ type Config struct {
 	CompareDatabases bool                            `koanf:"compare-source-destination"`
 	CompareStart    uint64                          `koanf:"compare-start-block"`
 	CompareEnd      string                          `koanf:"compare-end-block"`
+	StateWorkers    int                             `koanf:"state-workers"`
+	StateMaxInFlight int                            `koanf:"state-max-inflight"`
 	IdealBatchSize   int                             `koanf:"ideal-batch-size"`
 	LogLevel         string                          `koanf:"log-level"`
 	LogType          string                          `koanf:"log-type"`
@@ -140,6 +142,8 @@ var DefaultConfig = Config{
 	RepairPathState:  false,
 	FindEndBlock:     "latest",
 	CompareEnd:       "latest",
+	StateWorkers:     1,
+	StateMaxInFlight: 0,
 	Verify:           true,
 	VerifyOnly:       false,
 	IgnoreUnfinished: false,
@@ -192,6 +196,8 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Bool("compare-source-destination", DefaultConfig.CompareDatabases, "offline compare canonical block hashes and state roots")
 	f.Uint64("compare-start-block", DefaultConfig.CompareStart, "offline comparison start block")
 	f.String("compare-end-block", DefaultConfig.CompareEnd, "offline comparison end block ('latest' or a block number)")
+	f.Int("state-workers", DefaultConfig.StateWorkers, "number of storage-trie workers used by migration and PathDB repair")
+	f.Int("state-max-inflight", DefaultConfig.StateMaxInFlight, "maximum active and queued storage tries; 0 uses the worker count")
 	f.Int("ideal-batch-size", DefaultConfig.IdealBatchSize, "ideal write batch size in bytes")
 	f.String("log-level", DefaultConfig.LogLevel, "log level, valid values are CRIT, ERROR, WARN, INFO, DEBUG, TRACE")
 	f.String("log-type", DefaultConfig.LogType, "log type (plaintext or json)")
@@ -331,6 +337,15 @@ func (c *Config) Validate() error {
 	}
 	if c.IdealBatchSize <= 0 {
 		return fmt.Errorf("invalid ideal-batch-size %d", c.IdealBatchSize)
+	}
+	if c.StateWorkers <= 0 {
+		return errors.New("state-workers must be greater than 0")
+	}
+	if c.StateMaxInFlight < 0 {
+		return errors.New("state-max-inflight must be non-negative")
+	}
+	if c.StateMaxInFlight != 0 && c.StateMaxInFlight < c.StateWorkers {
+		return errors.New("state-max-inflight must be at least state-workers")
 	}
 	return nil
 }
