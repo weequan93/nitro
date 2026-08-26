@@ -107,7 +107,12 @@ go run ./cmd/pathdb-migrate \
 ```
 
 The command reports the first canonical block-hash or state-root mismatch and
-opens both databases read-only. It does not compare raw database files.
+opens both databases read-only. On success it also prints the source and
+destination head numbers and roots, the destination PathDB root, and whether
+that PathDB root appeared in the compared canonical range. If `pathRootFound`
+is false, rerun through `--compare-end-block latest` before treating the PathDB
+as corrupt: the PathDB may simply represent a later block than the originally
+chosen archive-history end block. It does not compare raw database files.
 
 If an earlier process exited after migration finished but before clean shutdown,
 the unfinished-conversion canary can be cleared after a successful verification:

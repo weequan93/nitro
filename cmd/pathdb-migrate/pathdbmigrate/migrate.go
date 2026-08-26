@@ -289,6 +289,14 @@ func (m *Migrator) compareDatabases(ctx context.Context) error {
 		return err
 	}
 	defer dst.Close()
+	srcHead := rawdb.ReadHeadHeader(src)
+	if srcHead == nil {
+		return errors.New("missing source head header")
+	}
+	dstHead := rawdb.ReadHeadHeader(dst)
+	if dstHead == nil {
+		return errors.New("missing destination head header")
+	}
 	srcEnd, err := selectState(src, m.config.CompareEnd)
 	if err != nil {
 		return err
@@ -301,6 +309,16 @@ func (m *Migrator) compareDatabases(ctx context.Context) error {
 	if dstEnd.header.Number.Uint64() < end {
 		end = dstEnd.header.Number.Uint64()
 	}
+	if m.config.CompareStart > end {
+		return fmt.Errorf("compare-start-block %d is greater than end block %d", m.config.CompareStart, end)
+	}
+	dstPathRoot := pathAccountRoot(dst)
+	var (
+		pathRootBlock uint64
+		pathRootFound bool
+		lastSrcRoot   common.Hash
+		lastDstRoot   common.Hash
+	)
 	for number := m.config.CompareStart; number <= end; number++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -321,14 +339,26 @@ func (m *Migrator) compareDatabases(ctx context.Context) error {
 		if srcHeader.Root != dstHeader.Root {
 			return fmt.Errorf("first state-root mismatch at block %d: source=%s destination=%s block=%s", number, srcHeader.Root, dstHeader.Root, srcHash)
 		}
+		lastSrcRoot = srcHeader.Root
+		lastDstRoot = dstHeader.Root
+		if srcHeader.Root == dstPathRoot {
+			pathRootBlock = number
+			pathRootFound = true
+		}
 		if number%10000 == 0 {
 			log.Info("Compared canonical headers", "number", number, "end", end)
 		}
 	}
 	log.Info("Source and destination canonical headers match", "start", m.config.CompareStart, "end", end,
-		"sourceHeaderRoot", srcEnd.header.Root.Hex(),
-		"destinationHeaderRoot", dstEnd.header.Root.Hex(),
-		"destinationPathRoot", pathAccountRoot(dst).Hex())
+		"sourceHeaderRoot", lastSrcRoot.Hex(),
+		"destinationHeaderRoot", lastDstRoot.Hex(),
+		"destinationPathRoot", dstPathRoot.Hex(),
+		"pathRootFound", pathRootFound,
+		"pathRootBlock", pathRootBlock,
+		"sourceHead", srcHead.Number.Uint64(),
+		"destinationHead", dstHead.Number.Uint64(),
+		"sourceHeadRoot", srcHead.Root.Hex(),
+		"destinationHeadRoot", dstHead.Root.Hex())
 	return nil
 }
 
