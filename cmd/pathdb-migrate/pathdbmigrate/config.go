@@ -79,6 +79,9 @@ type Config struct {
 	FindStateRoot    string                          `koanf:"find-state-root"`
 	FindStartBlock   uint64                          `koanf:"find-start-block"`
 	FindEndBlock     string                          `koanf:"find-end-block"`
+	CompareDatabases bool                            `koanf:"compare-source-destination"`
+	CompareStart    uint64                          `koanf:"compare-start-block"`
+	CompareEnd      string                          `koanf:"compare-end-block"`
 	IdealBatchSize   int                             `koanf:"ideal-batch-size"`
 	LogLevel         string                          `koanf:"log-level"`
 	LogType          string                          `koanf:"log-type"`
@@ -133,6 +136,7 @@ var DefaultConfig = Config{
 	},
 	Migrate:          false,
 	FindEndBlock:     "latest",
+	CompareEnd:       "latest",
 	Verify:           true,
 	VerifyOnly:       false,
 	IgnoreUnfinished: false,
@@ -181,6 +185,9 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.String("find-state-root", DefaultConfig.FindStateRoot, "offline scan: find the canonical block whose state root equals this hash")
 	f.Uint64("find-start-block", DefaultConfig.FindStartBlock, "offline state-root scan start block")
 	f.String("find-end-block", DefaultConfig.FindEndBlock, "offline state-root scan end block ('latest' or a block number)")
+	f.Bool("compare-source-destination", DefaultConfig.CompareDatabases, "offline compare canonical block hashes and state roots")
+	f.Uint64("compare-start-block", DefaultConfig.CompareStart, "offline comparison start block")
+	f.String("compare-end-block", DefaultConfig.CompareEnd, "offline comparison end block ('latest' or a block number)")
 	f.Int("ideal-batch-size", DefaultConfig.IdealBatchSize, "ideal write batch size in bytes")
 	f.String("log-level", DefaultConfig.LogLevel, "log level, valid values are CRIT, ERROR, WARN, INFO, DEBUG, TRACE")
 	f.String("log-type", DefaultConfig.LogType, "log type (plaintext or json)")
@@ -202,6 +209,14 @@ func (c *Config) Validate() error {
 		}
 		if c.Migrate || c.VerifyOnly || c.AccountHistory.Enable || c.ArchiveHistory.Enable || c.CleanupLegacy || c.StrictCleanup || c.Compact {
 			return errors.New("find-state-root cannot be combined with migration, history, verification, cleanup, or compact modes")
+		}
+	}
+	if c.CompareDatabases {
+		if c.Src.ChainData == "" || c.Dst.ChainData == "" {
+			return errors.New("src.chain-data and dst.chain-data are required for comparison")
+		}
+		if c.FindStateRoot != "" || c.Migrate || c.VerifyOnly || c.AccountHistory.Enable || c.ArchiveHistory.Enable || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+			return errors.New("compare-source-destination cannot be combined with another migration or scan mode")
 		}
 	}
 	if c.AccountHistory.Enable && c.ArchiveHistory.Enable {

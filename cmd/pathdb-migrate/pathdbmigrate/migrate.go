@@ -131,6 +131,9 @@ func (m *Migrator) Run(ctx context.Context) error {
 	if m.config.FindStateRoot != "" {
 		return m.findStateRoot(ctx)
 	}
+	if m.config.CompareDatabases {
+		return m.compareDatabases(ctx)
+	}
 	if m.config.AccountHistory.Enable {
 		return m.runAccountHistory(ctx)
 	}
@@ -269,6 +272,60 @@ func (m *Migrator) Run(ctx context.Context) error {
 	if err := dst.SyncKeyValue(); err != nil {
 		return err
 	}
+	return nil
+}
+
+// compareDatabases compares canonical headers in two offline chain databases.
+// It is useful for proving whether a converted destination came from the same
+// snapshot as its source; neither database is opened for writing.
+func (m *Migrator) compareDatabases(ctx context.Context) error {
+	src, err := openChainDB(&m.config.Src, "src-compare", true, false)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := openChainDB(&m.config.Dst, "dst-compare", true, true)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	srcEnd, err := selectState(src, m.config.CompareEnd)
+	if err != nil {
+		return err
+	}
+	dstEnd, err := selectState(dst, m.config.CompareEnd)
+	if err != nil {
+		return err
+	}
+	end := srcEnd.header.Number.Uint64()
+	if dstEnd.header.Number.Uint64() < end {
+		end = dstEnd.header.Number.Uint64()
+	}
+	for number := m.config.CompareStart; number <= end; number++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		srcHash := rawdb.ReadCanonicalHash(src, number)
+		dstHash := rawdb.ReadCanonicalHash(dst, number)
+		if srcHash != dstHash {
+			return fmt.Errorf("first canonical mismatch at block %d: source=%s destination=%s", number, srcHash, dstHash)
+		}
+		if srcHash == (common.Hash{}) {
+			return fmt.Errorf("missing canonical block %d in source and/or destination", number)
+		}
+		srcHeader := rawdb.ReadHeader(src, srcHash, number)
+		dstHeader := rawdb.ReadHeader(dst, dstHash, number)
+		if srcHeader == nil || dstHeader == nil {
+			return fmt.Errorf("missing header at block %d", number)
+		}
+		if srcHeader.Root != dstHeader.Root {
+			return fmt.Errorf("first state-root mismatch at block %d: source=%s destination=%s block=%s", number, srcHeader.Root, dstHeader.Root, srcHash)
+		}
+		if number%10000 == 0 {
+			log.Info("Compared canonical headers", "number", number, "end", end)
+		}
+	}
+	log.Info("Source and destination canonical headers match", "start", m.config.CompareStart, "end", end)
 	return nil
 }
 

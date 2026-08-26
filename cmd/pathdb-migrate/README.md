@@ -95,6 +95,20 @@ The scanner prints `Found state root` with the block number and block hash.
 Use that number as `--archive-history.end-block`. It opens the source database
 read-only; stop any node that owns the source database before running it.
 
+To compare two offline databases block by block:
+
+```sh
+go run ./cmd/pathdb-migrate \
+  --src.chain-data /data/source/l2chaindata \
+  --dst.chain-data /data/destination/l2chaindata \
+  --compare-source-destination \
+  --compare-start-block 0 \
+  --compare-end-block latest
+```
+
+The command reports the first canonical block-hash or state-root mismatch and
+opens both databases read-only. It does not compare raw database files.
+
 If an earlier process exited after migration finished but before clean shutdown,
 the unfinished-conversion canary can be cleared after a successful verification:
 
