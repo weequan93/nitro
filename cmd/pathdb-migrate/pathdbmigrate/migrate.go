@@ -127,12 +127,34 @@ func ensureDestinationReady(db ethdb.Database, expected *selectedState) error {
 	return nil
 }
 
+func ensureSelectedStateStillCanonical(db ethdb.Database, expected *selectedState, label string) error {
+	current, err := selectState(db, strconv.FormatUint(expected.header.Number.Uint64(), 10))
+	if err != nil {
+		return fmt.Errorf("recheck %s selected block: %w", label, err)
+	}
+	if current.header.Hash() != expected.header.Hash() || current.root != expected.root {
+		return fmt.Errorf(
+			"%s selected state changed during conversion at block %d: selectedBlock=%s canonicalBlock=%s selectedRoot=%s canonicalRoot=%s",
+			label,
+			expected.header.Number.Uint64(),
+			expected.header.Hash(),
+			current.header.Hash(),
+			expected.root,
+			current.root,
+		)
+	}
+	return nil
+}
+
 func (m *Migrator) Run(ctx context.Context) error {
 	if m.config.FindStateRoot != "" {
 		return m.findStateRoot(ctx)
 	}
 	if m.config.CompareDatabases {
 		return m.compareDatabases(ctx)
+	}
+	if m.config.RepairPathState {
+		return m.repairPathState(ctx)
 	}
 	if m.config.AccountHistory.Enable {
 		return m.runAccountHistory(ctx)
@@ -227,6 +249,12 @@ func (m *Migrator) Run(ctx context.Context) error {
 	}
 	err = m.convertState(ctx, src, dst, state.root, true)
 	if err == nil {
+		err = ensureSelectedStateStillCanonical(src, state, "source")
+	}
+	if err == nil {
+		err = ensureSelectedStateStillCanonical(dst, state, "destination")
+	}
+	if err == nil {
 		err = m.writePathMetadata(dst, state.root)
 	}
 	if err == nil {
@@ -272,6 +300,126 @@ func (m *Migrator) Run(ctx context.Context) error {
 	if err := dst.SyncKeyValue(); err != nil {
 		return err
 	}
+	return nil
+}
+
+// repairPathState replaces only the destination PathDB trie layer and its
+// current-root metadata. The source and destination canonical block must match,
+// and the destination must not contain state history. A failed repair leaves
+// the unfinished-conversion canary in place so the database cannot be started
+// accidentally before a successful retry or restore from backup.
+func (m *Migrator) repairPathState(ctx context.Context) error {
+	src, err := openChainDB(&m.config.Src, "src-repair", true, false)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	if err := ensureHashSource(src); err != nil {
+		return err
+	}
+	state, err := selectState(src, m.config.Block)
+	if err != nil {
+		return err
+	}
+
+	dst, err := openChainDB(&m.config.Dst, "dst-repair", false, m.config.IgnoreUnfinished)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	if scheme := rawdb.ReadStateScheme(dst); scheme != rawdb.PathScheme {
+		return fmt.Errorf("destination state scheme must be path, got %q", scheme)
+	}
+	dstState, err := selectState(dst, m.config.Block)
+	if err != nil {
+		return fmt.Errorf("destination selected block: %w", err)
+	}
+	if dstState.header.Hash() != state.header.Hash() || dstState.root != state.root {
+		return fmt.Errorf(
+			"source and destination canonical state differ at block %d: sourceBlock=%s destinationBlock=%s sourceRoot=%s destinationRoot=%s",
+			state.header.Number.Uint64(), state.header.Hash(), dstState.header.Hash(), state.root, dstState.root,
+		)
+	}
+
+	currentRoot := pathAccountRoot(dst)
+	log.Info("PathDB repair preflight",
+		"block", state.header.Number.Uint64(),
+		"canonicalRoot", state.root.Hex(),
+		"currentPathRoot", currentRoot.Hex())
+	if currentRoot == state.root {
+		log.Info("Destination PathDB already matches the selected canonical state")
+		if err := VerifyPathState(ctx, dst, state.root); err != nil {
+			return err
+		}
+		if m.config.IgnoreUnfinished {
+			if err := dbutil.DeleteUnfinishedConversionCanary(dst); err != nil {
+				return err
+			}
+			if err := dst.SyncKeyValue(); err != nil {
+				return err
+			}
+			log.Info("Deleted unfinished conversion canary after successful repair verification")
+		}
+		return nil
+	}
+	if rawdb.ReadPersistentStateID(dst) != 0 {
+		return errors.New("destination persistent state ID is nonzero; refusing to replace a PathDB with existing history")
+	}
+	ancientDir, err := dst.AncientDatadir()
+	if err != nil {
+		return fmt.Errorf("destination ancient directory: %w", err)
+	}
+	freezer, err := rawdb.NewStateFreezer(ancientDir, false, false)
+	if err != nil {
+		return fmt.Errorf("open destination state freezer: %w", err)
+	}
+	frozen, frozenErr := freezer.Ancients()
+	closeErr := freezer.Close()
+	if frozenErr != nil {
+		return fmt.Errorf("read destination state history size: %w", frozenErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close destination state freezer: %w", closeErr)
+	}
+	if frozen != 0 {
+		return fmt.Errorf("destination contains %d state history entries; refusing in-place PathDB repair", frozen)
+	}
+
+	m.stats.Reset()
+	if err := dbutil.PutUnfinishedConversionCanary(dst); err != nil {
+		return err
+	}
+	if err := m.convertState(ctx, src, dst, state.root, true); err != nil {
+		return fmt.Errorf("rewrite destination PathDB trie: %w", err)
+	}
+	if err := ensureSelectedStateStillCanonical(src, state, "source"); err != nil {
+		return err
+	}
+	if err := ensureSelectedStateStillCanonical(dst, state, "destination"); err != nil {
+		return err
+	}
+	if err := m.writePathMetadata(dst, state.root); err != nil {
+		return fmt.Errorf("write repaired PathDB metadata: %w", err)
+	}
+	if err := dst.SyncKeyValue(); err != nil {
+		return fmt.Errorf("sync repaired PathDB: %w", err)
+	}
+	if err := VerifyPathState(ctx, dst, state.root); err != nil {
+		return fmt.Errorf("verify repaired PathDB: %w", err)
+	}
+	if err := dbutil.DeleteUnfinishedConversionCanary(dst); err != nil {
+		return err
+	}
+	if err := dst.SyncKeyValue(); err != nil {
+		return err
+	}
+	log.Info("PathDB repair completed",
+		"block", state.header.Number.Uint64(),
+		"root", state.root.Hex(),
+		"accountNodes", m.stats.AccountNodes(),
+		"storageNodes", m.stats.StorageNodes(),
+		"MB", m.stats.Bytes()/1024/1024,
+		"elapsed", m.stats.Elapsed())
 	return nil
 }
 

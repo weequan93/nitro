@@ -124,6 +124,32 @@ go run ./cmd/pathdb-migrate \
   --ignore-unfinished-conversion
 ```
 
+## Repair an orphaned current PathDB root
+
+If the offline comparison reports `pathRootFound=false` through both database
+heads, the destination PathDB root is not canonical. After making a full backup
+of the destination, the trie layer can be replaced in place from an explicit
+canonical source block:
+
+```sh
+go run ./cmd/pathdb-migrate \
+  --src.chain-data /data/node/l2chaindata \
+  --dst.chain-data /data/node-path/l2chaindata \
+  --repair-path-state \
+  --block 123600452
+```
+
+This mode requires matching source and destination canonical headers at the
+selected block, a hash-scheme source, a PathDB destination, and an empty PathDB
+state-history freezer. It writes an unfinished-conversion canary before changing
+trie nodes, rewrites account and storage nodes from the selected source root,
+updates PathDB root metadata, performs a full trie verification, and removes the
+canary only after success. It does not repair or preserve existing PathDB state
+history and therefore refuses to run when history entries already exist.
+If an interrupted repair left the conversion canary behind, restore the backup
+or rerun the same repair with `--ignore-unfinished-conversion`; the canary is
+still removed only after full verification succeeds.
+
 ## Archive history with missing states
 
 Full archive-history migration can bridge retained hashdb states while skipping
@@ -211,6 +237,10 @@ choose a later start block instead of bridging one very large missing-state gap.
   can rebuild against the converted root.
 - verification may initialize empty pathdb state-history freezer files under
   `ancient/state` when the source database was converted from hashdb.
+- immediately before committing PathDB root metadata, migration rechecks that
+  the selected source and destination block hashes and roots are still
+  canonical; a database that moved or reorged during a long conversion fails
+  closed and retains the unfinished-conversion canary.
 - with `--cleanup-legacy-hash-state`, legacy hash-scheme trie-node keys are
   deleted from the destination after successful pathdb verification.
 - with `--strict-cleanup`, stale snapshot account/storage flat-state entries

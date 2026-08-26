@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -69,6 +70,7 @@ type Config struct {
 	AccountHistory   AccountHistoryConfig            `koanf:"account-history"`
 	ArchiveHistory   ArchiveHistoryConfig            `koanf:"archive-history"`
 	Migrate          bool                            `koanf:"migrate"`
+	RepairPathState  bool                            `koanf:"repair-path-state"`
 	Verify           bool                            `koanf:"verify"`
 	VerifyOnly       bool                            `koanf:"verify-only"`
 	IgnoreUnfinished bool                            `koanf:"ignore-unfinished-conversion"`
@@ -135,6 +137,7 @@ var DefaultConfig = Config{
 		SpillCache:        64,
 	},
 	Migrate:          false,
+	RepairPathState:  false,
 	FindEndBlock:     "latest",
 	CompareEnd:       "latest",
 	Verify:           true,
@@ -175,6 +178,7 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.String("archive-history.spill-directory", DefaultConfig.ArchiveHistory.SpillDirectory, "directory for disk-backed archive trie diffs; defaults beside dst.chain-data")
 	f.Int("archive-history.spill-cache", DefaultConfig.ArchiveHistory.SpillCache, "cache in megabytes for disk-backed archive trie diffs")
 	f.Bool("migrate", DefaultConfig.Migrate, "write pathdb trie nodes and metadata into destination database")
+	f.Bool("repair-path-state", DefaultConfig.RepairPathState, "DANGEROUS: replace an inconsistent destination PathDB trie from the selected canonical source state")
 	f.Bool("verify", DefaultConfig.Verify, "verify destination pathdb after migration")
 	f.Bool("verify-only", DefaultConfig.VerifyOnly, "verify an existing pathdb destination without running migration")
 	f.Bool("ignore-unfinished-conversion", DefaultConfig.IgnoreUnfinished, "allow --verify-only to open a destination with an unfinished conversion canary")
@@ -207,7 +211,7 @@ func (c *Config) Validate() error {
 		if c.Src.ChainData == "" {
 			return errors.New("src.chain-data is required for find-state-root")
 		}
-		if c.Migrate || c.VerifyOnly || c.AccountHistory.Enable || c.ArchiveHistory.Enable || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+		if c.Migrate || c.RepairPathState || c.VerifyOnly || c.AccountHistory.Enable || c.ArchiveHistory.Enable || c.CleanupLegacy || c.StrictCleanup || c.Compact {
 			return errors.New("find-state-root cannot be combined with migration, history, verification, cleanup, or compact modes")
 		}
 	}
@@ -215,7 +219,7 @@ func (c *Config) Validate() error {
 		if c.Src.ChainData == "" || c.Dst.ChainData == "" {
 			return errors.New("src.chain-data and dst.chain-data are required for comparison")
 		}
-		if c.FindStateRoot != "" || c.Migrate || c.VerifyOnly || c.AccountHistory.Enable || c.ArchiveHistory.Enable || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+		if c.FindStateRoot != "" || c.Migrate || c.RepairPathState || c.VerifyOnly || c.AccountHistory.Enable || c.ArchiveHistory.Enable || c.CleanupLegacy || c.StrictCleanup || c.Compact {
 			return errors.New("compare-source-destination cannot be combined with another migration or scan mode")
 		}
 	}
@@ -232,7 +236,7 @@ func (c *Config) Validate() error {
 		if len(c.AccountHistory.Addresses) == 0 {
 			return errors.New("account-history.addresses is required")
 		}
-		if c.Migrate || c.VerifyOnly || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+		if c.Migrate || c.RepairPathState || c.VerifyOnly || c.CleanupLegacy || c.StrictCleanup || c.Compact {
 			return errors.New("account-history.enable cannot be combined with migrate, verify-only, cleanup, or compact modes")
 		}
 	}
@@ -243,7 +247,7 @@ func (c *Config) Validate() error {
 		if c.Dst.ChainData == "" {
 			return errors.New("dst.chain-data is required")
 		}
-		if c.Migrate || c.VerifyOnly || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+		if c.Migrate || c.RepairPathState || c.VerifyOnly || c.CleanupLegacy || c.StrictCleanup || c.Compact {
 			return errors.New("archive-history.enable cannot be combined with migrate, verify-only, cleanup, or compact modes")
 		}
 		if c.ArchiveHistory.ProgressEvery == 0 {
@@ -280,8 +284,19 @@ func (c *Config) Validate() error {
 	if !c.VerifyOnly && c.Src.ChainData == "" {
 		return errors.New("src.chain-data is required")
 	}
-	if (c.Migrate || c.VerifyOnly) && c.Dst.ChainData == "" {
-		return errors.New("dst.chain-data is required when --migrate or --verify-only is set")
+	if (c.Migrate || c.RepairPathState || c.VerifyOnly) && c.Dst.ChainData == "" {
+		return errors.New("dst.chain-data is required when --migrate, --repair-path-state, or --verify-only is set")
+	}
+	if c.RepairPathState {
+		if c.Migrate || c.VerifyOnly || c.CleanupLegacy || c.StrictCleanup || c.Compact {
+			return errors.New("repair-path-state cannot be combined with migrate, verify-only, cleanup, or compact modes")
+		}
+		if strings.EqualFold(c.Block, "latest") || c.Block == "" {
+			return errors.New("repair-path-state requires an explicit --block number")
+		}
+		if _, err := strconv.ParseUint(c.Block, 10, 64); err != nil {
+			return fmt.Errorf("repair-path-state requires an explicit numeric --block: %w", err)
+		}
 	}
 	if c.CleanupLegacy && !c.Migrate && !c.VerifyOnly {
 		return errors.New("cleanup-legacy-hash-state requires --migrate or --verify-only")
@@ -298,10 +313,10 @@ func (c *Config) Validate() error {
 	if c.StrictCleanup && c.Migrate && !c.Verify {
 		return errors.New("strict-cleanup with --migrate requires --verify")
 	}
-	if c.IgnoreUnfinished && !c.VerifyOnly {
-		return errors.New("ignore-unfinished-conversion is only allowed with --verify-only")
+	if c.IgnoreUnfinished && !c.VerifyOnly && !c.RepairPathState {
+		return errors.New("ignore-unfinished-conversion is only allowed with --verify-only or --repair-path-state")
 	}
-	if c.Migrate {
+	if c.Migrate || c.RepairPathState {
 		src, err := filepath.Abs(c.Src.ChainData)
 		if err != nil {
 			return fmt.Errorf("resolve src.chain-data: %w", err)

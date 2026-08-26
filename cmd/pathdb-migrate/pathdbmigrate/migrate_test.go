@@ -115,6 +115,49 @@ func TestConvertHashStateToPathState(t *testing.T) {
 	}
 }
 
+func TestRepairPathStateConfigRequiresExplicitBlock(t *testing.T) {
+	config := DefaultConfig
+	config.Src.ChainData = "/source"
+	config.Dst.ChainData = "/destination"
+	config.RepairPathState = true
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected repair with latest block to fail validation")
+	}
+	config.Block = "123600452"
+	if err := config.Validate(); err != nil {
+		t.Fatalf("explicit repair block failed validation: %v", err)
+	}
+	config.Migrate = true
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected repair combined with migration to fail validation")
+	}
+}
+
+func TestEnsureSelectedStateStillCanonical(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	header := &types.Header{
+		Number: big.NewInt(7),
+		Root:   crypto.Keccak256Hash([]byte("selected-root")),
+	}
+	rawdb.WriteHeader(db, header)
+	rawdb.WriteCanonicalHash(db, header.Hash(), header.Number.Uint64())
+	selected := &selectedState{header: header, root: header.Root}
+	if err := ensureSelectedStateStillCanonical(db, selected, "test"); err != nil {
+		t.Fatalf("unchanged selected state failed canonicality check: %v", err)
+	}
+
+	replacement := &types.Header{
+		Number: header.Number,
+		Root:   crypto.Keccak256Hash([]byte("replacement-root")),
+		Extra:  []byte("replacement"),
+	}
+	rawdb.WriteHeader(db, replacement)
+	rawdb.WriteCanonicalHash(db, replacement.Hash(), replacement.Number.Uint64())
+	if err := ensureSelectedStateStillCanonical(db, selected, "test"); err == nil {
+		t.Fatal("expected changed canonical state to fail")
+	}
+}
+
 func buildHashState(t *testing.T, db ethdb.Database) (common.Hash, common.Hash, common.Hash) {
 	t.Helper()
 
