@@ -143,11 +143,18 @@ go run ./cmd/pathdb-migrate \
 
 This mode requires matching source and destination canonical headers at the
 selected block, a hash-scheme source, a PathDB destination, and an empty PathDB
-state-history freezer. It writes an unfinished-conversion canary before changing
-trie nodes, rewrites account and storage nodes from the selected source root,
-updates PathDB root metadata, performs a full trie verification, and removes the
-canary only after success. It does not repair or preserve existing PathDB state
-history and therefore refuses to run when history entries already exist.
+state-history freezer. If the current PathDB root already matches the selected
+canonical root, repair first performs a full trie verification and exits without
+rewriting when every descendant node is readable. If that verification fails,
+repair falls through to the rewrite so missing or corrupt descendant nodes are
+restored even though the root metadata matches. It writes an
+unfinished-conversion canary before changing trie nodes, rewrites account and
+storage nodes from the selected source root, updates PathDB root metadata,
+performs another full trie verification, and removes the canary only after
+success. It does not repair or preserve existing PathDB state history and
+therefore refuses to run when history entries already exist.
+Full verification logs account and storage traversal counters every 30 seconds;
+these verification counters are distinct from the periodic migration counters.
 If an interrupted repair left the conversion canary behind, restore the backup
 or rerun the same repair with `--ignore-unfinished-conversion`; the canary is
 still removed only after full verification succeeds.

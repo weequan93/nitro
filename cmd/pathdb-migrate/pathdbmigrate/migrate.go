@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -353,19 +354,23 @@ func (m *Migrator) repairPathState(ctx context.Context) error {
 		"stateMaxInFlight", m.config.StateMaxInFlight)
 	if currentRoot == state.root {
 		log.Info("Destination PathDB already matches the selected canonical state")
-		if err := VerifyPathState(ctx, dst, state.root); err != nil {
-			return err
-		}
-		if m.config.IgnoreUnfinished {
-			if err := dbutil.DeleteUnfinishedConversionCanary(dst); err != nil {
-				return err
+		if err := VerifyPathState(ctx, dst, state.root); err == nil {
+			if m.config.IgnoreUnfinished {
+				if err := dbutil.DeleteUnfinishedConversionCanary(dst); err != nil {
+					return err
+				}
+				if err := dst.SyncKeyValue(); err != nil {
+					return err
+				}
+				log.Info("Deleted unfinished conversion canary after successful repair verification")
 			}
-			if err := dst.SyncKeyValue(); err != nil {
-				return err
+			return nil
+		} else {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
 			}
-			log.Info("Deleted unfinished conversion canary after successful repair verification")
+			log.Warn("Destination PathDB root matches but full verification failed; rewriting the selected canonical state", "err", err)
 		}
-		return nil
 	}
 	if rawdb.ReadPersistentStateID(dst) != 0 {
 		return errors.New("destination persistent state ID is nonzero; refusing to replace a PathDB with existing history")
@@ -983,6 +988,27 @@ func compactDestination(db ethdb.Database) error {
 }
 
 func VerifyPathState(ctx context.Context, db ethdb.Database, root common.Hash) error {
+	started := time.Now()
+	lastProgress := started
+	var accountNodes uint64
+	var accountLeaves uint64
+	var storageTries uint64
+	var storageNodes uint64
+	var storageLeaves uint64
+	logProgress := func(force bool) {
+		if !force && time.Since(lastProgress) < 30*time.Second {
+			return
+		}
+		log.Info("Pathdb verification progress",
+			"accountNodes", accountNodes,
+			"accountLeaves", accountLeaves,
+			"storageTries", storageTries,
+			"storageNodes", storageNodes,
+			"storageLeaves", storageLeaves,
+			"elapsed", time.Since(started))
+		lastProgress = time.Now()
+	}
+
 	if _, err := rawdb.ParseStateScheme(rawdb.PathScheme, db); err != nil {
 		return err
 	}
@@ -1012,12 +1038,15 @@ func VerifyPathState(ctx context.Context, db ethdb.Database, root common.Hash) e
 		return err
 	}
 	for accountIt.Next(true) {
+		accountNodes++
+		logProgress(false)
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if !accountIt.Leaf() {
 			continue
 		}
+		accountLeaves++
 		accountHashBytes := common.CopyBytes(accountIt.LeafKey())
 		if len(accountHashBytes) != common.HashLength {
 			return fmt.Errorf("unexpected destination account trie leaf key length %d", len(accountHashBytes))
@@ -1029,6 +1058,7 @@ func VerifyPathState(ctx context.Context, db ethdb.Database, root common.Hash) e
 		if account.Root == types.EmptyRootHash {
 			continue
 		}
+		storageTries++
 		storageTrie, err := trie.New(trie.StorageTrieID(root, common.BytesToHash(accountHashBytes), account.Root), pathTrieDB)
 		if err != nil {
 			return fmt.Errorf("open destination storage trie account %x root %s: %w", accountHashBytes, account.Root, err)
@@ -1038,6 +1068,11 @@ func VerifyPathState(ctx context.Context, db ethdb.Database, root common.Hash) e
 			return err
 		}
 		for storageIt.Next(true) {
+			storageNodes++
+			if storageIt.Leaf() {
+				storageLeaves++
+			}
+			logProgress(false)
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -1049,6 +1084,14 @@ func VerifyPathState(ctx context.Context, db ethdb.Database, root common.Hash) e
 	if err := accountIt.Error(); err != nil {
 		return fmt.Errorf("iterate destination account trie: %w", err)
 	}
-	log.Info("Pathdb verification completed", "root", root)
+	logProgress(true)
+	log.Info("Pathdb verification completed",
+		"root", root,
+		"accountNodes", accountNodes,
+		"accountLeaves", accountLeaves,
+		"storageTries", storageTries,
+		"storageNodes", storageNodes,
+		"storageLeaves", storageLeaves,
+		"elapsed", time.Since(started))
 	return nil
 }
