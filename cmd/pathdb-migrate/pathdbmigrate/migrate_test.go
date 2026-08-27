@@ -156,6 +156,13 @@ func TestRepairPathStateConfigRequiresExplicitBlock(t *testing.T) {
 	if err := config.Validate(); err == nil {
 		t.Fatal("expected repair combined with migration to fail validation")
 	}
+
+	forceOnly := DefaultConfig
+	forceOnly.Src.ChainData = "/source"
+	forceOnly.ForceRepairPathState = true
+	if err := forceOnly.Validate(); err == nil {
+		t.Fatal("expected force repair without repair mode to fail validation")
+	}
 }
 
 func TestStateWorkerConfigValidation(t *testing.T) {

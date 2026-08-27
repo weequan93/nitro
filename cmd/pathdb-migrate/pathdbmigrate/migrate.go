@@ -352,7 +352,7 @@ func (m *Migrator) repairPathState(ctx context.Context) error {
 		"currentPathRoot", currentRoot.Hex(),
 		"stateWorkers", m.config.StateWorkers,
 		"stateMaxInFlight", m.config.StateMaxInFlight)
-	if currentRoot == state.root {
+	if currentRoot == state.root && !m.config.ForceRepairPathState {
 		log.Info("Destination PathDB already matches the selected canonical state")
 		if err := VerifyPathState(ctx, dst, state.root); err == nil {
 			if m.config.IgnoreUnfinished {
@@ -371,6 +371,8 @@ func (m *Migrator) repairPathState(ctx context.Context) error {
 			}
 			log.Warn("Destination PathDB root matches but full verification failed; rewriting the selected canonical state", "err", err)
 		}
+	} else if currentRoot == state.root {
+		log.Warn("Skipping initial destination verification and forcing PathDB state rewrite")
 	}
 	if rawdb.ReadPersistentStateID(dst) != 0 {
 		return errors.New("destination persistent state ID is nonzero; refusing to replace a PathDB with existing history")
@@ -399,6 +401,12 @@ func (m *Migrator) repairPathState(ctx context.Context) error {
 	if err := dbutil.PutUnfinishedConversionCanary(dst); err != nil {
 		return err
 	}
+	log.Info("PathDB state rewrite started",
+		"block", state.header.Number.Uint64(),
+		"root", state.root,
+		"stateWorkers", m.config.StateWorkers,
+		"stateMaxInFlight", m.config.StateMaxInFlight,
+		"idealBatchSize", m.config.IdealBatchSize)
 	if err := m.convertState(ctx, src, dst, state.root, true); err != nil {
 		return fmt.Errorf("rewrite destination PathDB trie: %w", err)
 	}
@@ -662,10 +670,14 @@ func (m *Migrator) copyAccountTrieParallel(ctx context.Context, writer *pathWrit
 				if err := workerCtx.Err(); err != nil {
 					return
 				}
-				if err := m.copyStorageTrie(workerCtx, storageWriter, srcTrieDB, stateRoot, job.accountHash, job.storageRoot); err != nil {
+				m.stats.activeStorageWorkers.Add(1)
+				err := m.copyStorageTrie(workerCtx, storageWriter, srcTrieDB, stateRoot, job.accountHash, job.storageRoot)
+				m.stats.activeStorageWorkers.Add(^uint64(0))
+				if err != nil {
 					recordWorkerError(err)
 					return
 				}
+				m.stats.storageJobsCompleted.Add(1)
 			}
 			if err := storageWriter.Flush(); err != nil {
 				recordWorkerError(err)
@@ -726,9 +738,11 @@ func (m *Migrator) copyAccountTrieAndScheduleStorage(ctx context.Context, writer
 			accountHash: common.BytesToHash(accountHashBytes),
 			storageRoot: account.Root,
 		}
+		m.stats.storageJobsScheduled.Add(1)
 		select {
 		case jobs <- job:
 		case <-ctx.Done():
+			m.stats.storageJobsScheduled.Add(^uint64(0))
 			return ctx.Err()
 		}
 	}

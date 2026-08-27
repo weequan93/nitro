@@ -155,6 +155,9 @@ success. It does not repair or preserve existing PathDB state history and
 therefore refuses to run when history entries already exist.
 Full verification logs account and storage traversal counters every 30 seconds;
 these verification counters are distinct from the periodic migration counters.
+After a previous full verification has already proved that descendants are
+missing or corrupt, add `--force-repair-path-state` to the same repair command
+to skip repeating that initial verification and begin the rewrite immediately.
 If an interrupted repair left the conversion canary behind, restore the backup
 or rerun the same repair with `--ignore-unfinished-conversion`; the canary is
 still removed only after full verification succeeds.
@@ -165,6 +168,11 @@ storage worker uses its own bounded write batch. Start with four workers and an
 in-flight limit of eight; increase one worker at a time only when storage has
 spare random-read capacity and RSS remains safely below the host limit. These
 flags are separate from `--archive-history.workers`.
+The periodic state-copy report includes scheduled, completed and in-flight
+storage jobs, active workers, nodes per second and MiB per second. A sustained
+active-worker count below the configured worker count means account traversal
+or storage latency is limiting scheduling; a full active-worker count with low
+throughput usually means the disk is saturated.
 
 ## Archive history with missing states
 

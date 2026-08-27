@@ -69,17 +69,34 @@ func printProgress(m *pathdbmigrate.Migrator) {
 		fmt.Printf("\telapsed / eta:\t%v / %v\n", elapsed, eta)
 		return
 	}
+	elapsed := stats.Elapsed()
+	totalNodes := stats.AccountNodes() + stats.StorageNodes()
+	nodesPerSecond := float64(0)
+	mbPerSecond := float64(0)
+	if elapsed > 0 {
+		nodesPerSecond = float64(totalNodes) / elapsed.Seconds()
+		mbPerSecond = float64(stats.Bytes()) / (1024 * 1024) / elapsed.Seconds()
+	}
+	scheduled := stats.StorageJobsScheduled()
+	completed := stats.StorageJobsCompleted()
+	inFlight := uint64(0)
+	if scheduled >= completed {
+		inFlight = scheduled - completed
+	}
 	fmt.Printf("Progress:\n")
 	fmt.Printf("\taccount nodes:\t%d\n", stats.AccountNodes())
 	fmt.Printf("\taccount leaves:\t%d\n", stats.AccountLeaves())
 	fmt.Printf("\tstorage tries:\t%d\n", stats.StorageTries())
 	fmt.Printf("\tstorage nodes:\t%d\n", stats.StorageNodes())
 	fmt.Printf("\tstorage leaves:\t%d\n", stats.StorageLeaves())
+	fmt.Printf("\tstorage jobs scheduled / completed / in-flight:\t%d / %d / %d\n", scheduled, completed, inFlight)
+	fmt.Printf("\tactive storage workers:\t%d\n", stats.ActiveStorageWorkers())
 	fmt.Printf("\tprocessed MB:\t%d\n", stats.Bytes()/1024/1024)
+	fmt.Printf("\trate:\t%.0f nodes/s / %.2f MB/s\n", nodesPerSecond, mbPerSecond)
 	fmt.Printf("\tbatches:\t%d\n", stats.Batches())
 	fmt.Printf("\tlegacy cleanup:\t%d nodes / %d MB\n", stats.LegacyNodes(), stats.LegacyBytes()/1024/1024)
 	fmt.Printf("\tsnapshot cleanup:\t%d entries / %d MB\n", stats.SnapshotNodes(), stats.SnapshotBytes()/1024/1024)
-	fmt.Printf("\telapsed:\t%v\n", stats.Elapsed())
+	fmt.Printf("\telapsed:\t%v\n", elapsed)
 }
 
 func main() {

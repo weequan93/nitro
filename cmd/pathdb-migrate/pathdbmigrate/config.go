@@ -64,33 +64,34 @@ func (c DBConfig) ancientPath() string {
 }
 
 type Config struct {
-	Src              DBConfig                        `koanf:"src"`
-	Dst              DBConfig                        `koanf:"dst"`
-	Block            string                          `koanf:"block"`
-	AccountHistory   AccountHistoryConfig            `koanf:"account-history"`
-	ArchiveHistory   ArchiveHistoryConfig            `koanf:"archive-history"`
-	Migrate          bool                            `koanf:"migrate"`
-	RepairPathState  bool                            `koanf:"repair-path-state"`
-	Verify           bool                            `koanf:"verify"`
-	VerifyOnly       bool                            `koanf:"verify-only"`
-	IgnoreUnfinished bool                            `koanf:"ignore-unfinished-conversion"`
-	CleanupLegacy    bool                            `koanf:"cleanup-legacy-hash-state"`
-	StrictCleanup    bool                            `koanf:"strict-cleanup"`
-	Compact          bool                            `koanf:"compact"`
-	DiscardSnapshot  bool                            `koanf:"discard-snapshot"`
-	FindStateRoot    string                          `koanf:"find-state-root"`
-	FindStartBlock   uint64                          `koanf:"find-start-block"`
-	FindEndBlock     string                          `koanf:"find-end-block"`
-	CompareDatabases bool                            `koanf:"compare-source-destination"`
-	CompareStart    uint64                          `koanf:"compare-start-block"`
-	CompareEnd      string                          `koanf:"compare-end-block"`
-	StateWorkers    int                             `koanf:"state-workers"`
-	StateMaxInFlight int                            `koanf:"state-max-inflight"`
-	IdealBatchSize   int                             `koanf:"ideal-batch-size"`
-	LogLevel         string                          `koanf:"log-level"`
-	LogType          string                          `koanf:"log-type"`
-	Metrics          bool                            `koanf:"metrics"`
-	MetricsServer    genericconf.MetricsServerConfig `koanf:"metrics-server"`
+	Src                  DBConfig                        `koanf:"src"`
+	Dst                  DBConfig                        `koanf:"dst"`
+	Block                string                          `koanf:"block"`
+	AccountHistory       AccountHistoryConfig            `koanf:"account-history"`
+	ArchiveHistory       ArchiveHistoryConfig            `koanf:"archive-history"`
+	Migrate              bool                            `koanf:"migrate"`
+	RepairPathState      bool                            `koanf:"repair-path-state"`
+	ForceRepairPathState bool                            `koanf:"force-repair-path-state"`
+	Verify               bool                            `koanf:"verify"`
+	VerifyOnly           bool                            `koanf:"verify-only"`
+	IgnoreUnfinished     bool                            `koanf:"ignore-unfinished-conversion"`
+	CleanupLegacy        bool                            `koanf:"cleanup-legacy-hash-state"`
+	StrictCleanup        bool                            `koanf:"strict-cleanup"`
+	Compact              bool                            `koanf:"compact"`
+	DiscardSnapshot      bool                            `koanf:"discard-snapshot"`
+	FindStateRoot        string                          `koanf:"find-state-root"`
+	FindStartBlock       uint64                          `koanf:"find-start-block"`
+	FindEndBlock         string                          `koanf:"find-end-block"`
+	CompareDatabases     bool                            `koanf:"compare-source-destination"`
+	CompareStart         uint64                          `koanf:"compare-start-block"`
+	CompareEnd           string                          `koanf:"compare-end-block"`
+	StateWorkers         int                             `koanf:"state-workers"`
+	StateMaxInFlight     int                             `koanf:"state-max-inflight"`
+	IdealBatchSize       int                             `koanf:"ideal-batch-size"`
+	LogLevel             string                          `koanf:"log-level"`
+	LogType              string                          `koanf:"log-type"`
+	Metrics              bool                            `koanf:"metrics"`
+	MetricsServer        genericconf.MetricsServerConfig `koanf:"metrics-server"`
 }
 
 type AccountHistoryConfig struct {
@@ -138,24 +139,25 @@ var DefaultConfig = Config{
 		SpillGap:          10000,
 		SpillCache:        64,
 	},
-	Migrate:          false,
-	RepairPathState:  false,
-	FindEndBlock:     "latest",
-	CompareEnd:       "latest",
-	StateWorkers:     1,
-	StateMaxInFlight: 0,
-	Verify:           true,
-	VerifyOnly:       false,
-	IgnoreUnfinished: false,
-	CleanupLegacy:    false,
-	StrictCleanup:    false,
-	Compact:          false,
-	DiscardSnapshot:  true,
-	IdealBatchSize:   100 * 1024 * 1024,
-	LogLevel:         "INFO",
-	LogType:          "plaintext",
-	Metrics:          false,
-	MetricsServer:    genericconf.MetricsServerConfigDefault,
+	Migrate:              false,
+	RepairPathState:      false,
+	ForceRepairPathState: false,
+	FindEndBlock:         "latest",
+	CompareEnd:           "latest",
+	StateWorkers:         1,
+	StateMaxInFlight:     0,
+	Verify:               true,
+	VerifyOnly:           false,
+	IgnoreUnfinished:     false,
+	CleanupLegacy:        false,
+	StrictCleanup:        false,
+	Compact:              false,
+	DiscardSnapshot:      true,
+	IdealBatchSize:       100 * 1024 * 1024,
+	LogLevel:             "INFO",
+	LogType:              "plaintext",
+	Metrics:              false,
+	MetricsServer:        genericconf.MetricsServerConfigDefault,
 }
 
 func ConfigAddOptions(f *pflag.FlagSet) {
@@ -183,6 +185,7 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Int("archive-history.spill-cache", DefaultConfig.ArchiveHistory.SpillCache, "cache in megabytes for disk-backed archive trie diffs")
 	f.Bool("migrate", DefaultConfig.Migrate, "write pathdb trie nodes and metadata into destination database")
 	f.Bool("repair-path-state", DefaultConfig.RepairPathState, "DANGEROUS: replace an inconsistent destination PathDB trie from the selected canonical source state")
+	f.Bool("force-repair-path-state", DefaultConfig.ForceRepairPathState, "with --repair-path-state, skip the initial destination verification and rewrite even when root metadata matches")
 	f.Bool("verify", DefaultConfig.Verify, "verify destination pathdb after migration")
 	f.Bool("verify-only", DefaultConfig.VerifyOnly, "verify an existing pathdb destination without running migration")
 	f.Bool("ignore-unfinished-conversion", DefaultConfig.IgnoreUnfinished, "allow --verify-only to open a destination with an unfinished conversion canary")
@@ -303,6 +306,9 @@ func (c *Config) Validate() error {
 		if _, err := strconv.ParseUint(c.Block, 10, 64); err != nil {
 			return fmt.Errorf("repair-path-state requires an explicit numeric --block: %w", err)
 		}
+	}
+	if c.ForceRepairPathState && !c.RepairPathState {
+		return errors.New("force-repair-path-state requires --repair-path-state")
 	}
 	if c.CleanupLegacy && !c.Migrate && !c.VerifyOnly {
 		return errors.New("cleanup-legacy-hash-state requires --migrate or --verify-only")

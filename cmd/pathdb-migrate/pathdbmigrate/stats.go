@@ -8,18 +8,21 @@ import (
 )
 
 type Stats struct {
-	startUnixNano atomic.Int64
-	accountNodes  atomic.Uint64
-	accountLeaves atomic.Uint64
-	storageNodes  atomic.Uint64
-	storageLeaves atomic.Uint64
-	storageTries  atomic.Uint64
-	bytes         atomic.Uint64
-	batches       atomic.Uint64
-	legacyNodes   atomic.Uint64
-	legacyBytes   atomic.Uint64
-	snapshotNodes atomic.Uint64
-	snapshotBytes atomic.Uint64
+	startUnixNano        atomic.Int64
+	accountNodes         atomic.Uint64
+	accountLeaves        atomic.Uint64
+	storageNodes         atomic.Uint64
+	storageLeaves        atomic.Uint64
+	storageTries         atomic.Uint64
+	storageJobsScheduled atomic.Uint64
+	storageJobsCompleted atomic.Uint64
+	activeStorageWorkers atomic.Uint64
+	bytes                atomic.Uint64
+	batches              atomic.Uint64
+	legacyNodes          atomic.Uint64
+	legacyBytes          atomic.Uint64
+	snapshotNodes        atomic.Uint64
+	snapshotBytes        atomic.Uint64
 
 	archiveHistory          atomic.Bool
 	archiveStartBlock       atomic.Uint64
@@ -42,6 +45,9 @@ func (s *Stats) Reset() {
 	s.storageNodes.Store(0)
 	s.storageLeaves.Store(0)
 	s.storageTries.Store(0)
+	s.storageJobsScheduled.Store(0)
+	s.storageJobsCompleted.Store(0)
+	s.activeStorageWorkers.Store(0)
 	s.bytes.Store(0)
 	s.batches.Store(0)
 	s.legacyNodes.Store(0)
@@ -133,6 +139,18 @@ func (s *Stats) StorageLeaves() uint64 {
 
 func (s *Stats) StorageTries() uint64 {
 	return s.storageTries.Load()
+}
+
+func (s *Stats) StorageJobsScheduled() uint64 {
+	return s.storageJobsScheduled.Load()
+}
+
+func (s *Stats) StorageJobsCompleted() uint64 {
+	return s.storageJobsCompleted.Load()
+}
+
+func (s *Stats) ActiveStorageWorkers() uint64 {
+	return s.activeStorageWorkers.Load()
 }
 
 func (s *Stats) Bytes() uint64 {
