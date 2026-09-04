@@ -4,6 +4,7 @@ package pathdbmigrate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -56,15 +57,68 @@ type archiveBlockEvent struct {
 	err             error
 }
 
+type archiveHistorySectionTooLargeError struct {
+	name string
+	size uint64
+}
+
+func (e *archiveHistorySectionTooLargeError) Error() string {
+	return fmt.Sprintf(
+		"archive history %s is %d bytes and exceeds the Snappy single-block limit",
+		e.name,
+		e.size,
+	)
+}
+
+var maxArchiveHistorySectionSize = func() uint64 {
+	high := uint64(math.MaxUint32)
+	if uint64(math.MaxInt) < high {
+		high = uint64(math.MaxInt)
+	}
+	low := uint64(0)
+	for low < high {
+		mid := low + (high-low+1)/2
+		if snappy.MaxEncodedLen(int(mid)) >= 0 {
+			low = mid
+		} else {
+			high = mid - 1
+		}
+	}
+	return low
+}()
+
 func validateArchiveHistorySectionSize(name string, size uint64) error {
-	if size > uint64(math.MaxInt) || snappy.MaxEncodedLen(int(size)) < 0 {
-		return fmt.Errorf(
-			"archive history %s is %d bytes and exceeds the Snappy single-block limit; choose a later archive-history.start-block after the missing-state gap",
-			name,
-			size,
-		)
+	if size > maxArchiveHistorySectionSize {
+		return &archiveHistorySectionTooLargeError{name: name, size: size}
 	}
 	return nil
+}
+
+func annotateArchiveTransitionError(err error, job archiveTransitionJob) error {
+	var sizeErr *archiveHistorySectionTooLargeError
+	if !errors.As(err, &sizeErr) {
+		return err
+	}
+	return fmt.Errorf(
+		"%w; retry with --archive-history.start-block %d to make this retained state the initial anchor",
+		err,
+		job.block,
+	)
+}
+
+func validateArchiveTransitionGap(job archiveTransitionJob, maxGap uint64) error {
+	gap := job.block - job.anchorBlock
+	if maxGap == 0 || gap <= maxGap {
+		return nil
+	}
+	return fmt.Errorf(
+		"archive state gap from block %d to %d spans %d blocks and exceeds archive-history.max-transition-gap %d; retry with --archive-history.start-block %d to make this retained state the initial anchor, or set --archive-history.max-transition-gap 0 to attempt the transition",
+		job.anchorBlock,
+		job.block,
+		gap,
+		maxGap,
+		job.block,
+	)
 }
 
 func validateEncodedArchiveHistory(encoded *encodedArchiveHistory) error {
@@ -97,6 +151,9 @@ func computeArchiveTransition(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := validateArchiveTransitionGap(job, cfg.MaxTransitionGap); err != nil {
+		return nil, err
+	}
 	transitionGap := job.block - job.anchorBlock
 	if transitionGap >= cfg.SpillGap {
 		if spillGate != nil {
@@ -118,10 +175,10 @@ func computeArchiveTransition(
 			ctx, src, trieDB, job.parentRoot, job.root, cfg, dstChainData,
 		)
 		if err != nil {
-			return nil, err
+			return nil, annotateArchiveTransitionError(err, job)
 		}
 		if err := validateEncodedArchiveHistory(encoded); err != nil {
-			return nil, err
+			return nil, annotateArchiveTransitionError(err, job)
 		}
 		return encoded, nil
 	}
@@ -142,7 +199,7 @@ func computeArchiveTransition(
 		storageSlots: slotCount,
 	}
 	if err := validateEncodedArchiveHistory(encoded); err != nil {
-		return nil, err
+		return nil, annotateArchiveTransitionError(err, job)
 	}
 	return encoded, nil
 }

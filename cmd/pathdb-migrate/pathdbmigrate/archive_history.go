@@ -154,6 +154,8 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		"maxInFlight", cfg.MaxInFlight,
 		"trieCleanCacheMB", cfg.TrieCleanCache,
 		"resultMemoryLimitMB", cfg.ResultMemoryLimit,
+		"maxTransitionGap", cfg.MaxTransitionGap,
+		"spillWorkers", cfg.SpillWorkers,
 		"storageHistoryVersion", 0,
 	)
 

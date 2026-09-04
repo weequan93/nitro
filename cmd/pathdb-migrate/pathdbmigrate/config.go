@@ -115,8 +115,10 @@ type ArchiveHistoryConfig struct {
 	TrieCleanCache    int    `koanf:"trie-clean-cache"`
 	ResultMemoryLimit int    `koanf:"result-memory-limit"`
 	SpillGap          uint64 `koanf:"spill-gap"`
+	MaxTransitionGap  uint64 `koanf:"max-transition-gap"`
 	SpillDirectory    string `koanf:"spill-directory"`
 	SpillCache        int    `koanf:"spill-cache"`
+	SpillWorkers      int    `koanf:"spill-workers"`
 }
 
 var DefaultConfig = Config{
@@ -137,7 +139,9 @@ var DefaultConfig = Config{
 		Workers:           1,
 		ResultMemoryLimit: 256,
 		SpillGap:          10000,
+		MaxTransitionGap:  1000000,
 		SpillCache:        64,
+		SpillWorkers:      4,
 	},
 	Migrate:              false,
 	RepairPathState:      false,
@@ -181,8 +185,10 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Int("archive-history.trie-clean-cache", DefaultConfig.ArchiveHistory.TrieCleanCache, "shared hash-trie clean-node cache in megabytes (0 disables)")
 	f.Int("archive-history.result-memory-limit", DefaultConfig.ArchiveHistory.ResultMemoryLimit, "maximum megabytes retained by completed parallel results; excess results spill to disk (0 spills all)")
 	f.Uint64("archive-history.spill-gap", DefaultConfig.ArchiveHistory.SpillGap, "use a disk-backed trie diff when retained states are separated by at least N blocks")
+	f.Uint64("archive-history.max-transition-gap", DefaultConfig.ArchiveHistory.MaxTransitionGap, "maximum blocks bridged by one archive history record (0 disables the safety limit)")
 	f.String("archive-history.spill-directory", DefaultConfig.ArchiveHistory.SpillDirectory, "directory for disk-backed archive trie diffs; defaults beside dst.chain-data")
-	f.Int("archive-history.spill-cache", DefaultConfig.ArchiveHistory.SpillCache, "cache in megabytes for disk-backed archive trie diffs")
+	f.Int("archive-history.spill-cache", DefaultConfig.ArchiveHistory.SpillCache, "total buffer memory in megabytes for disk-backed archive trie-diff spool files")
+	f.Int("archive-history.spill-workers", DefaultConfig.ArchiveHistory.SpillWorkers, "number of storage-trie workers within one disk-backed archive transition")
 	f.Bool("migrate", DefaultConfig.Migrate, "write pathdb trie nodes and metadata into destination database")
 	f.Bool("repair-path-state", DefaultConfig.RepairPathState, "DANGEROUS: replace an inconsistent destination PathDB trie from the selected canonical source state")
 	f.Bool("force-repair-path-state", DefaultConfig.ForceRepairPathState, "with --repair-path-state, skip the initial destination verification and rewrite even when root metadata matches")
@@ -285,6 +291,12 @@ func (c *Config) Validate() error {
 		}
 		if c.ArchiveHistory.SpillCache <= 0 {
 			return errors.New("archive-history.spill-cache must be greater than 0")
+		}
+		if c.ArchiveHistory.SpillCache > math.MaxInt/(1024*1024) {
+			return errors.New("archive-history.spill-cache is too large")
+		}
+		if c.ArchiveHistory.SpillWorkers <= 0 {
+			return errors.New("archive-history.spill-workers must be greater than 0")
 		}
 		if !c.ArchiveHistory.RequirePreimages {
 			return errors.New("archive-history.require-preimages=false is not supported for full archive-compatible migration")

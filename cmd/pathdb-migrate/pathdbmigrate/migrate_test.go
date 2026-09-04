@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,6 +181,21 @@ func TestStateWorkerConfigValidation(t *testing.T) {
 	config.StateMaxInFlight = 8
 	if err := config.Validate(); err != nil {
 		t.Fatalf("valid state worker configuration failed: %v", err)
+	}
+}
+
+func TestArchiveSpillWorkerConfigValidation(t *testing.T) {
+	config := DefaultConfig
+	config.Src.ChainData = "/source"
+	config.Dst.ChainData = "/destination"
+	config.ArchiveHistory.Enable = true
+	config.ArchiveHistory.SpillWorkers = 0
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected zero archive spill workers to fail validation")
+	}
+	config.ArchiveHistory.SpillWorkers = 4
+	if err := config.Validate(); err != nil {
+		t.Fatalf("valid archive spill worker configuration failed: %v", err)
 	}
 }
 
@@ -636,13 +652,65 @@ func TestArchiveHistoryRejectsOversizedSnappySectionBeforeAllocation(t *testing.
 	if err := validateArchiveHistorySectionSize("small", 1); err != nil {
 		t.Fatalf("small archive history section was rejected: %v", err)
 	}
-	if err := validateArchiveHistorySectionSize("storage index", math.MaxUint32); err == nil {
+	if err := validateArchiveHistorySectionSize("maximum", maxArchiveHistorySectionSize); err != nil {
+		t.Fatalf("maximum Snappy section was rejected: %v", err)
+	}
+	if err := validateArchiveHistorySectionSize("over maximum", maxArchiveHistorySectionSize+1); err == nil {
+		t.Fatal("section immediately above the Snappy limit was accepted")
+	}
+	err := validateArchiveHistorySectionSize("storage index", math.MaxUint32)
+	if err == nil {
 		t.Fatal("oversized Snappy section was not rejected")
+	}
+	var sizeErr *archiveHistorySectionTooLargeError
+	if !errors.As(err, &sizeErr) {
+		t.Fatalf("oversized section returned the wrong error type: %T", err)
+	}
+	if sizeErr.name != "storage index" || sizeErr.size != math.MaxUint32 {
+		t.Fatalf("unexpected oversized section error: %+v", sizeErr)
+	}
+	annotated := annotateArchiveTransitionError(err, archiveTransitionJob{block: 7032713})
+	if !strings.Contains(annotated.Error(), "--archive-history.start-block 7032713") {
+		t.Fatalf("oversized section error does not contain the exact restart block: %v", annotated)
+	}
+	if !errors.As(annotated, &sizeErr) {
+		t.Fatalf("annotated error no longer wraps the oversized section error: %v", annotated)
 	}
 	if _, err := encodeArchiveHistoryFromSpill(nil, archiveSpillStats{
 		storageSlots: math.MaxUint32,
 	}); err == nil {
 		t.Fatal("oversized spilled history was not rejected before allocation")
+	}
+	maxSlots := uint64(math.MaxUint32) / storageIndexSizeForArchiveHistory
+	if err := validateArchiveSpillStats(archiveSpillStats{storageSlots: maxSlots + 1}); err == nil {
+		t.Fatal("oversized spill was not rejected while collecting entries")
+	}
+}
+
+func TestArchiveSpoolBufferBudget(t *testing.T) {
+	if got, want := archiveSpoolBufferSize(64, 4), 16*1024*1024; got != want {
+		t.Fatalf("unexpected per-worker spool buffer: have %d want %d", got, want)
+	}
+	if got := archiveSpoolBufferSize(1, 100); got != archiveSpoolMinBufferSize {
+		t.Fatalf("small spool budget did not use minimum buffer: %d", got)
+	}
+	if got := archiveSpoolBufferSize(1024, 1); got != archiveSpoolMaxBufferSize {
+		t.Fatalf("large spool budget did not honor maximum buffer: %d", got)
+	}
+}
+
+func TestArchiveHistoryLargeGapFailsBeforeTrieDiff(t *testing.T) {
+	job := archiveTransitionJob{anchorBlock: 0, block: 7032713}
+	err := validateArchiveTransitionGap(job, 1000000)
+	if err == nil {
+		t.Fatal("oversized transition gap was not rejected")
+	}
+	want := "--archive-history.start-block 7032713"
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("transition gap error %q does not contain restart hint %q", err, want)
+	}
+	if err := validateArchiveTransitionGap(job, 0); err != nil {
+		t.Fatalf("disabled transition gap limit returned an error: %v", err)
 	}
 }
 
@@ -768,8 +836,13 @@ func buildArchiveHashStatePair(t *testing.T, db ethdb.Database, trieDB *triedb.D
 
 	slotOne := crypto.Keccak256Hash(common.LeftPadBytes([]byte{1}, common.HashLength))
 	slotTwo := crypto.Keccak256Hash(common.LeftPadBytes([]byte{2}, common.HashLength))
+	slotThree := crypto.Keccak256Hash(common.LeftPadBytes([]byte{3}, common.HashLength))
+	slotFour := crypto.Keccak256Hash(common.LeftPadBytes([]byte{4}, common.HashLength))
 	oldStorage := commitArchiveStorageTrie(t, db, trieDB, types.EmptyRootHash, accountHashes[0], types.EmptyRootHash, map[common.Hash]uint64{
 		slotOne: 11,
+	})
+	deletedStorage := commitArchiveStorageTrie(t, db, trieDB, types.EmptyRootHash, accountHashes[1], types.EmptyRootHash, map[common.Hash]uint64{
+		slotThree: 44,
 	})
 
 	oldAccounts := map[common.Hash]*types.StateAccount{
@@ -777,7 +850,7 @@ func buildArchiveHashStatePair(t *testing.T, db ethdb.Database, trieDB *triedb.D
 			Nonce: 1, Balance: uint256.NewInt(100), Root: oldStorage, CodeHash: types.EmptyCodeHash.Bytes(),
 		},
 		accountHashes[1]: {
-			Nonce: 2, Balance: uint256.NewInt(200), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes(),
+			Nonce: 2, Balance: uint256.NewInt(200), Root: deletedStorage, CodeHash: types.EmptyCodeHash.Bytes(),
 		},
 	}
 	oldRoot := commitArchiveAccountTrie(t, trieDB, types.EmptyRootHash, oldAccounts, nil)
@@ -792,13 +865,16 @@ func buildArchiveHashStatePair(t *testing.T, db ethdb.Database, trieDB *triedb.D
 		slotOne: 22,
 		slotTwo: 33,
 	})
+	createdStorage := commitArchiveStorageTrie(t, db, trieDB, oldRoot, accountHashes[2], types.EmptyRootHash, map[common.Hash]uint64{
+		slotFour: 55,
+	})
 
 	newAccounts := map[common.Hash]*types.StateAccount{
 		accountHashes[0]: {
 			Nonce: 3, Balance: uint256.NewInt(300), Root: newStorage, CodeHash: types.EmptyCodeHash.Bytes(),
 		},
 		accountHashes[2]: {
-			Nonce: 4, Balance: uint256.NewInt(400), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes(),
+			Nonce: 4, Balance: uint256.NewInt(400), Root: createdStorage, CodeHash: types.EmptyCodeHash.Bytes(),
 		},
 	}
 	newRoot := commitArchiveAccountTrie(t, trieDB, oldRoot, newAccounts, []common.Hash{accountHashes[1]})

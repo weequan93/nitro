@@ -3,31 +3,35 @@
 package pathdbmigrate
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
-	pebbledb "github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
 const (
-	archiveSpillAccountPrefix = byte(0x01)
-	archiveSpillStoragePrefix = byte(0x02)
-	archiveSpillBatchSize     = 16 * 1024 * 1024
-	archiveSpillLogEvery      = 100000
+	archiveSpillLogEvery       = 100000
+	archiveSpoolMinBufferSize  = 64 * 1024
+	archiveSpoolMaxBufferSize  = 16 * 1024 * 1024
+	archiveSpoolReadBufferSize = 1024 * 1024
+	archiveSpoolSlotHeaderSize = common.HashLength + 1
 )
 
 type encodedArchiveHistory struct {
@@ -46,42 +50,120 @@ type archiveSpillStats struct {
 	storageDataBytes uint64
 }
 
-type archiveSpillWriter struct {
-	store ethdb.KeyValueStore
-	batch ethdb.Batch
+type archiveStorageSpoolRef struct {
+	path   string
+	offset uint64
+	size   uint64
+	slots  uint32
 }
 
-func newArchiveSpillWriter(store ethdb.KeyValueStore) *archiveSpillWriter {
-	return &archiveSpillWriter{store: store, batch: store.NewBatchWithSize(archiveSpillBatchSize)}
+type archiveSpoolAccount struct {
+	address common.Address
+	origin  []byte
+	storage archiveStorageSpoolRef
 }
 
-func (w *archiveSpillWriter) put(key []byte, value []byte) error {
-	if err := w.batch.Put(key, value); err != nil {
-		if !errors.Is(err, ethdb.ErrBatchTooLarge) {
-			return err
-		}
-		if err := w.flush(); err != nil {
-			return err
-		}
-		if err := w.batch.Put(key, value); err != nil {
-			return err
-		}
+type archiveStorageSpoolJob struct {
+	parentRoot  common.Hash
+	root        common.Hash
+	accountHash common.Hash
+	address     common.Address
+	origin      []byte
+	oldRoot     common.Hash
+	newRoot     common.Hash
+}
+
+type archiveStorageSpoolResult struct {
+	account archiveSpoolAccount
+	stats   archiveSpillStats
+}
+
+type archiveStorageSpool struct {
+	path   string
+	file   *os.File
+	writer *bufio.Writer
+	offset uint64
+}
+
+func validateArchiveSpillStats(stats archiveSpillStats) error {
+	if stats.storageSlots > math.MaxUint32 {
+		return fmt.Errorf("too many storage slots in archive history: %d", stats.storageSlots)
 	}
-	if w.batch.ValueSize() >= archiveSpillBatchSize {
-		return w.flush()
+	if stats.accounts > math.MaxUint64/accountIndexSize {
+		return fmt.Errorf("account index is too large: %d entries", stats.accounts)
+	}
+	if stats.storageSlots > math.MaxUint64/storageIndexSizeForArchiveHistory {
+		return fmt.Errorf("storage index is too large: %d entries", stats.storageSlots)
+	}
+	sections := []struct {
+		name string
+		size uint64
+	}{
+		{name: "account index", size: stats.accounts * accountIndexSize},
+		{name: "storage index", size: stats.storageSlots * storageIndexSizeForArchiveHistory},
+		{name: "account data", size: stats.accountDataBytes},
+		{name: "storage data", size: stats.storageDataBytes},
+	}
+	for _, section := range sections {
+		if err := validateArchiveHistorySectionSize(section.name, section.size); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (w *archiveSpillWriter) flush() error {
-	if w.batch.ValueSize() == 0 {
-		return nil
+func validateArchiveStorageSpillStats(stats archiveSpillStats) error {
+	if stats.storageSlots > math.MaxUint64/storageIndexSizeForArchiveHistory {
+		return fmt.Errorf("storage index is too large: %d entries", stats.storageSlots)
 	}
-	if err := w.batch.Write(); err != nil {
+	if err := validateArchiveHistorySectionSize("storage index", stats.storageSlots*storageIndexSizeForArchiveHistory); err != nil {
 		return err
 	}
-	w.batch.Reset()
+	return validateArchiveHistorySectionSize("storage data", stats.storageDataBytes)
+}
+
+func archiveSpoolBufferSize(totalMB int, workers int) int {
+	size := totalMB * 1024 * 1024 / workers
+	if size < archiveSpoolMinBufferSize {
+		return archiveSpoolMinBufferSize
+	}
+	if size > archiveSpoolMaxBufferSize {
+		return archiveSpoolMaxBufferSize
+	}
+	return size
+}
+
+func newArchiveStorageSpool(directory string, worker int, bufferSize int) (*archiveStorageSpool, error) {
+	path := filepath.Join(directory, fmt.Sprintf("storage-%03d.spool", worker))
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
+	}
+	return &archiveStorageSpool{
+		path:   path,
+		file:   file,
+		writer: bufio.NewWriterSize(file, bufferSize),
+	}, nil
+}
+
+func (s *archiveStorageSpool) writeSlot(slot common.Hash, origin []byte) error {
+	var header [archiveSpoolSlotHeaderSize]byte
+	copy(header[:common.HashLength], slot.Bytes())
+	header[common.HashLength] = byte(len(origin))
+	if _, err := s.writer.Write(header[:]); err != nil {
+		return err
+	}
+	if len(origin) != 0 {
+		if _, err := s.writer.Write(origin); err != nil {
+			return err
+		}
+	}
+	s.offset += uint64(len(header) + len(origin))
 	return nil
+}
+
+func (s *archiveStorageSpool) close() error {
+	return errors.Join(s.writer.Flush(), s.file.Close())
 }
 
 type archiveTrieCursor struct {
@@ -251,74 +333,65 @@ func forEachChangedLeaf(base *trie.Trie, target *trie.Trie, callback func(key co
 	return nil
 }
 
-func archiveSpillAccountKey(address common.Address) []byte {
-	key := make([]byte, 1+common.AddressLength)
-	key[0] = archiveSpillAccountPrefix
-	copy(key[1:], address.Bytes())
-	return key
-}
-
-func archiveSpillStorageKey(address common.Address, slot common.Hash) []byte {
-	key := make([]byte, 1+common.AddressLength+common.HashLength)
-	key[0] = archiveSpillStoragePrefix
-	copy(key[1:], address.Bytes())
-	copy(key[1+common.AddressLength:], slot.Bytes())
-	return key
-}
-
-func collectArchiveStorageOriginsToSpill(
+func collectArchiveStorageOriginsToSpool(
 	ctx context.Context,
 	src ethdb.KeyValueReader,
 	trieDB *triedb.Database,
-	parentRoot common.Hash,
-	root common.Hash,
-	accountHash common.Hash,
-	address common.Address,
-	oldRoot common.Hash,
-	newRoot common.Hash,
-	writer *archiveSpillWriter,
-	stats *archiveSpillStats,
-) (uint32, error) {
-	if !archiveTrieRootAvailable(src, oldRoot) {
-		return 0, fmt.Errorf("%w: parent storage root %s", errArchiveStateUnavailable, oldRoot)
+	job archiveStorageSpoolJob,
+	spool *archiveStorageSpool,
+) (archiveStorageSpoolRef, archiveSpillStats, error) {
+	if !archiveTrieRootAvailable(src, job.oldRoot) {
+		return archiveStorageSpoolRef{}, archiveSpillStats{}, fmt.Errorf("%w: parent storage root %s", errArchiveStateUnavailable, job.oldRoot)
 	}
-	if !archiveTrieRootAvailable(src, newRoot) {
-		return 0, fmt.Errorf("%w: storage root %s", errArchiveStateUnavailable, newRoot)
+	if !archiveTrieRootAvailable(src, job.newRoot) {
+		return archiveStorageSpoolRef{}, archiveSpillStats{}, fmt.Errorf("%w: storage root %s", errArchiveStateUnavailable, job.newRoot)
 	}
-	oldTrie, err := trie.New(trie.StorageTrieID(parentRoot, accountHash, oldRoot), trieDB)
+	oldTrie, err := trie.New(trie.StorageTrieID(job.parentRoot, job.accountHash, job.oldRoot), trieDB)
 	if err != nil {
-		return 0, fmt.Errorf("open parent storage trie %s: %w", oldRoot, err)
+		return archiveStorageSpoolRef{}, archiveSpillStats{}, fmt.Errorf("open parent storage trie %s: %w", job.oldRoot, err)
 	}
-	newTrie, err := trie.New(trie.StorageTrieID(root, accountHash, newRoot), trieDB)
+	newTrie, err := trie.New(trie.StorageTrieID(job.root, job.accountHash, job.newRoot), trieDB)
 	if err != nil {
-		return 0, fmt.Errorf("open storage trie %s: %w", newRoot, err)
+		return archiveStorageSpoolRef{}, archiveSpillStats{}, fmt.Errorf("open storage trie %s: %w", job.newRoot, err)
 	}
-	var slots uint64
+	start := spool.offset
+	stats := archiveSpillStats{}
 	err = forEachChangedLeaf(oldTrie, newTrie, func(slotHash common.Hash, origin []byte) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if len(origin) > math.MaxUint8 {
-			return fmt.Errorf("origin storage slot %s for %s too large: %d bytes", slotHash, address, len(origin))
+			return fmt.Errorf("origin storage slot %s for %s too large: %d bytes", slotHash, job.address, len(origin))
 		}
-		if err := writer.put(archiveSpillStorageKey(address, slotHash), origin); err != nil {
-			return err
-		}
-		slots++
 		stats.storageSlots++
 		stats.storageDataBytes += uint64(len(origin))
+		if err := validateArchiveStorageSpillStats(stats); err != nil {
+			return err
+		}
+		if err := spool.writeSlot(slotHash, origin); err != nil {
+			return err
+		}
 		if stats.storageSlots%archiveSpillLogEvery == 0 {
-			log.Info("Spilling archive storage changes", "accounts", stats.accounts, "storageSlots", stats.storageSlots)
+			log.Info(
+				"Spooling archive account storage",
+				"address", job.address,
+				"accountSlots", stats.storageSlots,
+			)
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return archiveStorageSpoolRef{}, archiveSpillStats{}, err
 	}
-	if slots > math.MaxUint32 {
-		return 0, fmt.Errorf("too many changed storage slots for %s: %d", address, slots)
+	if stats.storageSlots > math.MaxUint32 {
+		return archiveStorageSpoolRef{}, archiveSpillStats{}, fmt.Errorf("too many changed storage slots for %s: %d", job.address, stats.storageSlots)
 	}
-	return uint32(slots), nil
+	return archiveStorageSpoolRef{
+		path:   spool.path,
+		offset: start,
+		size:   spool.offset - start,
+		slots:  uint32(stats.storageSlots),
+	}, stats, nil
 }
 
 func collectArchiveHistoryOriginsToSpill(
@@ -327,79 +400,189 @@ func collectArchiveHistoryOriginsToSpill(
 	trieDB *triedb.Database,
 	parentRoot common.Hash,
 	root common.Hash,
-	store ethdb.KeyValueStore,
-) (archiveSpillStats, error) {
+	directory string,
+	workers int,
+	bufferMB int,
+) ([]archiveSpoolAccount, archiveSpillStats, error) {
 	if !archiveTrieRootAvailable(src, parentRoot) {
-		return archiveSpillStats{}, fmt.Errorf("%w: parent account root %s", errArchiveStateUnavailable, parentRoot)
+		return nil, archiveSpillStats{}, fmt.Errorf("%w: parent account root %s", errArchiveStateUnavailable, parentRoot)
 	}
 	if !archiveTrieRootAvailable(src, root) {
-		return archiveSpillStats{}, fmt.Errorf("%w: account root %s", errArchiveStateUnavailable, root)
+		return nil, archiveSpillStats{}, fmt.Errorf("%w: account root %s", errArchiveStateUnavailable, root)
 	}
 	oldTrie, err := trie.New(trie.TrieID(parentRoot), trieDB)
 	if err != nil {
-		return archiveSpillStats{}, fmt.Errorf("open parent account trie %s: %w", parentRoot, err)
+		return nil, archiveSpillStats{}, fmt.Errorf("open parent account trie %s: %w", parentRoot, err)
 	}
 	newTrie, err := trie.New(trie.TrieID(root), trieDB)
 	if err != nil {
-		return archiveSpillStats{}, fmt.Errorf("open account trie %s: %w", root, err)
+		return nil, archiveSpillStats{}, fmt.Errorf("open account trie %s: %w", root, err)
 	}
-	writer := newArchiveSpillWriter(store)
-	stats := archiveSpillStats{}
-	err = forEachChangedLeaf(oldTrie, newTrie, func(accountHash common.Hash, oldBlob []byte) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		preimage := rawdb.ReadPreimage(src, accountHash)
-		if len(preimage) != common.AddressLength {
-			return fmt.Errorf("missing account preimage for hash %s; full archive history needs account preimages", accountHash)
-		}
-		address := common.BytesToAddress(preimage)
-		oldAccount, oldOrigin, err := decodeArchiveAccountOrigin(accountHash, oldBlob)
+	if workers < 1 {
+		workers = 1
+	}
+	bufferSize := archiveSpoolBufferSize(bufferMB, workers)
+	spools := make([]*archiveStorageSpool, 0, workers)
+	for worker := 0; worker < workers; worker++ {
+		spool, err := newArchiveStorageSpool(directory, worker, bufferSize)
 		if err != nil {
-			return err
-		}
-		if len(oldOrigin) > math.MaxUint8 {
-			return fmt.Errorf("origin account for %s too large: %d bytes", address, len(oldOrigin))
-		}
-		newAccount, err := readArchiveAccount(newTrie, accountHash)
-		if err != nil {
-			return err
-		}
-		oldStorageRoot := accountStorageRoot(oldAccount)
-		newStorageRoot := accountStorageRoot(newAccount)
-		var slots uint32
-		if oldStorageRoot != newStorageRoot {
-			slots, err = collectArchiveStorageOriginsToSpill(
-				ctx, src, trieDB, parentRoot, root, accountHash, address,
-				oldStorageRoot, newStorageRoot, writer, &stats,
-			)
-			if err != nil {
-				return fmt.Errorf("account %s storage history: %w", address, err)
+			for _, opened := range spools {
+				_ = opened.close()
 			}
+			return nil, archiveSpillStats{}, fmt.Errorf("create archive storage spool: %w", err)
 		}
-		value := make([]byte, 4+len(oldOrigin))
-		binary.BigEndian.PutUint32(value[:4], slots)
-		copy(value[4:], oldOrigin)
-		if err := writer.put(archiveSpillAccountKey(address), value); err != nil {
-			return err
-		}
-		stats.accounts++
-		stats.accountDataBytes += uint64(len(oldOrigin))
-		if stats.accounts%archiveSpillLogEvery == 0 {
-			log.Info("Spilling archive account changes", "accounts", stats.accounts, "storageSlots", stats.storageSlots)
-		}
-		return nil
-	})
-	if err != nil {
-		return archiveSpillStats{}, err
+		spools = append(spools, spool)
 	}
-	if err := writer.flush(); err != nil {
-		return archiveSpillStats{}, err
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	jobs := make(chan archiveStorageSpoolJob, workers*2)
+	results := make(chan archiveStorageSpoolResult, workers*2)
+	firstErr := make(chan error, 1)
+	reportError := func(err error) {
+		if err == nil {
+			return
+		}
+		select {
+		case firstErr <- err:
+			cancel()
+		default:
+		}
+	}
+
+	var workerWG sync.WaitGroup
+	for _, spool := range spools {
+		workerWG.Add(1)
+		go func(spool *archiveStorageSpool) {
+			defer workerWG.Done()
+			defer func() { reportError(spool.close()) }()
+			for {
+				select {
+				case job, ok := <-jobs:
+					if !ok {
+						return
+					}
+					result := archiveStorageSpoolResult{
+						account: archiveSpoolAccount{address: job.address, origin: job.origin},
+						stats: archiveSpillStats{
+							accounts:         1,
+							accountDataBytes: uint64(len(job.origin)),
+						},
+					}
+					if job.oldRoot != job.newRoot {
+						storage, storageStats, err := collectArchiveStorageOriginsToSpool(runCtx, src, trieDB, job, spool)
+						if err != nil {
+							reportError(fmt.Errorf("account %s storage history: %w", job.address, err))
+							return
+						}
+						result.account.storage = storage
+						result.stats.storageSlots = storageStats.storageSlots
+						result.stats.storageDataBytes = storageStats.storageDataBytes
+					}
+					select {
+					case results <- result:
+					case <-runCtx.Done():
+						return
+					}
+				case <-runCtx.Done():
+					return
+				}
+			}
+		}(spool)
+	}
+
+	var scannerWG sync.WaitGroup
+	scannerWG.Add(1)
+	go func() {
+		defer scannerWG.Done()
+		defer close(jobs)
+		err := forEachChangedLeaf(oldTrie, newTrie, func(accountHash common.Hash, oldBlob []byte) error {
+			if err := runCtx.Err(); err != nil {
+				return err
+			}
+			preimage := rawdb.ReadPreimage(src, accountHash)
+			if len(preimage) != common.AddressLength {
+				return fmt.Errorf("missing account preimage for hash %s; full archive history needs account preimages", accountHash)
+			}
+			address := common.BytesToAddress(preimage)
+			oldAccount, oldOrigin, err := decodeArchiveAccountOrigin(accountHash, oldBlob)
+			if err != nil {
+				return err
+			}
+			if len(oldOrigin) > math.MaxUint8 {
+				return fmt.Errorf("origin account for %s too large: %d bytes", address, len(oldOrigin))
+			}
+			newAccount, err := readArchiveAccount(newTrie, accountHash)
+			if err != nil {
+				return err
+			}
+			job := archiveStorageSpoolJob{
+				parentRoot:  parentRoot,
+				root:        root,
+				accountHash: accountHash,
+				address:     address,
+				origin:      oldOrigin,
+				oldRoot:     accountStorageRoot(oldAccount),
+				newRoot:     accountStorageRoot(newAccount),
+			}
+			select {
+			case jobs <- job:
+				return nil
+			case <-runCtx.Done():
+				return runCtx.Err()
+			}
+		})
+		if err != nil {
+			reportError(err)
+		}
+	}()
+
+	go func() {
+		scannerWG.Wait()
+		workerWG.Wait()
+		close(results)
+	}()
+
+	started := time.Now()
+	nextProgress := uint64(archiveSpillLogEvery)
+	accounts := make([]archiveSpoolAccount, 0)
+	stats := archiveSpillStats{}
+	for result := range results {
+		stats.accounts += result.stats.accounts
+		stats.storageSlots += result.stats.storageSlots
+		stats.accountDataBytes += result.stats.accountDataBytes
+		stats.storageDataBytes += result.stats.storageDataBytes
+		if err := validateArchiveSpillStats(stats); err != nil {
+			reportError(err)
+			continue
+		}
+		accounts = append(accounts, result.account)
+		if stats.storageSlots >= nextProgress {
+			elapsed := time.Since(started)
+			log.Info(
+				"Spooling archive storage changes",
+				"accounts", stats.accounts,
+				"storageSlots", stats.storageSlots,
+				"workers", workers,
+				"slotsPerSec", fmt.Sprintf("%.2f", float64(stats.storageSlots)/elapsed.Seconds()),
+				"spoolMiB", (stats.storageSlots*archiveSpoolSlotHeaderSize+stats.storageDataBytes)/(1024*1024),
+				"elapsed", elapsed,
+			)
+			nextProgress = (stats.storageSlots/archiveSpillLogEvery + 1) * archiveSpillLogEvery
+		}
+	}
+	select {
+	case err := <-firstErr:
+		return nil, archiveSpillStats{}, err
+	default:
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, archiveSpillStats{}, err
 	}
 	if stats.accounts == 0 {
-		return archiveSpillStats{}, errors.New("state roots differ but no account changes were found")
+		return nil, archiveSpillStats{}, errors.New("state roots differ but no account changes were found")
 	}
-	return stats, nil
+	return accounts, stats, nil
 }
 
 func checkedArchiveAllocation(count uint64, itemSize int, label string) ([]byte, error) {
@@ -416,30 +599,16 @@ func checkedArchiveDataAllocation(size uint64, label string) ([]byte, error) {
 	return make([]byte, int(size)), nil
 }
 
-func encodeArchiveHistoryFromSpill(store ethdb.KeyValueStore, stats archiveSpillStats) (*encodedArchiveHistory, error) {
-	if stats.storageSlots > math.MaxUint32 {
-		return nil, fmt.Errorf("too many storage slots in archive history: %d", stats.storageSlots)
+func encodeArchiveHistoryFromSpill(accounts []archiveSpoolAccount, stats archiveSpillStats) (*encodedArchiveHistory, error) {
+	if err := validateArchiveSpillStats(stats); err != nil {
+		return nil, err
 	}
-	if stats.accounts > math.MaxUint64/accountIndexSize {
-		return nil, fmt.Errorf("account index is too large: %d entries", stats.accounts)
+	if uint64(len(accounts)) != stats.accounts {
+		return nil, fmt.Errorf("archive account spool size mismatch: accounts %d/%d", len(accounts), stats.accounts)
 	}
-	if stats.storageSlots > math.MaxUint64/storageIndexSizeForArchiveHistory {
-		return nil, fmt.Errorf("storage index is too large: %d entries", stats.storageSlots)
-	}
-	sections := []struct {
-		name string
-		size uint64
-	}{
-		{name: "account index", size: stats.accounts * accountIndexSize},
-		{name: "storage index", size: stats.storageSlots * storageIndexSizeForArchiveHistory},
-		{name: "account data", size: stats.accountDataBytes},
-		{name: "storage data", size: stats.storageDataBytes},
-	}
-	for _, section := range sections {
-		if err := validateArchiveHistorySectionSize(section.name, section.size); err != nil {
-			return nil, err
-		}
-	}
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].address.Cmp(accounts[j].address) < 0
+	})
 	accountIndex, err := checkedArchiveAllocation(stats.accounts, accountIndexSize, "account index")
 	if err != nil {
 		return nil, err
@@ -457,69 +626,98 @@ func encodeArchiveHistoryFromSpill(store ethdb.KeyValueStore, stats archiveSpill
 		return nil, err
 	}
 
-	accountIt := store.NewIterator([]byte{archiveSpillAccountPrefix}, nil)
-	defer accountIt.Release()
-	var accountNumber, accountDataOffset, storageOffset uint64
-	for accountIt.Next() {
-		key, value := accountIt.Key(), accountIt.Value()
-		if len(key) != 1+common.AddressLength || len(value) < 4 {
-			return nil, errors.New("corrupt archive account spill entry")
+	spoolFiles := make(map[string]*os.File)
+	defer func() {
+		for _, file := range spoolFiles {
+			_ = file.Close()
 		}
-		if accountNumber >= stats.accounts {
-			return nil, errors.New("archive account spill contains more entries than expected")
+	}()
+	openSpool := func(path string) (*os.File, error) {
+		if file := spoolFiles[path]; file != nil {
+			return file, nil
 		}
-		origin := value[4:]
-		slots := uint64(binary.BigEndian.Uint32(value[:4]))
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		spoolFiles[path] = file
+		return file, nil
+	}
+	spoolReader := bufio.NewReaderSize(bytes.NewReader(nil), archiveSpoolReadBufferSize)
+
+	var accountDataOffset, storageOffset, storageDataOffset uint64
+	for accountNumber, account := range accounts {
+		if accountNumber > 0 && accounts[accountNumber-1].address == account.address {
+			return nil, fmt.Errorf("duplicate archive account %s", account.address)
+		}
+		if len(account.origin) > math.MaxUint8 {
+			return nil, fmt.Errorf("origin account for %s too large: %d bytes", account.address, len(account.origin))
+		}
+		slots := uint64(account.storage.slots)
 		if storageOffset+slots > math.MaxUint32 {
 			return nil, fmt.Errorf("too many storage slots in archive history: %d", storageOffset+slots)
 		}
-		entry := accountIndex[accountNumber*accountIndexSize : (accountNumber+1)*accountIndexSize]
-		copy(entry[:common.AddressLength], key[1:])
-		entry[common.AddressLength] = uint8(len(origin))
+		entryStart := uint64(accountNumber) * accountIndexSize
+		entry := accountIndex[entryStart : entryStart+accountIndexSize]
+		copy(entry[:common.AddressLength], account.address.Bytes())
+		entry[common.AddressLength] = uint8(len(account.origin))
 		binary.BigEndian.PutUint32(entry[common.AddressLength+1:common.AddressLength+5], uint32(accountDataOffset))
 		binary.BigEndian.PutUint32(entry[common.AddressLength+5:common.AddressLength+9], uint32(storageOffset))
-		binary.BigEndian.PutUint32(entry[common.AddressLength+9:common.AddressLength+13], uint32(slots))
-		copy(accountData[accountDataOffset:], origin)
-		accountDataOffset += uint64(len(origin))
+		binary.BigEndian.PutUint32(entry[common.AddressLength+9:common.AddressLength+13], account.storage.slots)
+		copy(accountData[accountDataOffset:], account.origin)
+		accountDataOffset += uint64(len(account.origin))
+
+		if slots != 0 {
+			file, err := openSpool(account.storage.path)
+			if err != nil {
+				return nil, fmt.Errorf("open archive storage spool %s: %w", account.storage.path, err)
+			}
+			if account.storage.offset > math.MaxInt64 || account.storage.size > math.MaxInt64 {
+				return nil, fmt.Errorf("archive storage spool range is too large for %s", account.address)
+			}
+			section := io.NewSectionReader(file, int64(account.storage.offset), int64(account.storage.size))
+			spoolReader.Reset(section)
+			var spoolBytesRead uint64
+			for slotNumber := uint64(0); slotNumber < slots; slotNumber++ {
+				var header [archiveSpoolSlotHeaderSize]byte
+				if _, err := io.ReadFull(spoolReader, header[:]); err != nil {
+					return nil, fmt.Errorf("read archive storage spool header for %s: %w", account.address, err)
+				}
+				spoolBytesRead += uint64(len(header))
+				originSize := uint64(header[common.HashLength])
+				if storageDataOffset+originSize > uint64(len(storageData)) {
+					return nil, fmt.Errorf("archive storage spool data exceeds expected size for %s", account.address)
+				}
+				storageEntryStart := (storageOffset + slotNumber) * storageIndexSizeForArchiveHistory
+				storageEntry := storageIndex[storageEntryStart : storageEntryStart+storageIndexSizeForArchiveHistory]
+				copy(storageEntry[:common.HashLength], header[:common.HashLength])
+				storageEntry[common.HashLength] = byte(originSize)
+				binary.BigEndian.PutUint32(storageEntry[common.HashLength+1:common.HashLength+5], uint32(storageDataOffset))
+				if _, err := io.ReadFull(spoolReader, storageData[storageDataOffset:storageDataOffset+originSize]); err != nil {
+					return nil, fmt.Errorf("read archive storage spool data for %s: %w", account.address, err)
+				}
+				spoolBytesRead += originSize
+				storageDataOffset += originSize
+			}
+			if spoolBytesRead != account.storage.size {
+				return nil, fmt.Errorf(
+					"archive storage spool size mismatch for %s: read %d/%d bytes",
+					account.address, spoolBytesRead, account.storage.size,
+				)
+			}
+		}
 		storageOffset += slots
-		accountNumber++
 	}
-	if err := accountIt.Error(); err != nil {
-		return nil, err
-	}
-	if accountNumber != stats.accounts || accountDataOffset != stats.accountDataBytes || storageOffset != stats.storageSlots {
+	if uint64(len(accounts)) != stats.accounts || accountDataOffset != stats.accountDataBytes || storageOffset != stats.storageSlots {
 		return nil, fmt.Errorf(
-			"archive account spill size mismatch: accounts %d/%d accountData %d/%d storageSlots %d/%d",
-			accountNumber, stats.accounts, accountDataOffset, stats.accountDataBytes, storageOffset, stats.storageSlots,
+			"archive account spool size mismatch: accounts %d/%d accountData %d/%d storageSlots %d/%d",
+			len(accounts), stats.accounts, accountDataOffset, stats.accountDataBytes, storageOffset, stats.storageSlots,
 		)
 	}
-
-	storageIt := store.NewIterator([]byte{archiveSpillStoragePrefix}, nil)
-	defer storageIt.Release()
-	var storageNumber, storageDataOffset uint64
-	for storageIt.Next() {
-		key, origin := storageIt.Key(), storageIt.Value()
-		if len(key) != 1+common.AddressLength+common.HashLength {
-			return nil, errors.New("corrupt archive storage spill entry")
-		}
-		if storageNumber >= stats.storageSlots {
-			return nil, errors.New("archive storage spill contains more entries than expected")
-		}
-		entry := storageIndex[storageNumber*storageIndexSizeForArchiveHistory : (storageNumber+1)*storageIndexSizeForArchiveHistory]
-		copy(entry[:common.HashLength], key[1+common.AddressLength:])
-		entry[common.HashLength] = uint8(len(origin))
-		binary.BigEndian.PutUint32(entry[common.HashLength+1:common.HashLength+5], uint32(storageDataOffset))
-		copy(storageData[storageDataOffset:], origin)
-		storageDataOffset += uint64(len(origin))
-		storageNumber++
-	}
-	if err := storageIt.Error(); err != nil {
-		return nil, err
-	}
-	if storageNumber != stats.storageSlots || storageDataOffset != stats.storageDataBytes {
+	if storageDataOffset != stats.storageDataBytes {
 		return nil, fmt.Errorf(
-			"archive storage spill size mismatch: slots %d/%d storageData %d/%d",
-			storageNumber, stats.storageSlots, storageDataOffset, stats.storageDataBytes,
+			"archive storage spool data size mismatch: have %d want %d",
+			storageDataOffset, stats.storageDataBytes,
 		)
 	}
 	return &encodedArchiveHistory{
@@ -587,43 +785,58 @@ func archiveHistoryOriginsSpilled(
 	if err != nil {
 		return nil, fmt.Errorf("create archive spill directory: %w", err)
 	}
+	removeSpool := true
+	defer func() {
+		if removeSpool {
+			_ = os.RemoveAll(directory)
+		}
+	}()
 	started := time.Now()
-	log.Warn("Using disk-backed archive trie diff", "directory", directory, "parentRoot", parentRoot, "root", root, "cacheMB", config.SpillCache)
+	log.Warn(
+		"Using disk-backed archive trie diff",
+		"directory", directory,
+		"parentRoot", parentRoot,
+		"root", root,
+		"workers", config.SpillWorkers,
+		"bufferMB", config.SpillCache,
+	)
 
-	maxCompactions := func() int { return 1 }
-	store, err := pebbledb.New(directory, config.SpillCache, 64, "pathdb-migrate-archive-spill/", false, &pebbledb.ExtraOptions{
-		MaxConcurrentCompactions: maxCompactions,
-	})
-	if err != nil {
-		_ = os.RemoveAll(directory)
-		return nil, fmt.Errorf("open archive spill database: %w", err)
-	}
-	stats, collectErr := collectArchiveHistoryOriginsToSpill(ctx, src, trieDB, parentRoot, root, store)
+	accounts, stats, collectErr := collectArchiveHistoryOriginsToSpill(
+		ctx,
+		src,
+		trieDB,
+		parentRoot,
+		root,
+		directory,
+		config.SpillWorkers,
+		config.SpillCache,
+	)
+	spoolElapsed := time.Since(started)
 	if collectErr == nil {
 		log.Info(
-			"Archive trie diff spilled to disk",
+			"Archive trie diff spooled to disk",
 			"accounts", stats.accounts,
 			"storageSlots", stats.storageSlots,
 			"accountDataBytes", stats.accountDataBytes,
 			"storageDataBytes", stats.storageDataBytes,
-			"elapsed", time.Since(started),
+			"spoolBytes", stats.storageSlots*archiveSpoolSlotHeaderSize+stats.storageDataBytes,
+			"workers", config.SpillWorkers,
+			"elapsed", spoolElapsed,
 		)
 	}
 	var encoded *encodedArchiveHistory
+	encodeStarted := time.Now()
 	if collectErr == nil {
-		encoded, collectErr = encodeArchiveHistoryFromSpill(store, stats)
+		encoded, collectErr = encodeArchiveHistoryFromSpill(accounts, stats)
 	}
-	closeErr := store.Close()
 	removeErr := os.RemoveAll(directory)
 	if collectErr != nil {
 		return nil, collectErr
 	}
-	if closeErr != nil {
-		return nil, fmt.Errorf("close archive spill database: %w", closeErr)
-	}
 	if removeErr != nil {
-		return nil, fmt.Errorf("remove archive spill database: %w", removeErr)
+		return nil, fmt.Errorf("remove archive spool directory: %w", removeErr)
 	}
+	removeSpool = false
 	log.Info(
 		"Disk-backed archive trie diff encoded",
 		"accounts", encoded.accounts,
@@ -632,6 +845,8 @@ func archiveHistoryOriginsSpilled(
 		"storageIndexBytes", len(encoded.storageIndex),
 		"accountDataBytes", len(encoded.accountData),
 		"storageDataBytes", len(encoded.storageData),
+		"spoolElapsed", spoolElapsed,
+		"encodeElapsed", time.Since(encodeStarted),
 		"elapsed", time.Since(started),
 	)
 	return encoded, nil

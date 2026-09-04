@@ -196,7 +196,9 @@ GOMEMLIMIT=40GiB GOMAXPROCS=8 ./pathdb-migrate \
   --archive-history.trie-clean-cache 4096 \
   --archive-history.result-memory-limit 256 \
   --archive-history.spill-gap 10000 \
+  --archive-history.max-transition-gap 1000000 \
   --archive-history.spill-cache 64 \
+  --archive-history.spill-workers 4 \
   --archive-history.spill-directory /data/node-path/pathdb-spill
 ```
 
@@ -212,6 +214,23 @@ result memory limit to `0` to spill every completed parallel result.
 cache for all workers, avoiding repeated Pebble lookups for nodes shared by
 adjacent state roots. The value is in MiB; use `0` to disable it.
 
+Large transitions use append-only per-worker spool files instead of inserting
+every changed slot into a temporary key-value database. Storage tries within
+one such transition are processed by `--archive-history.spill-workers`; this is
+separate from `--archive-history.workers`, which controls independent block
+transitions. Start with four spill workers and increase toward eight only when
+the source disk still has random-read capacity. `--archive-history.spill-cache`
+is the total buffering budget for the spool writers, capped at 16 MiB per
+worker. When possible, put `--archive-history.spill-directory` on local NVMe
+separate from the source chain database.
+
+`--archive-history.max-transition-gap` rejects a single synthesized history
+record spanning more than the configured number of blocks before starting its
+trie diff. This prevents a large missing-state gap from consuming days only to
+produce a record that the freezer cannot represent. The error reports the exact
+block to use as a new `--archive-history.start-block`. Set the limit to `0` only
+when the large transition is intentional and known to have a small state diff.
+
 Start with three or four workers and watch RSS. On storage with spare random
 read capacity, increase workers one at a time while keeping max-inflight equal
 to workers. Every worker still needs memory for its active trie diff, even
@@ -220,13 +239,15 @@ trie data discovered inside a retained root, retry with one worker so
 `--archive-history.skip-missing-states` can recover sequentially.
 
 The spill directory must be on a filesystem with enough free space. Temporary
-spill data is removed after the transition, and stale spill directories from an
-interrupted run are removed on retry. If a failed run already wrote destination
-history, use `--archive-history.reset-history` only on the disposable destination
-copy before retrying. Disk spilling reduces migration memory; it cannot restore
-state roots or trie nodes that are absent from the source hashdb. A history
-section that cannot fit in the freezer's Snappy block is rejected with an error;
-choose a later start block instead of bridging one very large missing-state gap.
+append-only spool data is removed after the transition, and stale spill
+directories from an interrupted run are removed on retry. If a failed run
+already wrote destination history, use `--archive-history.reset-history` only
+on the disposable destination copy before retrying. Disk spilling reduces
+migration memory; it cannot restore state roots or trie nodes that are absent
+from the source hashdb. A history
+section that cannot fit in the freezer's Snappy block is rejected as soon as the
+growing disk-backed result crosses the format limit. The error reports the exact
+later start block instead of requiring the rest of the oversized diff to finish.
 
 ## Safety Notes
 
