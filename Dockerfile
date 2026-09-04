@@ -219,6 +219,7 @@ RUN ./download-machine.sh consensus-v60-deriw3 0xd37b89a09b4e3000f1704fe0fbdaffb
 RUN ./download-machine.sh consensus-v60-deriw4 0x92f0edc340cef91223a492f0efe03b53616ed9a91ec0a67361ac5c794d1071a7 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x92f0edc340cef91223a492f0efe03b53616ed9a91ec0a67361ac5c794d1071a7
 RUN ./download-machine.sh consensus-v60-deriw5 0x20255e86fa9da8b3cbafcabfa0b964dd6dd8a81f15c3e3de4bbe7198d6fab17b https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x20255e86fa9da8b3cbafcabfa0b964dd6dd8a81f15c3e3de4bbe7198d6fab17b
 RUN ./download-machine.sh consensus-v60-deriw6 0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676
+RUN ./download-machine.sh consensus-v60-deriw7 0x3af92d1be0de846860687211d41aaae7bbc6d5dff5c12137cdb20e2c3711713c https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x3af92d1be0de846860687211d41aaae7bbc6d5dff5c12137cdb20e2c3711713c
 
 
 
