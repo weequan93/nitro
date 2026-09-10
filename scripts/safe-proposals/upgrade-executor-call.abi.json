@@ -1,0 +1,12 @@
+[
+  {
+    "type": "function",
+    "name": "executeCall",
+    "stateMutability": "payable",
+    "inputs": [
+      { "name": "target", "type": "address" },
+      { "name": "targetCallData", "type": "bytes" }
+    ],
+    "outputs": []
+  }
+]

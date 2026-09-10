@@ -1,0 +1,16 @@
+[
+  {
+    "type": "function",
+    "name": "addBlacklistTxFrom",
+    "stateMutability": "nonpayable",
+    "inputs": [{ "name": "addr", "type": "address" }],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "addBlacklistTxTo",
+    "stateMutability": "nonpayable",
+    "inputs": [{ "name": "addr", "type": "address" }],
+    "outputs": []
+  }
+]

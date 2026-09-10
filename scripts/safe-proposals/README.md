@@ -1,5 +1,106 @@
 # Deriw Safe proposal helper
 
+## Generate production blacklist calldata for the Safe UI
+
+`blacklist-calldata.mjs` generates additions to the sender (`from`) and/or
+recipient (`to`) blacklists. It only makes read-only RPC calls and writes an
+optional local JSON file; it never signs, proposes, or broadcasts a transaction.
+Use the dependencies installed with `npm ci` in this directory.
+
+From the repository root, replace the quoted placeholder with the actual
+address to blacklist:
+
+```bash
+node scripts/safe-proposals/blacklist-calldata.mjs \
+  --address 'ADDRESS_TO_BLACKLIST' \
+  --direction both \
+  --out /tmp/deriw-blacklist.safe.json
+```
+
+Repeat `--address 'ANOTHER_ADDRESS'` for multiple addresses. Use `--direction
+from` or `--direction to` for a single list. The default is `both`, producing
+two calls per address. Duplicate addresses are removed. Existing output files
+are not overwritten.
+
+### Direct Safe calls to the blacklist precompile
+
+Use `--route direct` when the Safe itself is authorized as a blacklist owner
+or chain owner. This targets `0x00000000000000000000000000000000000007EC`
+and uses the blacklist calldata directly. For example, to reproduce the
+supplied recipient-list addition:
+
+```bash
+node scripts/safe-proposals/blacklist-calldata.mjs \
+  --address '0xe76a03e00b10528e079070d39b52ec5788f6f3a8' \
+  --direction to \
+  --route direct \
+  --out /tmp/deriw-blacklist-direct-to.safe.json
+```
+
+For this route, the Safe UI **To** is the `0x…07EC` precompile, **Value** is
+`0`, **Operation** is `CALL (0)`, and **Data** is the printed calldata. For ABI
+entry use [deriw-blacklist-add.abi.json](./deriw-blacklist-add.abi.json) and select
+`addBlacklistTxTo`. Use `--direction both` to generate both list additions.
+Direct mode checks the Safe and simulates each call from it; it does not
+require the executor role. Unauthorized direct calls fail simulation.
+The separate `safe-proposal.mjs` service helper still only accepts executor
+targets; use the generated Transaction Builder JSON in the Safe UI for direct
+calls. The generator continues to default to `--route executor`.
+
+### Default executor route
+
+The default RPC is `https://rpc.deriw.com`. Before producing output, the script
+checks chain ID `2886`, Safe/executor bytecode, the Safe's executor role and
+signing threshold, and simulates each exact executor call with `from` set to
+the Safe at the same block. A failed check stops generation. `--rpc-url URL`
+can select another production endpoint; the chain remains pinned. `--offline`
+skips those checks and explicitly labels its output **UNVERIFIED**.
+
+In `https://safe.deriw.com`, select production Safe
+`0x2F996bC558818D33DE37aF36Bee7de24bA3Fc4dF`, then open **New transaction →
+Transaction Builder** and import the generated JSON. Alternatively enable
+**Custom data** and add each printed transaction using these fields:
+
+| Field | Value |
+|---|---|
+| Safe / caller | `0x2F996bC558818D33DE37aF36Bee7de24bA3Fc4dF` |
+| To / contract address | `0xC49f79CcdFbB3668400b7476A641268De81548b1` |
+| Value | `0` |
+| Operation for each executor call | `CALL (0)` |
+| Data / hex encoded | The printed outer `Data (hex encoded)` for that entry |
+
+The outer data is `executeCall(0x00000000000000000000000000000000000007EC,
+innerData)`. The inner data calls `addBlacklistTxFrom(address)` or
+`addBlacklistTxTo(address)`. If using ABI entry instead of Custom data, select
+`executeCall(address,bytes)`, put `0x00000000000000000000000000000000000007EC`
+in `target`, and the printed **targetCallData** in `targetCallData`.
+The address being blacklisted is inside the inner data; the Safe UI's **To**
+field always contains the executor.
+
+Minimal JSON ABIs for this workflow are included:
+
+- [upgrade-executor-call.abi.json](./upgrade-executor-call.abi.json): paste this
+  into the Safe ABI field for executor `0xC49f79CcdFbB3668400b7476A641268De81548b1`.
+  Select `executeCall` and enter the `target` and `targetCallData` shown above.
+- [deriw-blacklist-add.abi.json](./deriw-blacklist-add.abi.json): the two inner
+  blacklist addition methods, for encoding/decoding the precompile calldata.
+
+Review every entry, create the proposal, and have Safe owners sign and execute
+through the UI. For multiple entries the UI constructs a MultiSend batch;
+its outer Safe operation may be a delegatecall to MultiSend, while each child
+is a CALL to the executor. The script simulates the child calls separately;
+it does not simulate the full Safe batch, guards, signatures, or future state.
+After execution, confirm both relevant getters (`isBlacklistTxFrom(address)`
+and `isBlacklistTxTo(address)`) at the public precompile
+`0x00000000000000000000000000000000000007EB` return `true`.
+See the [Safe Transaction Builder guide](https://help.safe.global/articles/4180673514-transaction-builder).
+
+The shell error `zsh: no matches found: data?` means prose with an unquoted `?`
+was pasted into zsh and treated as a filename pattern. Run only the command
+block above, replacing the quoted address placeholder.
+
+## Prepare and submit signed proposals with the service helper
+
 This helper lets a registered Safe Transaction Service delegate prepare and
 submit a trusted proposal without receiving owner or executor authority. It
 does not execute the Safe transaction and it never reads a private key.
@@ -160,3 +261,32 @@ Every proposal transaction must target its chain's verified UpgradeExecutor;
 the governed contract or precompile appears only inside the reviewed nested
 calldata. DeriwOS activation transactions remain separate proposals with
 postcondition gates.
+
+
+
+
+
+     node scripts/safe-proposals/blacklist-calldata.mjs \
+    --address '0xbE184Ae2Bd172561ce18e375206066EB5D5136Bd' \
+    --address '0x4a98D9770867BE6a62819284751049f2bfca95Ad' \
+    --address '0x6349C86E0d4372681066B4Dad155C55E2aC96b69' \
+    --address '0x3648ACcE9fa82c24ba6Dba396e9999C6DD0d5474' \
+    --address '0x295452B8D1DFe2Da698F348F67293322DaeEf31D' \
+    --address '0x34c29d726adacCc078861BecF78F67951986F22f' \
+    --address '0x8e0d1A706Ed041F3e1dF0f63354a73C97877E3CF' \
+    --address '0x82da8A15c7BFb44377480Bf27A54B834BC732eEE' \
+    --address '0x70628234Ce9c175FF33C4b49Bf3FdaC5CDcc793a' \
+    --address '0x19F1d21C64393efDDE96795239d68Bd72dC5a377' \
+    --address '0xF6206Ada9A38a631C7e60A046aD21237C0E6425A' \
+    --address '0x91eC5B77f44c2c031b7a6ADA9B744f419804FA20' \
+    --address '0x01b58C29cD3E59605D72e9B5228E69F2b4B5D7ba' \
+    --address '0x853DabC54B9CA0d1106919476A2B0F4Dbd6ff700' \
+    --address '0xAA611f7529D8A1A4b102C7335914DbBE2797A4Aa' \
+    --address '0x3F94073E092f06CDB8E7B708e40Dabf1Cb425018' \
+    --address '0x6977756685BbFfF4b4941fE175A1c517F1659607' \
+    --address '0x84d49f4Dcfb8D40cf6611CFC83B4c34DB4e4B303' \
+    --address '0x516820C26620E0664d8727bA2e07f978d6F752Bf' \
+    --address '0x9c7207aF7e7bfbcDfDf9a6D777775Dbb29E84ca7' \
+    --direction both \
+    --route direct \
+    --out ./blacklist-to.safe.json

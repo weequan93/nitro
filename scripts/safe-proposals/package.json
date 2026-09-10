@@ -7,7 +7,7 @@
     "node": ">=20.12.2"
   },
   "scripts": {
-    "test": "node --test safe-proposal.test.mjs"
+    "test": "node --test *.test.mjs"
   },
   "dependencies": {
     "@safe-global/api-kit": "5.0.2",
