@@ -2,16 +2,22 @@
 
 ## Release status and manifest
 
-**Status: draft release note; deployment and activation are not verified.**
+**Status: development activation is operator-confirmed at ArbOS 60 / DeriwOS 6;
+feature acceptance and post-activation replay evidence remain pending. Test and
+production deployment/activation are not verified here.**
 Promote one pinned release through development, test, production rehearsal,
 and production. Record execution evidence in the DER-3180 ticket and separate
 [release progress records](../release-progress/README.md) for each environment.
+
+Use the [DER-3180 manual validation checklist](DER-3180-manual-validation.md)
+for the code summary, reported development deployment evidence, Safe calldata
+preparation, transaction tests, cleanup, and outstanding replay checks.
 
 | Item | Release value |
 | --- | --- |
 | Jira ID | `DER-3180` |
 | Source branch | `dev/feat-DER-3180` |
-| Release owner / final source commit | To be recorded after committing the reviewed changes |
+| Release owner / final source commit | Owner to be recorded; deployed image source revision reported as `625e9205f` |
 | Submodule commits | Pin all gitlinks, including changed precompile interfaces and explorer ABIs |
 | Node image digest / validator image digest | To be built and recorded from the final source commit |
 | Current / target WASM module root | Record per environment; build the target machine from the same release source |
