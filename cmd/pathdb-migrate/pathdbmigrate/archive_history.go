@@ -110,14 +110,27 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read destination state history size: %w", err)
 	}
-	if frozen != 0 {
+	if frozen != 0 && !cfg.Resume {
 		if !cfg.ResetHistory {
-			return fmt.Errorf("destination already has %d state history entries; rerun with --archive-history.reset-history only on a disposable/copy DB", frozen)
+			return fmt.Errorf("destination already has %d state history entries; use --archive-history.resume for a matching migration, or --archive-history.reset-history only on a disposable/copy DB", frozen)
 		}
 		log.Warn("Resetting existing destination state history", "entries", frozen)
 		if err := freezer.Reset(); err != nil {
 			return fmt.Errorf("reset destination state history: %w", err)
 		}
+		frozen = 0
+	}
+	originalStart := start
+	start, initialRoot, err = prepareArchiveResume(ctx, src, dst, freezer, frozen, archiveMigrationManifest{
+		Version: 1, Start: start, End: end,
+		Genesis: rawdb.ReadCanonicalHash(src, 0), InitialRoot: initialRoot, EndRoot: endRoot,
+		SkipMissingStates: cfg.SkipMissingStates,
+	}, cfg.Resume)
+	if err != nil {
+		return fmt.Errorf("prepare archive migration: %w", err)
+	}
+	if cfg.Resume {
+		log.Info("Resuming archive history", "requestedStart", originalStart, "resumeBlock", start, "retainedRecords", frozen)
 	}
 	resetStateHistoryIndexes(dst)
 	if err := prepareArchiveSpillDirectory(cfg, m.config.Dst.ChainData); err != nil {
@@ -127,7 +140,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 	started := time.Now()
 	stats := archiveHistoryStats{}
 	totalBlocks := end - start
-	stateID := uint64(0)
+	stateID := frozen
 	m.stats.resetArchiveHistory(start, end)
 	prevRoot := common.Hash{}
 	anchorBlock := start
@@ -282,6 +295,10 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		}
 	}
 
+	// Persist history before publishing the final state ID in the key-value DB.
+	if err := freezer.SyncAncient(); err != nil {
+		return fmt.Errorf("sync archive history: %w", err)
+	}
 	rawdb.WritePersistentStateID(dst, stateID)
 	resetStateHistoryIndexes(dst)
 	if err := dst.SyncKeyValue(); err != nil {

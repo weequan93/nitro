@@ -104,6 +104,7 @@ type AccountHistoryConfig struct {
 
 type ArchiveHistoryConfig struct {
 	Enable            bool   `koanf:"enable"`
+	Resume            bool   `koanf:"resume"`
 	StartBlock        string `koanf:"start-block"`
 	EndBlock          string `koanf:"end-block"`
 	ResetHistory      bool   `koanf:"reset-history"`
@@ -174,6 +175,7 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.String("account-history.end-block", DefaultConfig.AccountHistory.EndBlock, "last block for targeted account history ('latest' or block number)")
 	f.Bool("account-history.reset-history", DefaultConfig.AccountHistory.ResetHistory, "DANGEROUS: reset existing destination PathDB state history before writing account history")
 	f.Bool("archive-history.enable", DefaultConfig.ArchiveHistory.Enable, "write full PathDB archive state history from hashdb without replaying blocks")
+	f.Bool("archive-history.resume", DefaultConfig.ArchiveHistory.Resume, "resume matching archive migration by validating retained history and rebuilding root mappings")
 	f.String("archive-history.start-block", DefaultConfig.ArchiveHistory.StartBlock, "first block for full archive history")
 	f.String("archive-history.end-block", DefaultConfig.ArchiveHistory.EndBlock, "last block for full archive history ('latest' or block number)")
 	f.Bool("archive-history.reset-history", DefaultConfig.ArchiveHistory.ResetHistory, "DANGEROUS: reset existing destination PathDB state history before writing archive history")
@@ -256,6 +258,9 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.ArchiveHistory.Enable {
+		if c.ArchiveHistory.Resume && c.ArchiveHistory.ResetHistory {
+			return errors.New("archive-history.resume cannot be combined with archive-history.reset-history")
+		}
 		if c.Src.ChainData == "" {
 			return errors.New("src.chain-data is required")
 		}

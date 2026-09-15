@@ -11,6 +11,94 @@ This tool is intentionally conservative:
 - only one selected state root is converted, normally `latest`;
 - validators/stakers should not use pathdb unless Nitro explicitly supports it.
 
+## Build on a Linux server with Docker
+
+Run these commands in Bash from the Nitro repository root. Docker must be
+installed and able to download images and dependencies. Host Go, Node.js, and
+Foundry installations are not required. The repository requires Go 1.25 and
+generated Solidity bindings; a plain Go container cannot build a fresh checkout
+until those bindings exist.
+
+### 1. Update the branch and submodules
+
+```bash
+git switch dev-migration-tool3 &&
+git pull --ff-only &&
+git submodule update --init --recursive
+```
+
+### 2. Build the contract artifacts
+
+The contracts builder installs Foundry under `/root/.foundry/bin`. Explicitly
+add that directory to `PATH`: sourcing `.bashrc` in a noninteractive Docker
+build may leave `forge` unavailable. This command supplies the adjusted
+Dockerfile through stdin without editing the repository's Dockerfile.
+
+```bash
+set -o pipefail
+
+sed '/make build-solidity/i ENV PATH="/root/.foundry/bin:${PATH}"' Dockerfile |
+docker build \
+  --progress=plain \
+  --target contracts-builder \
+  -t nitro-migration-contracts:local \
+  -f - .
+```
+
+Wait for this build to succeed before continuing. Rebuild this image after
+updating contract sources or submodules so its artifacts match the checkout.
+
+### 3. Generate bindings and build the executable
+
+The following uses `printf` instead of a heredoc so indentation introduced when
+pasting commands cannot turn a closing heredoc marker into a Dockerfile
+instruction. Keep each quoted string on one line.
+
+```bash
+set -o pipefail
+
+printf '%s\n' \
+  'FROM nitro-migration-contracts:local AS contracts' \
+  'FROM golang:1.25-bookworm AS builder' \
+  'WORKDIR /workspace' \
+  'COPY . .' \
+  'COPY --from=contracts /workspace/ /workspace/' \
+  'RUN go run ./solgen/gen.go' \
+  'RUN go build -o /out/pathdb-migrate-updated ./cmd/pathdb-migrate' \
+  'FROM scratch' \
+  'COPY --from=builder /out/pathdb-migrate-updated /pathdb-migrate-updated' |
+DOCKER_BUILDKIT=1 docker build \
+  --progress=plain \
+  --output type=local,dest=./migration-build \
+  -f - .
+```
+
+The executable is exported to `./migration-build/pathdb-migrate-updated` for
+the Docker builder's platform. These build steps do not open the chain databases.
+
+### 4. Check the executable
+
+```bash
+./migration-build/pathdb-migrate-updated --help 2>&1 |
+  grep -E 'max-transition-gap|spill-workers'
+```
+
+Both flags must appear. Use `./migration-build/pathdb-migrate-updated` in place
+of `./pathdb-migrate` or `go run ./cmd/pathdb-migrate` in the examples below.
+Checking out a branch does not update an existing executable.
+
+### Build troubleshooting
+
+- `go: command not found`: use the Docker workflow above; it supplies Go 1.25.
+- Missing `solgen/go/precompilesgen` or `solgen/go/bridgegen`: these are local
+  generated packages, not dependencies to install with `go get`. Complete the
+  contract build and run the binding generator as shown above.
+- `forge: No such file or directory`: use the explicit Foundry `PATH` in step 2.
+- `sed: unterminated s command`: a pasted substitution may have been split
+  across lines. Use the single-line `sed` insertion in step 2.
+- `unknown instruction: DOCKERFILE`: an indented heredoc terminator became
+  Dockerfile content. Use the `printf` command in step 3.
+
 ## Flow
 
 1. Stop the source node cleanly.
@@ -173,6 +261,33 @@ storage jobs, active workers, nodes per second and MiB per second. A sustained
 active-worker count below the configured worker count means account traversal
 or storage latency is limiting scheduling; a full active-worker count with low
 throughput usually means the disk is saturated.
+
+## Resuming archive-history migration
+
+Add `--archive-history.resume` to an archive-history command to start or resume
+a matching migration. Keep the original `--archive-history.start-block`,
+`--archive-history.end-block`, source chain, and `--archive-history.skip-missing-states`
+setting. Worker counts, caches, spill settings, and the transition gap limit may
+change between attempts. For example, retry with `--archive-history.workers 1`
+if parallel processing discovers missing internal trie data.
+
+This build syncs a migration manifest before writing history, even when the
+first run omits `--archive-history.resume`. On restart it validates all retained
+history metadata against the canonical source headers and the parent/root chain,
+repairs root-to-state-ID mappings, and continues after the last retained
+transition. This scans metadata but does not recompute completed trie diffs.
+Skipped blocks and unchanged roots after that transition may be scanned again.
+Progress and coverage counters describe the resumed segment; the state ID
+includes previously retained records. Retain logs from earlier segments to
+assess total missing-state coverage.
+
+The source and destination must remain offline and unchanged between attempts.
+Resume rejects a different range or source, incompatible metadata, and history
+created by older builds without a manifest. It cannot be combined with
+`--archive-history.reset-history`. Do not reset history merely to bypass a resume
+validation error. A completed matching run can also be resumed without appending
+duplicate records. Resume validates metadata continuity, not a full replay of
+every stored account/storage history payload.
 
 ## Archive history with missing states
 
