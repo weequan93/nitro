@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
+	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"github.com/offchainlabs/nitro/cmd/chaininfo"
 )
 
@@ -214,4 +215,29 @@ func TestPreCheckBlacklistAllowsExactAuthorizedEmergencyRemoval(t *testing.T) {
 		AuthList:  []types.SetCodeAuthorization{{}},
 	})
 	require.ErrorIs(t, preCheckBlacklist(state, piggyback, owner), ErrTxBlacklist)
+}
+
+func TestPreCheckBlacklistTransferBanIsMetadataOnly(t *testing.T) {
+	chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+	chainConfig.ChainID = new(big.Int).SetUint64(arbosState.DeriwDevChainID)
+	state, _ := arbosState.NewArbosMemoryBackedArbOSStateWithConfig(chainConfig)
+	require.NoError(t, state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_BlacklistBanTypes))
+	child := common.HexToAddress("0x1001")
+	parent := common.HexToAddress("0x2002")
+	target := common.HexToAddress("0x3003")
+	require.NoError(t, state.SubAccount().AllowedAddress().Add(target))
+	require.NoError(t, state.SubAccount().BindRelation(parent, child, big.NewInt(0)))
+	from, err := state.Blacklist().TxFromAddrsWithFlag(blacklist.BanFlagERC20Transfer)
+	require.NoError(t, err)
+	to, err := state.Blacklist().TxToAddrsWithFlag(blacklist.BanFlagERC20Transfer)
+	require.NoError(t, err)
+	for _, address := range []common.Address{child, parent, target} {
+		require.NoError(t, from.Add(address))
+		require.NoError(t, to.Add(address))
+		require.True(t, state.Blacklist().TxFromAddrs().IsMemberFree(address))
+		require.True(t, state.Blacklist().TxToAddrs().IsMemberFree(address))
+	}
+	require.NoError(t, preCheckBlacklist(state, blacklistTestTx(target), child))
+	require.NoError(t, state.Blacklist().SetBanType(parent, blacklist.BanFlagAll))
+	require.ErrorIs(t, preCheckBlacklist(state, blacklistTestTx(target), child), ErrTxBlacklist)
 }

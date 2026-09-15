@@ -4,6 +4,12 @@ This directory is the operational source of truth for Deriw node releases.
 Every release has its own directory, and every deployment environment has its
 own runbook.
 
+Record completed work, live checkpoints, and next actions separately in
+[release progress](../release-progress/README.md). The active custom DeriwOS
+testnet rollout is tracked in [testnet progress](../release-progress/deriwos-testnet.md)
+and uses the [DeriwOS runbook](../deriw-l3-environment-deployment-runbook.md).
+The versioned legacy release below has a separate manifest and activation flow.
+
 ## Layout
 
 ```text
@@ -29,6 +35,13 @@ Use these environment names consistently:
 | `production.md` | Production chain |
 
 ## Release index
+
+Feature release notes supplement the environment runbooks and identify their
+own activation requirements. They do not establish deployment status.
+
+| Jira | Feature release note | Environments |
+| --- | --- | --- |
+| `DER-3180` | [Blacklist ban types](DER-3180-blacklist-ban-types.md) | Development, test, production |
 
 | Release | Source revision | Guides |
 | --- | --- | --- |
@@ -68,4 +81,3 @@ Build and test
 
 An environment may be skipped only when the release owner records the reason
 and accepts the additional risk in the change ticket.
-

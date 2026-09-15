@@ -5,6 +5,7 @@ package arbos
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -15,8 +16,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
+	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"github.com/offchainlabs/nitro/arbos/storage"
 	arbosutil "github.com/offchainlabs/nitro/arbos/util"
+	"github.com/offchainlabs/nitro/cmd/chaininfo"
+	"github.com/stretchr/testify/require"
 )
 
 func newDeriwBlacklistTestProcessor(t *testing.T, active bool) (*TxProcessor, *arbosState.ArbosState, *state.StateDB) {
@@ -151,22 +155,40 @@ func TestDeriwBlacklistChecksOriginalAndAliasedL1Sender(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			processor, state, _ := newDeriwBlacklistTestProcessor(t, true)
-			originalL1Sender := common.HexToAddress("0x4101")
-			aliasedSender := arbosutil.RemapL1Address(originalL1Sender)
-			processor.originalFrom = aliasedSender
-			processor.msg.From = aliasedSender
-			processor.msg.Tx = test.tx(aliasedSender, processor.msg.To)
-			if err := state.Blacklist().TxFromAddrs().Add(originalL1Sender); err != nil {
-				t.Fatal(err)
+		for _, version := range []uint64{1, arbosState.DeriwOSVersion_BlacklistBanTypes} {
+			for _, flag := range []uint64{blacklist.BanFlagAll, blacklist.BanFlagERC20Transfer} {
+				if version == 1 && flag == blacklist.BanFlagERC20Transfer {
+					continue
+				}
+				t.Run(fmt.Sprintf("%s/v%d/flag%d", test.name, version, flag), func(t *testing.T) {
+					processor, state, _ := newDeriwBlacklistTestProcessor(t, true)
+					if version >= arbosState.DeriwOSVersion_BlacklistBanTypes {
+						config := chaininfo.ArbitrumDevTestChainConfig()
+						config.ChainID = new(big.Int).SetUint64(arbosState.DeriwDevChainID)
+						upgraded, stateDB := arbosState.NewArbosMemoryBackedArbOSStateWithConfig(config)
+						state = upgraded
+						processor.state, processor.evm.StateDB = state, stateDB
+						require.NoError(t, state.UpgradeDeriwOSVersion(version))
+					}
+					originalL1Sender := common.HexToAddress("0x4101")
+					aliasedSender := arbosutil.RemapL1Address(originalL1Sender)
+					processor.originalFrom = aliasedSender
+					processor.msg.From = aliasedSender
+					processor.msg.Tx = test.tx(aliasedSender, processor.msg.To)
+					require.NoError(t, state.Blacklist().TxFromAddrs().Add(originalL1Sender))
+					if version >= arbosState.DeriwOSVersion_BlacklistBanTypes {
+						require.NoError(t, state.Blacklist().SetBanType(originalL1Sender, flag))
+					}
+					gasRemaining := uint64(100_000)
+					_, err := processor.checkTopLevelDeriwBlacklist(&gasRemaining)
+					if flag == blacklist.BanFlagAll {
+						require.ErrorIs(t, err, vm.ErrDeriwBlacklisted)
+					} else {
+						require.NoError(t, err)
+					}
+				})
 			}
-
-			gasRemaining := uint64(100_000)
-			if _, err := processor.checkTopLevelDeriwBlacklist(&gasRemaining); !errors.Is(err, vm.ErrDeriwBlacklisted) {
-				t.Fatalf("original L1 sender check = %v, want ErrDeriwBlacklisted", err)
-			}
-		})
+		}
 	}
 }
 
@@ -239,4 +261,38 @@ func TestDeriwBlacklistLookupOutOfGasIsFailedNoop(t *testing.T) {
 	if stateDB.GetNonce(processor.originalFrom) != 1 || stateDB.GetNonce(processor.msg.From) != 1 {
 		t.Fatal("lookup out of gas did not advance child and parent nonces")
 	}
+}
+
+func TestDeriwBlacklistTransferBanIsMetadataOnly(t *testing.T) {
+	processor, _, _ := newDeriwBlacklistTestProcessor(t, true)
+	chainConfig := chaininfo.ArbitrumDevTestChainConfig()
+	chainConfig.ChainID = new(big.Int).SetUint64(arbosState.DeriwDevChainID)
+	state, stateDB := arbosState.NewArbosMemoryBackedArbOSStateWithConfig(chainConfig)
+	processor.state = state
+	processor.evm.StateDB = stateDB
+	require.NoError(t, state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_BlacklistBanTypes))
+	from, err := state.Blacklist().TxFromAddrsWithFlag(blacklist.BanFlagERC20Transfer)
+	require.NoError(t, err)
+	to, err := state.Blacklist().TxToAddrsWithFlag(blacklist.BanFlagERC20Transfer)
+	require.NoError(t, err)
+	for _, address := range []common.Address{processor.originalFrom, processor.msg.From, *processor.msg.To} {
+		require.NoError(t, from.Add(address))
+		require.NoError(t, to.Add(address))
+		require.True(t, state.Blacklist().TxFromAddrs().IsMemberFree(address))
+		require.True(t, state.Blacklist().TxToAddrs().IsMemberFree(address))
+	}
+	// ERC20 transfer calldata is intentionally not interpreted by DeriwOS.
+	processor.msg.Data = make([]byte, 68)
+	copy(processor.msg.Data, []byte{0xa9, 0x05, 0x9c, 0xbb})
+	gasRemaining := uint64(100_000)
+	gas, err := processor.checkTopLevelDeriwBlacklist(&gasRemaining)
+	require.NoError(t, err)
+	require.Equal(t, uint64(9*storage.StorageReadCost), gas.SingleGas())
+	require.Equal(t, uint64(100_000-9*storage.StorageReadCost), gasRemaining)
+	require.Zero(t, stateDB.GetNonce(processor.originalFrom))
+	require.Zero(t, stateDB.GetNonce(processor.msg.From))
+	require.NoError(t, state.Blacklist().SetBanType(processor.originalFrom, blacklist.BanFlagAll))
+	gasRemaining = 100_000
+	_, err = processor.checkTopLevelDeriwBlacklist(&gasRemaining)
+	require.ErrorIs(t, err, vm.ErrDeriwBlacklisted)
 }

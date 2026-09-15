@@ -36,8 +36,11 @@ const (
 	// sub-account signatures, replay protection, timestamp validation, and
 	// one-to-one parent/child relationship updates at one consensus boundary.
 	DeriwOSVersion_SubAccountAuthorizationHardening uint64 = 5
+	// DeriwOSVersion_BlacklistBanTypes enables one ban type per address.
+	// General blacklist rejection requires the stored flag to equal BanFlagAll.
+	DeriwOSVersion_BlacklistBanTypes uint64 = 6
 
-	MaxDeriwOSVersionSupported = DeriwOSVersion_SubAccountAuthorizationHardening
+	MaxDeriwOSVersionSupported = DeriwOSVersion_BlacklistBanTypes
 
 	DeriwDevChainID  = deriwpolicy.DevChainID
 	DeriwTestChainID = deriwpolicy.TestChainID
@@ -115,6 +118,9 @@ func (state *ArbosState) UpgradeDeriwOSVersion(upgradeTo uint64) error {
 		case DeriwOSVersion_SubAccountAuthorizationHardening:
 			// No state migration is required. The sub-account precompiles use this
 			// version as the deterministic legacy-to-hardened execution boundary.
+		case DeriwOSVersion_BlacklistBanTypes:
+			// Existing unflagged entries resolve to BanFlagAll. New writes persist
+			// an explicit flag; consensus charges one additional read per address.
 		default:
 			return fmt.Errorf("missing DeriwOS upgrade implementation for version %v", nextVersion)
 		}
@@ -148,7 +154,7 @@ func (state *ArbosState) validateConsensusBlacklistActivation() error {
 	}
 	protected := blacklist.ProtectedSystemAddresses(networkFeeAccount, infraFeeAccount, l1pricing.BatchPosterAddress)
 	for _, address := range protected {
-		if state.Blacklist().IsQuarantinedFree(address) {
+		if state.Blacklist().BanTypeFree(address) == blacklist.BanFlagAll {
 			return fmt.Errorf("cannot activate DeriwOS consensus blacklist while protected system address %v is quarantined", address)
 		}
 	}

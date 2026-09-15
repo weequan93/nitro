@@ -59,6 +59,11 @@ func (con DeriwBlacklist) AddBlacklistTxFrom(c ctx, evm mech, addr common.Addres
 	if err := rejectProtectedBlacklistAddress(c, addr); err != nil {
 		return err
 	}
+	if c.State.DeriwOSVersion() >= arbosState.DeriwOSVersion_BlacklistBanTypes {
+		if err := c.State.Blacklist().SetBanType(addr, blacklist.BanFlagAll); err != nil {
+			return err
+		}
+	}
 	if err := c.State.Blacklist().TxFromAddrs().Add(addr); err != nil {
 		return err
 	}
@@ -68,6 +73,11 @@ func (con DeriwBlacklist) AddBlacklistTxFrom(c ctx, evm mech, addr common.Addres
 func (con DeriwBlacklist) AddBlacklistTxTo(c ctx, evm mech, addr common.Address) error {
 	if err := rejectProtectedBlacklistAddress(c, addr); err != nil {
 		return err
+	}
+	if c.State.DeriwOSVersion() >= arbosState.DeriwOSVersion_BlacklistBanTypes {
+		if err := c.State.Blacklist().SetBanType(addr, blacklist.BanFlagAll); err != nil {
+			return err
+		}
 	}
 	if err := c.State.Blacklist().TxToAddrs().Add(addr); err != nil {
 		return err
@@ -113,6 +123,9 @@ func (con DeriwBlacklist) RemoveBlacklistTxFrom(c ctx, evm mech, addr common.Add
 	if err := c.State.Blacklist().TxFromAddrs().Remove(addr, c.State.ArbOSVersion()); err != nil {
 		return err
 	}
+	if c.State.DeriwOSVersion() >= arbosState.DeriwOSVersion_BlacklistBanTypes {
+		return c.State.Blacklist().ClearBanTypeIfUnlisted(addr)
+	}
 	return nil
 }
 
@@ -123,6 +136,9 @@ func (con DeriwBlacklist) RemoveBlacklistTxTo(c ctx, evm mech, addr common.Addre
 	}
 	if err := c.State.Blacklist().TxToAddrs().Remove(addr, c.State.ArbOSVersion()); err != nil {
 		return err
+	}
+	if c.State.DeriwOSVersion() >= arbosState.DeriwOSVersion_BlacklistBanTypes {
+		return c.State.Blacklist().ClearBanTypeIfUnlisted(addr)
 	}
 	return nil
 }
@@ -135,4 +151,121 @@ func (con DeriwBlacklist) ScheduleDeriwOSUpgrade(c ctx, evm mech, newVersion uin
 		return errors.New("DeriwOS 4 and later upgrades must be scheduled through ArbOwner")
 	}
 	return c.State.ScheduleDeriwOSUpgrade(newVersion, timestamp)
+}
+
+// GetBlacklistTxFromWithFlag lists addresses with exactly the requested flag.
+func (con DeriwBlacklist) GetBlacklistTxFromWithFlag(c ctx, evm mech, flag uint64) ([]common.Address, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return nil, err
+	}
+	addresses, err := c.State.Blacklist().TxFromAddrsWithFlag(flag)
+	if err != nil {
+		return nil, err
+	}
+	return addresses.AllMembers(65536)
+}
+
+// IsBlacklistTxFromWithFlag checks the address for the requested ban type.
+func (con DeriwBlacklist) IsBlacklistTxFromWithFlag(c ctx, evm mech, addr common.Address, flag uint64) (bool, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return false, err
+	}
+	addresses, err := c.State.Blacklist().TxFromAddrsWithFlag(flag)
+	if err != nil {
+		return false, err
+	}
+	return addresses.IsMember(addr)
+}
+
+// AddBlacklistTxFromWithFlag sets the address's ban type, replacing its previous type in both lists.
+func (con DeriwBlacklist) AddBlacklistTxFromWithFlag(c ctx, evm mech, addr common.Address, flag uint64) error {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return err
+	}
+	if flag == blacklist.BanFlagAll {
+		return con.AddBlacklistTxFrom(c, evm, addr)
+	}
+	addresses, err := c.State.Blacklist().TxFromAddrsWithFlag(flag)
+	if err != nil {
+		return err
+	}
+	return addresses.Add(addr)
+}
+
+// RemoveBlacklistTxFromWithFlag removes the address from this direction for the requested ban type.
+func (con DeriwBlacklist) RemoveBlacklistTxFromWithFlag(c ctx, evm mech, addr common.Address, flag uint64) error {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return err
+	}
+	addresses, err := c.State.Blacklist().TxFromAddrsWithFlag(flag)
+	if err != nil {
+		return err
+	}
+	return addresses.Remove(addr, c.State.ArbOSVersion())
+}
+
+// GetBlacklistTxToWithFlag lists addresses with exactly the requested flag.
+func (con DeriwBlacklist) GetBlacklistTxToWithFlag(c ctx, evm mech, flag uint64) ([]common.Address, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return nil, err
+	}
+	addresses, err := c.State.Blacklist().TxToAddrsWithFlag(flag)
+	if err != nil {
+		return nil, err
+	}
+	return addresses.AllMembers(65536)
+}
+
+// IsBlacklistTxToWithFlag checks the address for the requested ban type.
+func (con DeriwBlacklist) IsBlacklistTxToWithFlag(c ctx, evm mech, addr common.Address, flag uint64) (bool, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return false, err
+	}
+	addresses, err := c.State.Blacklist().TxToAddrsWithFlag(flag)
+	if err != nil {
+		return false, err
+	}
+	return addresses.IsMember(addr)
+}
+
+// AddBlacklistTxToWithFlag sets the address's ban type, replacing its previous type in both lists.
+func (con DeriwBlacklist) AddBlacklistTxToWithFlag(c ctx, evm mech, addr common.Address, flag uint64) error {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return err
+	}
+	if flag == blacklist.BanFlagAll {
+		return con.AddBlacklistTxTo(c, evm, addr)
+	}
+	addresses, err := c.State.Blacklist().TxToAddrsWithFlag(flag)
+	if err != nil {
+		return err
+	}
+	return addresses.Add(addr)
+}
+
+// RemoveBlacklistTxToWithFlag removes the address from this direction for the requested ban type.
+func (con DeriwBlacklist) RemoveBlacklistTxToWithFlag(c ctx, evm mech, addr common.Address, flag uint64) error {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return err
+	}
+	addresses, err := c.State.Blacklist().TxToAddrsWithFlag(flag)
+	if err != nil {
+		return err
+	}
+	return addresses.Remove(addr, c.State.ArbOSVersion())
+}
+
+func requireBlacklistBanTypes(c ctx) error {
+	if c.State.DeriwOSVersion() < arbosState.DeriwOSVersion_BlacklistBanTypes {
+		return errors.New("blacklist ban types require DeriwOS 6")
+	}
+	return nil
+}
+
+// GetBlacklistBanFlag returns 0 (unlisted), 1 (all), or 2 (ERC20/USDT transfer).
+func (con DeriwBlacklist) GetBlacklistBanFlag(c ctx, evm mech, addr common.Address) (uint64, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return 0, err
+	}
+	return c.State.Blacklist().BanType(addr)
 }

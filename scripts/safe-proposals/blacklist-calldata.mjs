@@ -11,12 +11,18 @@ export const PRODUCTION = Object.freeze({
   chainId: '2886',
   safe: '0x2F996bC558818D33DE37aF36Bee7de24bA3Fc4dF',
   executor: '0xC49f79CcdFbB3668400b7476A641268De81548b1',
-  blacklist: getAddress('0x00000000000000000000000000000000000007ec')
+  blacklist: getAddress('0x00000000000000000000000000000000000007ec'),
+  blacklistPublic: getAddress('0x00000000000000000000000000000000000007eb')
 })
 
 const blacklistAbi = new Interface([
   'function addBlacklistTxFrom(address addr)',
-  'function addBlacklistTxTo(address addr)'
+  'function addBlacklistTxTo(address addr)',
+  'function addBlacklistTxFromWithFlag(address addr,uint64 flag)',
+  'function addBlacklistTxToWithFlag(address addr,uint64 flag)'
+])
+const blacklistPublicAbi = new Interface([
+  'function getDeriwOSVersion() view returns (uint64 arbOSVersion,uint64 deriwOSVersion)'
 ])
 const executorAbi = new Interface([
   'function executeCall(address target, bytes targetCallData) payable',
@@ -32,9 +38,10 @@ function check(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-export function buildCalls(addresses, direction = 'both', route = 'executor') {
+export function buildCalls(addresses, direction = 'both', route = 'executor', banFlag = '1') {
   check(['from', 'to', 'both'].includes(direction), '--direction must be from, to, or both')
   check(['executor', 'direct'].includes(route), '--route must be executor or direct')
+  check(banFlag === '1' || banFlag === '2', '--ban-flag must be 1 (ban all) or 2 (ERC20/USDT transfer metadata)')
   check(addresses.length > 0, 'Supply at least one --address ADDRESS')
   const normalized = [...new Set(addresses.map(address => getAddress(address)))]
   for (const address of normalized) {
@@ -44,11 +51,15 @@ export function buildCalls(addresses, direction = 'both', route = 'executor') {
   const methods = direction === 'both'
     ? ['addBlacklistTxFrom', 'addBlacklistTxTo']
     : [direction === 'from' ? 'addBlacklistTxFrom' : 'addBlacklistTxTo']
-  return normalized.flatMap(address => methods.map(method => {
-    const innerData = blacklistAbi.encodeFunctionData(method, [address])
+  return normalized.flatMap(address => methods.map(legacyMethod => {
+    // Keep type 1 calldata compatible with the existing precompile selectors.
+    const method = banFlag === '1' ? legacyMethod : `${legacyMethod}WithFlag`
+    const args = banFlag === '1' ? [address] : [address, banFlag]
+    const innerData = blacklistAbi.encodeFunctionData(method, args)
     return {
       address,
       method,
+      banFlag,
       innerData,
       to: route === 'direct' ? PRODUCTION.blacklist : PRODUCTION.executor,
       value: '0',
@@ -62,15 +73,19 @@ export function buildTransactionBuilder(calls, verified = false) {
   const path = calls.every(call => call.to === PRODUCTION.blacklist)
     ? 'Safe -> DeriwBlacklist'
     : 'Safe -> UpgradeExecutor.executeCall -> DeriwBlacklist'
+  const transferMetadata = calls.some(call => call.banFlag === '2')
+  const banDescription = transferMetadata
+    ? 'Type 2: ERC20/USDT transfer metadata only; no transfer enforcement. Replaces the prior ban type in both direction lists, removing any ban-all restriction.'
+    : 'Type 1: ban all. Replaces any prior transfer ban type after DeriwOS 6 activation.'
   return {
     version: '1.0',
     chainId: PRODUCTION.chainId,
     createdAt: Date.now(),
     meta: {
-      name: 'Deriw production: add blacklist addresses',
-      description: verified
+      name: transferMetadata ? 'Deriw production: set transfer ban metadata (type 2)' : 'Deriw production: add blacklist addresses',
+      description: (verified
         ? `${path}. Each child eth_call passed; full Safe batch/signatures were not simulated.`
-        : `OFFLINE / UNVERIFIED. ${path}.`,
+        : `OFFLINE / UNVERIFIED. ${path}.`) + ` ${banDescription}`,
       txBuilderVersion: '1.16.5',
       createdFromSafeAddress: PRODUCTION.safe,
       createdFromOwnerAddress: ''
@@ -86,6 +101,12 @@ export async function verifyCalls(calls, rpc) {
   const chainId = BigInt(await rpc('eth_chainId', []))
   check(chainId === BigInt(PRODUCTION.chainId), `Wrong chain: expected 2886, received ${chainId}`)
   const block = await rpc('eth_blockNumber', [])
+  if (calls.some(call => call.banFlag === '2')) {
+    const data = blacklistPublicAbi.encodeFunctionData('getDeriwOSVersion')
+    const result = await rpc('eth_call', [{ to: PRODUCTION.blacklistPublic, data }, block])
+    const [, deriwOSVersion] = blacklistPublicAbi.decodeFunctionResult('getDeriwOSVersion', result)
+    check(deriwOSVersion >= 6n, `Transfer ban metadata requires active DeriwOS 6; received ${deriwOSVersion}`)
+  }
   const usesExecutor = calls.some(call => call.to === PRODUCTION.executor)
   for (const address of usesExecutor ? [PRODUCTION.safe, PRODUCTION.executor] : [PRODUCTION.safe]) {
     check(await rpc('eth_getCode', [address, block]) !== '0x', `No contract code at ${address}`)
@@ -111,7 +132,7 @@ export async function verifyCalls(calls, rpc) {
       }, block])
       check(result === '0x', `Unexpected call return data: ${result}`)
     } catch (error) {
-      throw new Error(`${call.method}(${call.address}) simulation failed: ${error.message}`)
+      throw new Error(`${call.method}(${call.address}) [ban type ${call.banFlag}] simulation failed: ${error.message}`)
     }
   }
   return { block: BigInt(block).toString(), threshold: threshold.toString(), owners: [...owners] }
@@ -122,6 +143,7 @@ async function main() {
     address: { type: 'string', multiple: true },
     direction: { type: 'string', default: 'both' },
     route: { type: 'string', default: 'executor' },
+    'ban-flag': { type: 'string', default: '1' },
     out: { type: 'string' },
     'rpc-url': { type: 'string', default: PRODUCTION.rpc },
     offline: { type: 'boolean', default: false },
@@ -130,16 +152,19 @@ async function main() {
   if (values.help) {
     console.log(`Usage: node blacklist-calldata.mjs --address ADDRESS [--address ADDRESS ...]
   [--direction from|to|both] [--route executor|direct] [--out blacklist.safe.json]
-  [--rpc-url https://rpc.deriw.com] [--offline]
+  [--ban-flag 1|2] [--rpc-url https://rpc.deriw.com] [--offline]
 
 Defaults to both lists through the executor; verifies/simulates on production (chain 2886).
+--ban-flag 1 (default): ban all, using legacy selectors.
+--ban-flag 2: ERC20/USDT transfer metadata only; requires active DeriwOS 6.
+Setting a different type replaces the prior type across both direction lists.
 --route direct targets DeriwBlacklist directly from the Safe, which must be authorized.
 --offline generates UNVERIFIED calldata without contacting RPC.
 --out exports Safe Transaction Builder JSON; existing files are not overwritten.
 Prints the fields for each CALL. Does not sign, propose, or broadcast.`)
     return
   }
-  const calls = buildCalls(values.address ?? [], values.direction, values.route)
+  const calls = buildCalls(values.address ?? [], values.direction, values.route, values['ban-flag'])
   let verification
   if (!values.offline) {
     let id = 0
@@ -161,11 +186,15 @@ Prints the fields for each CALL. Does not sign, propose, or broadcast.`)
   const batch = buildTransactionBuilder(calls, Boolean(verification))
   if (values.out) writeFileSync(values.out, JSON.stringify(batch, null, 2) + '\n', { flag: 'wx' })
   console.log(`Network: Deriw production (chain ${PRODUCTION.chainId})\nSafe: ${PRODUCTION.safe}`)
+  console.log(values['ban-flag'] === '2'
+    ? 'Ban type 2: ERC20/USDT transfer metadata only; removes any existing ban-all restriction in both lists. Requires DeriwOS 6.'
+    : 'Ban type 1: ban all; replaces any prior transfer ban type after DeriwOS 6 activation.')
   console.log(verification
     ? `Verified at block ${verification.block}: ${verification.threshold}-of-${verification.owners.length} Safe; each ${values.route} call simulated successfully.`
     : 'OFFLINE / UNVERIFIED: no on-chain checks or simulations performed.')
   for (const [index, call] of calls.entries()) {
-    console.log(`\nTransaction ${index + 1}: ${call.method}(${call.address})
+    const argumentsText = call.banFlag === '2' ? `${call.address}, ${call.banFlag}` : call.address
+    console.log(`\nTransaction ${index + 1}: ${call.method}(${argumentsText})
 To (contract address): ${call.to}
 Value: ${call.value}
 Operation: CALL (0)

@@ -12,5 +12,19 @@
     "stateMutability": "nonpayable",
     "inputs": [{ "name": "addr", "type": "address" }],
     "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "addBlacklistTxFromWithFlag",
+    "stateMutability": "nonpayable",
+    "inputs": [{ "name": "addr", "type": "address" }, { "name": "flag", "type": "uint64" }],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "addBlacklistTxToWithFlag",
+    "stateMutability": "nonpayable",
+    "inputs": [{ "name": "addr", "type": "address" }, { "name": "flag", "type": "uint64" }],
+    "outputs": []
   }
 ]

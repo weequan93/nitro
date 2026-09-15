@@ -22,6 +22,39 @@ from` or `--direction to` for a single list. The default is `both`, producing
 two calls per address. Duplicate addresses are removed. Existing output files
 are not overwritten.
 
+### Choose the ban type (DER-3180)
+
+`--ban-flag 1` is the default and preserves the existing ban-all calldata.
+Use `--ban-flag 2` to record an ERC20/USDT transfer ban after **DeriwOS 6**
+is active:
+
+```bash
+node scripts/safe-proposals/blacklist-calldata.mjs \
+  --address 'ADDRESS_TO_BLACKLIST' \
+  --ban-flag 2 \
+  --direction both \
+  --out /tmp/deriw-transfer-ban.safe.json
+```
+
+Type `2` is metadata only: DeriwOS does not block token transfers for this type.
+Each address has one type. Setting type `2` replaces type `1` in both direction
+lists and removes the existing ban-all restriction, even when `--direction`
+selects only one list. Setting type `1` restores ban-all behavior. The generated
+JSON and terminal output describe the selected type and its replacement effect.
+
+For type `2`, online verification reads the active DeriwOS version from the
+public precompile at the same block used for simulations. It rejects versions
+below `6`. `--offline` generates unverified calldata without checking activation.
+The new flag-aware methods work through either `--route executor` or
+`--route direct`.
+
+After execution, call `getBlacklistBanFlag(address)` on the public precompile
+and check it returns `2`. Use `isBlacklistTxFromWithFlag(address,2)` and/or
+`isBlacklistTxToWithFlag(address,2)` for the relevant directions. Legacy boolean
+getters report membership for any type; they do not indicate whether a transaction
+will be blocked. Only stored type `1` triggers the general blacklist rejection. Values other than `1` and `2` are rejected by the
+helper. See [the ban-type behavior and API](../../docs/decisions/0005-blacklist-ban-types.md).
+
 ### Direct Safe calls to the blacklist precompile
 
 Use `--route direct` when the Safe itself is authorized as a blacklist owner
@@ -70,8 +103,9 @@ Transaction Builder** and import the generated JSON. Alternatively enable
 | Data / hex encoded | The printed outer `Data (hex encoded)` for that entry |
 
 The outer data is `executeCall(0x00000000000000000000000000000000000007EC,
-innerData)`. The inner data calls `addBlacklistTxFrom(address)` or
-`addBlacklistTxTo(address)`. If using ABI entry instead of Custom data, select
+innerData)`. For type `1`, the inner data calls `addBlacklistTxFrom(address)` or
+`addBlacklistTxTo(address)`. Type `2` calls the corresponding
+`WithFlag(address,2)` method. If using ABI entry instead of Custom data, select
 `executeCall(address,bytes)`, put `0x00000000000000000000000000000000000007EC`
 in `target`, and the printed **targetCallData** in `targetCallData`.
 The address being blacklisted is inside the inner data; the Safe UI's **To**
@@ -82,7 +116,7 @@ Minimal JSON ABIs for this workflow are included:
 - [upgrade-executor-call.abi.json](./upgrade-executor-call.abi.json): paste this
   into the Safe ABI field for executor `0xC49f79CcdFbB3668400b7476A641268De81548b1`.
   Select `executeCall` and enter the `target` and `targetCallData` shown above.
-- [deriw-blacklist-add.abi.json](./deriw-blacklist-add.abi.json): the two inner
+- [deriw-blacklist-add.abi.json](./deriw-blacklist-add.abi.json): the legacy and flag-aware
   blacklist addition methods, for encoding/decoding the precompile calldata.
 
 Review every entry, create the proposal, and have Safe owners sign and execute
@@ -90,7 +124,7 @@ through the UI. For multiple entries the UI constructs a MultiSend batch;
 its outer Safe operation may be a delegatecall to MultiSend, while each child
 is a CALL to the executor. The script simulates the child calls separately;
 it does not simulate the full Safe batch, guards, signatures, or future state.
-After execution, confirm both relevant getters (`isBlacklistTxFrom(address)`
+For type `1`, after execution, confirm both relevant getters (`isBlacklistTxFrom(address)`
 and `isBlacklistTxTo(address)`) at the public precompile
 `0x00000000000000000000000000000000000007EB` return `true`.
 See the [Safe Transaction Builder guide](https://help.safe.global/articles/4180673514-transaction-builder).

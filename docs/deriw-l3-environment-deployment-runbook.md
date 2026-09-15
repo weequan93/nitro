@@ -1,5 +1,10 @@
 # Deriw L3 environment deployment and activation runbook
 
+For the current testnet checkpoint and remaining work, see
+[DeriwOS testnet release progress](release-progress/deriwos-testnet.md).
+This runbook describes the procedure; dated rollout evidence is kept in the
+progress record. Source pins and observations below retain their original dates.
+
 Last verified against live RPC state: 2026-08-19
 
 Target branch: `fix/blacklist-subaccount`
