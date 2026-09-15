@@ -166,3 +166,67 @@ not this compatibility test.
 available starting trie paths from complete local files and report ArbOS fee
 settings and account leaf details. It is read-only and trusts the hash keys;
 it does not perform replay or Keccak verification itself.
+
+
+## Remaining blacklist witness gap (2026-09-16)
+
+The supplied fresh input with the flag enabled contains 411 preimages; all are
+byte-identical members of the 422-preimage successful manual replay input.
+All Keccak keys in both inputs were checked against their values. All 11
+remaining nodes are 17-element branch nodes reachable from the initial ArbOS
+storage trie. The starting state root is
+`69793d2ffba58ba94fc12ad8c9a38df1340d5e7b22615b5f51958ea8faa10ffc`,
+and ArbOS version is 32.
+
+Using the supplied block's two legacy transactions and the actual storage
+mapping (subspace 12, sender set 1 / recipient set 2, address index 0), the
+following four complete non-membership proofs account for exactly all 11 nodes:
+
+| Transaction index | Check | Address | Secure trie key prefix | Missing nodes |
+| --- | --- | --- | --- | --- |
+| 1 | sender blacklist | `0x7bb99091f0d709e28c6d73949a56d123fee6108f` | `66eea661` | 3 |
+| 1 | recipient blacklist | `0x83ca1aa2bc20e41287154650e4161dc995278e1d` | `c2026057` | 3 |
+| 2 | sender blacklist | `0x342223b1bc7b96ed223b04d28dfa9a7254c44646` | `0ab2da79` | 3 |
+| 2 | recipient blacklist | `0x43948b78477963d7b408a0e27ae168584c6e07a9` | `a3c90a7a` | 2 |
+
+In historical geth commit `13558e1863ba7bdcefd7df426e26a3ebcdcfdc5e`,
+`core/state_transition.go` calls `BlacklistState.IsBlacklistTxCheck` inside
+`TransitionDb`. The current execution checks blacklist admission in
+`execution/gethexec/blacklist_pre_checker.go`; ordinary replay does not execute
+that admission policy. This explains a second legacy read-set gap independently
+of the earlier fee-account reads. The exact deployed WASM's source identity
+still has not been independently reproduced.
+
+### Recorder extension
+
+The existing `legacy-fee-account-preimages` flag also enables read-only
+blacklist supplementation through recording-only sequencing hooks. The name
+is retained for existing deployments. Before each input transaction, read its
+recipient and signed-sender blacklist membership using a separate system
+burner. Membership does not reject the transaction. Database/read errors fail
+recording. The hook runs against the current recording state, so earlier
+transactions' blacklist changes are visible. Parsing, non-discarding scheduling,
+and the canonical block-hash check retain their existing behavior.
+
+This extension changes only gethexec recording code, not ArbOS or WASM source.
+It does not restore legacy blacklist enforcement in native consensus execution.
+Scheduled redeems bypass this pre-transaction hook; delegated sender differences
+and other legacy execution differences still need interval testing. The earlier
+initial fee-recipient limitations also remain.
+
+### Validation of the extension
+
+- Focused fee and blacklist witness tests pass. Blacklist tests cover absence
+  and membership, nil recipient, complete proofs, and unchanged state root.
+- The full gethexec test binary compiles. Running it remains blocked during
+  existing precompile initialization; this run reports `Precompile ArbOwnerPublic
+  must implement GetDeriwOSVersion`, before any test executes. The focused
+  file-list tests avoid that initialization and pass.
+- A local fixture experiment loaded the successful witness into a read-only
+  source database and seeded the recorded proof with the fresh 411 entries.
+  The actual Go blacklist helper, called for the two supplied transaction
+  address pairs, made all 422 successful-witness entries available and left
+  the initial state root unchanged. This tests witness reads, not full WASM
+  execution or a production database's retention of those nodes.
+- Full native block recording and legacy WASM replay against a rebuilt image
+  remain required, followed by subsequent messages and historical intervals.

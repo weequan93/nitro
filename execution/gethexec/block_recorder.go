@@ -53,7 +53,7 @@ type BlockRecorderConfig struct {
 	TrieDirtyCache int `koanf:"trie-dirty-cache"`
 	TrieCleanCache int `koanf:"trie-clean-cache"`
 	MaxPrepared    int `koanf:"max-prepared"`
-	// Opt-in witness compatibility for legacy fee-account reads. This does not
+	// Opt-in witness compatibility for legacy fee-account and blacklist reads. This does not
 	// select an execution version or change transaction fee accounting.
 	LegacyFeeAccountPreimages bool `koanf:"legacy-fee-account-preimages"`
 }
@@ -68,7 +68,7 @@ func BlockRecorderConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Int(prefix+".trie-dirty-cache", DefaultBlockRecorderConfig.TrieDirtyCache, "like trie-dirty-cache for the separate, recording database (used for validation)")
 	f.Int(prefix+".trie-clean-cache", DefaultBlockRecorderConfig.TrieCleanCache, "like trie-clean-cache for the separate, recording database (used for validation)")
 	f.Int(prefix+".max-prepared", DefaultBlockRecorderConfig.MaxPrepared, "max references to store in the recording database")
-	f.Bool(prefix+".legacy-fee-account-preimages", DefaultBlockRecorderConfig.LegacyFeeAccountPreimages, "include initial-state fee account trie paths in validation witnesses for legacy WASM compatibility")
+	f.Bool(prefix+".legacy-fee-account-preimages", DefaultBlockRecorderConfig.LegacyFeeAccountPreimages, "include fee account and transaction blacklist trie paths in validation witnesses for legacy WASM compatibility")
 }
 
 func NewBlockRecorder(config *BlockRecorderConfig, execEngine *ExecutionEngine, ethDb ethdb.Database) *BlockRecorder {
@@ -167,7 +167,11 @@ func (r *BlockRecorder) RecordBlockCreation(
 		if !slices.Contains(wasmTargets, rawdb.LocalTarget()) {
 			wasmTargets = append(wasmTargets, rawdb.LocalTarget())
 		}
-		block, _, _, err := arbos.ProduceBlock(
+		produceBlock := arbos.ProduceBlock
+		if r.config.LegacyFeeAccountPreimages {
+			produceBlock = produceBlockWithLegacyPreimages
+		}
+		block, _, _, err := produceBlock(
 			msg.Message,
 			msg.DelayedMessagesRead,
 			prevHeader,
