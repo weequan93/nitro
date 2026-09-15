@@ -53,6 +53,9 @@ type BlockRecorderConfig struct {
 	TrieDirtyCache int `koanf:"trie-dirty-cache"`
 	TrieCleanCache int `koanf:"trie-clean-cache"`
 	MaxPrepared    int `koanf:"max-prepared"`
+	// Opt-in witness compatibility for legacy fee-account reads. This does not
+	// select an execution version or change transaction fee accounting.
+	LegacyFeeAccountPreimages bool `koanf:"legacy-fee-account-preimages"`
 }
 
 var DefaultBlockRecorderConfig = BlockRecorderConfig{
@@ -65,6 +68,7 @@ func BlockRecorderConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Int(prefix+".trie-dirty-cache", DefaultBlockRecorderConfig.TrieDirtyCache, "like trie-dirty-cache for the separate, recording database (used for validation)")
 	f.Int(prefix+".trie-clean-cache", DefaultBlockRecorderConfig.TrieCleanCache, "like trie-clean-cache for the separate, recording database (used for validation)")
 	f.Int(prefix+".max-prepared", DefaultBlockRecorderConfig.MaxPrepared, "max references to store in the recording database")
+	f.Bool(prefix+".legacy-fee-account-preimages", DefaultBlockRecorderConfig.LegacyFeeAccountPreimages, "include initial-state fee account trie paths in validation witnesses for legacy WASM compatibility")
 }
 
 func NewBlockRecorder(config *BlockRecorderConfig, execEngine *ExecutionEngine, ethDb ethdb.Database) *BlockRecorder {
@@ -150,6 +154,11 @@ func (r *BlockRecorder) RecordBlockCreation(
 		expectedNum := chainConfig.ArbitrumChainParams.GenesisBlockNum
 		if genesisNum != expectedNum {
 			return nil, fmt.Errorf("unexpected genesis block number %v in ArbOS state, expected %v", genesisNum, expectedNum)
+		}
+		if r.config.LegacyFeeAccountPreimages {
+			if err := recordLegacyFeeAccountPreimages(recordingdb, initialArbosState); err != nil {
+				return nil, err
+			}
 		}
 	}
 
