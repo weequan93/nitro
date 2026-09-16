@@ -339,6 +339,30 @@ is the total buffering budget for the spool writers, capped at 16 MiB per
 worker. When possible, put `--archive-history.spill-directory` on local NVMe
 separate from the source chain database.
 
+If a single account dominates a disk-backed transition, try
+`--archive-history.spill-partitions 16` with `--archive-history.spill-workers 4`.
+The default partition count is `1` (disabled); supported counts are 1, 2, 4, 8,
+and 16. Partitions divide the storage key space into disjoint ranges, allowing
+multiple workers to process the same account. They share the existing bounded
+worker pool and buffer budget, not a new pool per account. Results are merged
+in key order, and overlapping/out-of-order slots are rejected. Partitioning adds
+trie seeks and metadata overhead, so measure it on the real source before
+increasing concurrency or enabling it for small transitions.
+
+For the observed `7032713 -> 7033177` transition, use
+`--archive-history.spill-gap 100 --archive-history.spill-partitions 16` to select
+the disk-backed partitioned path. This does not change the requested history
+range. Rebuild the binary and check its help for `spill-partitions` first.
+
+Long traversals log `Archive storage range progress` with account address,
+partition, visited iterator positions, skipped identical subtrees, changed slots,
+and elapsed time. Account traversal progress is logged separately. Reports are
+checked periodically while traversing; an individual blocking database read may
+delay them. Worker errors are logged immediately and cancellation is checked
+between traversal positions, even when no changed leaf is emitted. These are
+work counters, not an estimate of the total remaining trie size. The top-level
+block ETA remains unreliable until transitions finish.
+
 `--archive-history.max-transition-gap` rejects a single synthesized history
 record spanning more than the configured number of blocks before starting its
 trie diff. This prevents a large missing-state gap from consuming days only to

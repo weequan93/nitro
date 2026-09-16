@@ -51,19 +51,22 @@ type archiveSpillStats struct {
 }
 
 type archiveStorageSpoolRef struct {
-	path   string
-	offset uint64
-	size   uint64
-	slots  uint32
+	partition int
+	path      string
+	offset    uint64
+	size      uint64
+	slots     uint32
 }
 
 type archiveSpoolAccount struct {
 	address common.Address
 	origin  []byte
-	storage archiveStorageSpoolRef
+	storage []archiveStorageSpoolRef
 }
 
 type archiveStorageSpoolJob struct {
+	partition   int
+	partitions  int
 	parentRoot  common.Hash
 	root        common.Hash
 	accountHash common.Hash
@@ -220,11 +223,32 @@ func emitArchiveCursorLeaf(
 // and skips identical hashed subtrees. Origin is the value in base, or nil when
 // the leaf did not exist in base.
 func forEachChangedLeaf(base *trie.Trie, target *trie.Trie, callback func(key common.Hash, origin []byte) error) error {
-	baseCursor, err := newArchiveTrieCursor(base)
+	return forEachChangedLeafRange(context.Background(), base, target, nil, nil, nil, callback)
+}
+
+type archiveWalkProgress struct{ Nodes, Skipped uint64 }
+
+// Each range owns [start,end). Tries must be private to the calling worker.
+func forEachChangedLeafRange(ctx context.Context, base, target *trie.Trie, start, end []byte, progress func(archiveWalkProgress), callback func(common.Hash, []byte) error) error {
+	newCursor := func(tr *trie.Trie) (*archiveTrieCursor, error) {
+		it, err := tr.NodeIteratorWithRange(start, end)
+		if err != nil {
+			return nil, err
+		}
+		c := &archiveTrieCursor{it: it}
+		if err := c.advance(true); err != nil {
+			return nil, err
+		}
+		return c, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	baseCursor, err := newCursor(base)
 	if err != nil {
 		return err
 	}
-	targetCursor, err := newArchiveTrieCursor(target)
+	targetCursor, err := newCursor(target)
 	if err != nil {
 		return err
 	}
@@ -236,7 +260,23 @@ func forEachChangedLeaf(base *trie.Trie, target *trie.Trie, callback func(key co
 		}
 		return targetErr
 	}
+	stats := archiveWalkProgress{}
+	nextLog := time.Now().Add(10 * time.Second)
+	walkStarted := time.Now()
+	defer func() {
+		if progress != nil && time.Since(walkStarted) >= 10*time.Second {
+			progress(stats)
+		}
+	}()
 	for baseCursor.ok || targetCursor.ok {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		stats.Nodes++
+		if progress != nil && stats.Nodes%1024 == 0 && time.Now().After(nextLog) {
+			progress(stats)
+			nextLog = time.Now().Add(10 * time.Second)
+		}
 		switch {
 		case !baseCursor.ok:
 			if targetCursor.it.Leaf() {
@@ -325,6 +365,9 @@ func forEachChangedLeaf(base *trie.Trie, target *trie.Trie, callback func(key co
 			baseHash := baseCursor.it.Hash()
 			targetHash := targetCursor.it.Hash()
 			descend := baseHash == (common.Hash{}) || baseHash != targetHash
+			if !descend {
+				stats.Skipped++
+			}
 			if err := advanceBoth(descend); err != nil {
 				return err
 			}
@@ -356,7 +399,18 @@ func collectArchiveStorageOriginsToSpool(
 	}
 	start := spool.offset
 	stats := archiveSpillStats{}
-	err = forEachChangedLeaf(oldTrie, newTrie, func(slotHash common.Hash, origin []byte) error {
+	var lower, upper []byte
+	if job.partitions > 1 {
+		lower = []byte{byte(job.partition * 256 / job.partitions)}
+		if job.partition+1 < job.partitions {
+			upper = []byte{byte((job.partition + 1) * 256 / job.partitions)}
+		}
+	}
+	started := time.Now()
+	log.Debug("Archive storage range started", "address", job.address, "partition", job.partition, "partitions", job.partitions)
+	err = forEachChangedLeafRange(ctx, oldTrie, newTrie, lower, upper, func(p archiveWalkProgress) {
+		log.Info("Archive storage range progress", "address", job.address, "partition", job.partition, "visitedPositions", p.Nodes, "skippedSubtrees", p.Skipped, "changedSlots", stats.storageSlots, "elapsed", time.Since(started))
+	}, func(slotHash common.Hash, origin []byte) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -387,10 +441,11 @@ func collectArchiveStorageOriginsToSpool(
 		return archiveStorageSpoolRef{}, archiveSpillStats{}, fmt.Errorf("too many changed storage slots for %s: %d", job.address, stats.storageSlots)
 	}
 	return archiveStorageSpoolRef{
-		path:   spool.path,
-		offset: start,
-		size:   spool.offset - start,
-		slots:  uint32(stats.storageSlots),
+		partition: job.partition,
+		path:      spool.path,
+		offset:    start,
+		size:      spool.offset - start,
+		slots:     uint32(stats.storageSlots),
 	}, stats, nil
 }
 
@@ -403,6 +458,7 @@ func collectArchiveHistoryOriginsToSpill(
 	directory string,
 	workers int,
 	bufferMB int,
+	partitions int,
 ) ([]archiveSpoolAccount, archiveSpillStats, error) {
 	if !archiveTrieRootAvailable(src, parentRoot) {
 		return nil, archiveSpillStats{}, fmt.Errorf("%w: parent account root %s", errArchiveStateUnavailable, parentRoot)
@@ -420,6 +476,9 @@ func collectArchiveHistoryOriginsToSpill(
 	}
 	if workers < 1 {
 		workers = 1
+	}
+	if partitions < 1 || partitions > 16 || partitions&(partitions-1) != 0 {
+		return nil, archiveSpillStats{}, fmt.Errorf("invalid archive spill partitions: %d", partitions)
 	}
 	bufferSize := archiveSpoolBufferSize(bufferMB, workers)
 	spools := make([]*archiveStorageSpool, 0, workers)
@@ -445,6 +504,7 @@ func collectArchiveHistoryOriginsToSpill(
 		}
 		select {
 		case firstErr <- err:
+			log.Error("Archive spool worker failed; cancelling transition", "err", err)
 			cancel()
 		default:
 		}
@@ -469,13 +529,17 @@ func collectArchiveHistoryOriginsToSpill(
 							accountDataBytes: uint64(len(job.origin)),
 						},
 					}
+					if job.partition != 0 {
+						result.stats.accounts = 0
+						result.stats.accountDataBytes = 0
+					}
 					if job.oldRoot != job.newRoot {
 						storage, storageStats, err := collectArchiveStorageOriginsToSpool(runCtx, src, trieDB, job, spool)
 						if err != nil {
 							reportError(fmt.Errorf("account %s storage history: %w", job.address, err))
 							return
 						}
-						result.account.storage = storage
+						result.account.storage = []archiveStorageSpoolRef{storage}
 						result.stats.storageSlots = storageStats.storageSlots
 						result.stats.storageDataBytes = storageStats.storageDataBytes
 					}
@@ -496,7 +560,9 @@ func collectArchiveHistoryOriginsToSpill(
 	go func() {
 		defer scannerWG.Done()
 		defer close(jobs)
-		err := forEachChangedLeaf(oldTrie, newTrie, func(accountHash common.Hash, oldBlob []byte) error {
+		err := forEachChangedLeafRange(runCtx, oldTrie, newTrie, nil, nil, func(p archiveWalkProgress) {
+			log.Info("Archive account traversal progress", "visitedPositions", p.Nodes, "skippedSubtrees", p.Skipped)
+		}, func(accountHash common.Hash, oldBlob []byte) error {
 			if err := runCtx.Err(); err != nil {
 				return err
 			}
@@ -525,12 +591,19 @@ func collectArchiveHistoryOriginsToSpill(
 				oldRoot:     accountStorageRoot(oldAccount),
 				newRoot:     accountStorageRoot(newAccount),
 			}
-			select {
-			case jobs <- job:
-				return nil
-			case <-runCtx.Done():
-				return runCtx.Err()
+			job.partitions = 1
+			if job.oldRoot != job.newRoot {
+				job.partitions = partitions
 			}
+			for partition := 0; partition < job.partitions; partition++ {
+				job.partition = partition
+				select {
+				case jobs <- job:
+				case <-runCtx.Done():
+					return runCtx.Err()
+				}
+			}
+			return nil
 		})
 		if err != nil {
 			reportError(err)
@@ -546,6 +619,7 @@ func collectArchiveHistoryOriginsToSpill(
 	started := time.Now()
 	nextProgress := uint64(archiveSpillLogEvery)
 	accounts := make([]archiveSpoolAccount, 0)
+	accountPositions := make(map[common.Address]int)
 	stats := archiveSpillStats{}
 	for result := range results {
 		stats.accounts += result.stats.accounts
@@ -556,7 +630,12 @@ func collectArchiveHistoryOriginsToSpill(
 			reportError(err)
 			continue
 		}
-		accounts = append(accounts, result.account)
+		if pos, ok := accountPositions[result.account.address]; ok {
+			accounts[pos].storage = append(accounts[pos].storage, result.account.storage...)
+		} else {
+			accountPositions[result.account.address] = len(accounts)
+			accounts = append(accounts, result.account)
+		}
 		if stats.storageSlots >= nextProgress {
 			elapsed := time.Since(started)
 			log.Info(
@@ -653,7 +732,11 @@ func encodeArchiveHistoryFromSpill(accounts []archiveSpoolAccount, stats archive
 		if len(account.origin) > math.MaxUint8 {
 			return nil, fmt.Errorf("origin account for %s too large: %d bytes", account.address, len(account.origin))
 		}
-		slots := uint64(account.storage.slots)
+		sort.Slice(account.storage, func(i, j int) bool { return account.storage[i].partition < account.storage[j].partition })
+		var slots uint64
+		for _, ref := range account.storage {
+			slots += uint64(ref.slots)
+		}
 		if storageOffset+slots > math.MaxUint32 {
 			return nil, fmt.Errorf("too many storage slots in archive history: %d", storageOffset+slots)
 		}
@@ -663,32 +746,43 @@ func encodeArchiveHistoryFromSpill(accounts []archiveSpoolAccount, stats archive
 		entry[common.AddressLength] = uint8(len(account.origin))
 		binary.BigEndian.PutUint32(entry[common.AddressLength+1:common.AddressLength+5], uint32(accountDataOffset))
 		binary.BigEndian.PutUint32(entry[common.AddressLength+5:common.AddressLength+9], uint32(storageOffset))
-		binary.BigEndian.PutUint32(entry[common.AddressLength+9:common.AddressLength+13], account.storage.slots)
+		binary.BigEndian.PutUint32(entry[common.AddressLength+9:common.AddressLength+13], uint32(slots))
 		copy(accountData[accountDataOffset:], account.origin)
 		accountDataOffset += uint64(len(account.origin))
 
-		if slots != 0 {
-			file, err := openSpool(account.storage.path)
-			if err != nil {
-				return nil, fmt.Errorf("open archive storage spool %s: %w", account.storage.path, err)
+		var rangeOffset uint64
+		var previousSlot common.Hash
+		havePreviousSlot := false
+		for _, ref := range account.storage {
+			if ref.slots == 0 {
+				continue
 			}
-			if account.storage.offset > math.MaxInt64 || account.storage.size > math.MaxInt64 {
+			file, err := openSpool(ref.path)
+			if err != nil {
+				return nil, fmt.Errorf("open archive storage spool %s: %w", ref.path, err)
+			}
+			if ref.offset > math.MaxInt64 || ref.size > math.MaxInt64 {
 				return nil, fmt.Errorf("archive storage spool range is too large for %s", account.address)
 			}
-			section := io.NewSectionReader(file, int64(account.storage.offset), int64(account.storage.size))
+			section := io.NewSectionReader(file, int64(ref.offset), int64(ref.size))
 			spoolReader.Reset(section)
 			var spoolBytesRead uint64
-			for slotNumber := uint64(0); slotNumber < slots; slotNumber++ {
+			for slotNumber := uint64(0); slotNumber < uint64(ref.slots); slotNumber++ {
 				var header [archiveSpoolSlotHeaderSize]byte
 				if _, err := io.ReadFull(spoolReader, header[:]); err != nil {
 					return nil, fmt.Errorf("read archive storage spool header for %s: %w", account.address, err)
 				}
 				spoolBytesRead += uint64(len(header))
+				slot := common.BytesToHash(header[:common.HashLength])
+				if havePreviousSlot && bytes.Compare(previousSlot[:], slot[:]) >= 0 {
+					return nil, fmt.Errorf("archive spool keys overlap or are unordered for account %s", account.address)
+				}
+				previousSlot, havePreviousSlot = slot, true
 				originSize := uint64(header[common.HashLength])
 				if storageDataOffset+originSize > uint64(len(storageData)) {
 					return nil, fmt.Errorf("archive storage spool data exceeds expected size for %s", account.address)
 				}
-				storageEntryStart := (storageOffset + slotNumber) * storageIndexSizeForArchiveHistory
+				storageEntryStart := (storageOffset + rangeOffset + slotNumber) * storageIndexSizeForArchiveHistory
 				storageEntry := storageIndex[storageEntryStart : storageEntryStart+storageIndexSizeForArchiveHistory]
 				copy(storageEntry[:common.HashLength], header[:common.HashLength])
 				storageEntry[common.HashLength] = byte(originSize)
@@ -699,12 +793,13 @@ func encodeArchiveHistoryFromSpill(accounts []archiveSpoolAccount, stats archive
 				spoolBytesRead += originSize
 				storageDataOffset += originSize
 			}
-			if spoolBytesRead != account.storage.size {
+			if spoolBytesRead != ref.size {
 				return nil, fmt.Errorf(
 					"archive storage spool size mismatch for %s: read %d/%d bytes",
-					account.address, spoolBytesRead, account.storage.size,
+					account.address, spoolBytesRead, ref.size,
 				)
 			}
+			rangeOffset += uint64(ref.slots)
 		}
 		storageOffset += slots
 	}
@@ -798,6 +893,7 @@ func archiveHistoryOriginsSpilled(
 		"parentRoot", parentRoot,
 		"root", root,
 		"workers", config.SpillWorkers,
+		"partitions", config.SpillPartitions,
 		"bufferMB", config.SpillCache,
 	)
 
@@ -810,6 +906,7 @@ func archiveHistoryOriginsSpilled(
 		directory,
 		config.SpillWorkers,
 		config.SpillCache,
+		config.SpillPartitions,
 	)
 	spoolElapsed := time.Since(started)
 	if collectErr == nil {

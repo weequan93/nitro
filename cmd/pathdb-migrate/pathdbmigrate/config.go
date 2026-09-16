@@ -120,6 +120,7 @@ type ArchiveHistoryConfig struct {
 	SpillDirectory    string `koanf:"spill-directory"`
 	SpillCache        int    `koanf:"spill-cache"`
 	SpillWorkers      int    `koanf:"spill-workers"`
+	SpillPartitions   int    `koanf:"spill-partitions"`
 }
 
 var DefaultConfig = Config{
@@ -143,6 +144,7 @@ var DefaultConfig = Config{
 		MaxTransitionGap:  1000000,
 		SpillCache:        64,
 		SpillWorkers:      4,
+		SpillPartitions:   1,
 	},
 	Migrate:              false,
 	RepairPathState:      false,
@@ -191,6 +193,7 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.String("archive-history.spill-directory", DefaultConfig.ArchiveHistory.SpillDirectory, "directory for disk-backed archive trie diffs; defaults beside dst.chain-data")
 	f.Int("archive-history.spill-cache", DefaultConfig.ArchiveHistory.SpillCache, "total buffer memory in megabytes for disk-backed archive trie-diff spool files")
 	f.Int("archive-history.spill-workers", DefaultConfig.ArchiveHistory.SpillWorkers, "number of storage-trie workers within one disk-backed archive transition")
+	f.Int("archive-history.spill-partitions", DefaultConfig.ArchiveHistory.SpillPartitions, "storage key ranges per account, shared across spill workers (1, 2, 4, 8, or 16; 1 disables partitioning)")
 	f.Bool("migrate", DefaultConfig.Migrate, "write pathdb trie nodes and metadata into destination database")
 	f.Bool("repair-path-state", DefaultConfig.RepairPathState, "DANGEROUS: replace an inconsistent destination PathDB trie from the selected canonical source state")
 	f.Bool("force-repair-path-state", DefaultConfig.ForceRepairPathState, "with --repair-path-state, skip the initial destination verification and rewrite even when root metadata matches")
@@ -302,6 +305,11 @@ func (c *Config) Validate() error {
 		}
 		if c.ArchiveHistory.SpillWorkers <= 0 {
 			return errors.New("archive-history.spill-workers must be greater than 0")
+		}
+		switch c.ArchiveHistory.SpillPartitions {
+		case 1, 2, 4, 8, 16:
+		default:
+			return errors.New("archive-history.spill-partitions must be 1, 2, 4, 8, or 16")
 		}
 		if !c.ArchiveHistory.RequirePreimages {
 			return errors.New("archive-history.require-preimages=false is not supported for full archive-compatible migration")

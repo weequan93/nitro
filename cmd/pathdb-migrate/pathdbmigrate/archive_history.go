@@ -169,6 +169,7 @@ func (m *Migrator) runArchiveHistory(ctx context.Context) error {
 		"resultMemoryLimitMB", cfg.ResultMemoryLimit,
 		"maxTransitionGap", cfg.MaxTransitionGap,
 		"spillWorkers", cfg.SpillWorkers,
+		"spillPartitions", cfg.SpillPartitions,
 		"storageHistoryVersion", 0,
 	)
 
