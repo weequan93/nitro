@@ -329,6 +329,22 @@ result memory limit to `0` to spill every completed parallel result.
 cache for all workers, avoiding repeated Pebble lookups for nodes shared by
 adjacent state roots. The value is in MiB; use `0` to disable it.
 
+Archive diffs use the hash-first range iterator in the `go-ethereum` submodule.
+It compares corresponding hashed children before loading their contents and
+skips equal subtrees without those reads. The normal Geth iterator is unchanged.
+Initial range seeking still resolves nodes. Missing nodes in changed branches
+remain errors; equal skipped subtrees are not checked for completeness, so this
+optimization is not a replacement for state verification.
+
+This optimization needs both the migration source changes and the modified
+`go-ethereum` submodule, followed by a rebuild. When publishing, commit/push the
+submodule changes first, then update/commit the parent repository's submodule
+pointer together with the migration changes. No new command-line flag or
+history format is introduced; existing resume manifests and records remain
+compatible. Keep the existing resume range and tuning settings for the first
+production comparison. Synthetic read-count reductions do not predict an
+equivalent blocks-per-second improvement.
+
 Large transitions use append-only per-worker spool files instead of inserting
 every changed slot into a temporary key-value database. Storage tries within
 one such transition are processed by `--archive-history.spill-workers`; this is

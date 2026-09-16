@@ -230,8 +230,12 @@ type archiveWalkProgress struct{ Nodes, Skipped uint64 }
 
 // Each range owns [start,end). Tries must be private to the calling worker.
 func forEachChangedLeafRange(ctx context.Context, base, target *trie.Trie, start, end []byte, progress func(archiveWalkProgress), callback func(common.Hash, []byte) error) error {
+	return walkChangedLeafRange(ctx, base, target, start, end, progress, callback, (*trie.Trie).NodeIteratorWithRangeHashFirst)
+}
+
+func walkChangedLeafRange(ctx context.Context, base, target *trie.Trie, start, end []byte, progress func(archiveWalkProgress), callback func(common.Hash, []byte) error, iterator func(*trie.Trie, []byte, []byte) (trie.NodeIterator, error)) error {
 	newCursor := func(tr *trie.Trie) (*archiveTrieCursor, error) {
-		it, err := tr.NodeIteratorWithRange(start, end)
+		it, err := iterator(tr, start, end)
 		if err != nil {
 			return nil, err
 		}

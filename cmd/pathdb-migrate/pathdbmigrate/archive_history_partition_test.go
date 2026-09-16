@@ -67,11 +67,48 @@ func TestArchivePartitionBoundaries(t *testing.T) {
 		}
 		return tr
 	}
+	// Compare resolver calls on a sparse transition, where most sibling hashes
+	// are unchanged. Count trie reads, independent of the hashdb cache hit rate.
+	sparse := open(oldRoot)
+	key := common.Hash{}
+	if err := sparse.Update(key[:], bytes.Repeat([]byte{9}, 64)); err != nil {
+		t.Fatal(err)
+	}
+	sparseRoot, sparseNodes := sparse.Commit(false)
+	if err := tdb.Update(sparseRoot, oldRoot, 1, trienode.NewWithNodeSet(sparseNodes), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := tdb.Commit(sparseRoot, false); err != nil {
+		t.Fatal(err)
+	}
+	var readCounts [2]int
+	var outputs [2]map[common.Hash][]byte
+	for mode, factory := range []func(*trie.Trie, []byte, []byte) (trie.NodeIterator, error){(*trie.Trie).NodeIteratorWithRange, (*trie.Trie).NodeIteratorWithRangeHashFirst} {
+		outputs[mode] = make(map[common.Hash][]byte)
+		counted := func(tr *trie.Trie, start, end []byte) (trie.NodeIterator, error) {
+			it, err := factory(tr, start, end)
+			if err == nil {
+				it.AddResolver(func(common.Hash, []byte, common.Hash) []byte { readCounts[mode]++; return nil })
+			}
+			return it, err
+		}
+		if err := walkChangedLeafRange(context.Background(), open(oldRoot), open(sparseRoot), nil, nil, nil, func(k common.Hash, v []byte) error { outputs[mode][k] = v; return nil }, counted); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(outputs[0]) != 1 || len(outputs[1]) != 1 || !bytes.Equal(outputs[0][key], outputs[1][key]) {
+		t.Fatal("sparse diff differs")
+	}
+	if readCounts[1] >= readCounts[0] {
+		t.Fatalf("hash-first did not reduce reads: %v", readCounts)
+	}
+	t.Logf("sparse transition trie resolver calls: eager=%d hash-first=%d", readCounts[0], readCounts[1])
 	for _, roots := range [][2]common.Hash{{oldRoot, newRoot}, {newRoot, oldRoot}, {oldRoot, oldRoot}, {types.EmptyRootHash, newRoot}, {oldRoot, types.EmptyRootHash}} {
 		for _, partitions := range []int{1, 2, 4, 8, 16} {
 			t.Run(fmt.Sprintf("%s-%s/%d", roots[0].Hex()[:8], roots[1].Hex()[:8], partitions), func(t *testing.T) {
 				want := map[common.Hash][]byte{}
-				if err := forEachChangedLeaf(open(roots[0]), open(roots[1]), func(k common.Hash, v []byte) error { want[k] = v; return nil }); err != nil {
+				// Keep the eager iterator as an independent baseline for the hash-first walk.
+				if err := walkChangedLeafRange(context.Background(), open(roots[0]), open(roots[1]), nil, nil, nil, func(k common.Hash, v []byte) error { want[k] = v; return nil }, (*trie.Trie).NodeIteratorWithRange); err != nil {
 					t.Fatal(err)
 				}
 				got := map[common.Hash][]byte{}
@@ -104,6 +141,21 @@ func TestArchivePartitionBoundaries(t *testing.T) {
 					gv, ok := got[k]
 					if !ok || !bytes.Equal(v, gv) {
 						t.Fatalf("wrong origin %s", k)
+					}
+				}
+				address := common.Address{1}
+				accounts := map[common.Address][]byte{address: {1}}
+				encode := func(slots map[common.Hash][]byte) [4][]byte {
+					ai, si, ad, sd, err := encodeArchiveHistory(accounts, map[common.Address]map[common.Hash][]byte{address: slots})
+					if err != nil {
+						t.Fatal(err)
+					}
+					return [4][]byte{ai, si, ad, sd}
+				}
+				eagerBytes, hashFirstBytes := encode(want), encode(got)
+				for section := range eagerBytes {
+					if !bytes.Equal(eagerBytes[section], hashFirstBytes[section]) {
+						t.Fatalf("encoded section %d differs", section)
 					}
 				}
 			})
