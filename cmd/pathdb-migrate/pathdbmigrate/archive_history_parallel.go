@@ -381,7 +381,8 @@ func (m *Migrator) runArchiveHistoryParallel(
 		)
 	}()
 
-	trieDB := newArchiveTrieDatabase(src, cfg.TrieCleanCache)
+	nodeReads := &archiveNodeReads{Database: src, enabled: cfg.CoalesceNodeReads}
+	trieDB := newArchiveTrieDatabase(nodeReads, cfg.TrieCleanCache)
 	defer trieDB.Close()
 
 	jobs := make(chan archiveTransitionJob, window)
@@ -579,6 +580,7 @@ func (m *Migrator) runArchiveHistoryParallel(
 		}
 		m.stats.setArchiveHistoryProgress(event.block, stateID, stats)
 		if shouldLogArchiveProgress(stats.blocks, cfg.ProgressEvery, event.block, end) {
+			nodeReads.report(event.block)
 			logArchiveProgress(
 				"Parallel full archive history progress",
 				event.block,

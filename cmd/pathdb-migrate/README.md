@@ -345,6 +345,23 @@ compatible. Keep the existing resume range and tuning settings for the first
 production comparison. Synthetic read-count reductions do not predict an
 equivalent blocks-per-second improvement.
 
+For parallel runs, `--archive-history.coalesce-node-reads` is an experimental,
+opt-in optimization (default false). Concurrent clean-cache misses for the same
+hash share one backend read; completed results and errors are not retained as a
+second cache. Shared results are copied so each trie decoder owns its buffer.
+This helps only when workers request the same uncached node simultaneously;
+otherwise its synchronization overhead may outweigh the savings.
+
+Parallel progress also logs `Archive trie backend reads`: cumulative `requests`,
+`backendReads`, and `backendBytes`. These count hash-trie backend Get calls after
+the clean cache, not all trie accesses, cache hit rates, or physical disk I/O.
+Compare deltas between progress lines: `(requests - backendReads)` estimates
+coalesced calls, and `backendReads / blocks advanced` measures reads per block.
+In-flight work can cross interval boundaries. Test with the flag off and on,
+keeping other settings unchanged and allowing comparable warmup. Compare
+sustained blocks/s as well as read counts; do not infer speedup from CPU-profile
+percentages alone. The flag does not change the history format or resume range.
+
 Large transitions use append-only per-worker spool files instead of inserting
 every changed slot into a temporary key-value database. Storage tries within
 one such transition are processed by `--archive-history.spill-workers`; this is

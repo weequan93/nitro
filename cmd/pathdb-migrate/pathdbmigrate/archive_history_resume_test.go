@@ -14,6 +14,11 @@ import (
 )
 
 func TestArchiveResumeAfterParallelFailure(t *testing.T) {
+	t.Run("independent-reads", func(t *testing.T) { testArchiveResumeAfterParallelFailure(t, false) })
+	t.Run("coalesced-reads", func(t *testing.T) { testArchiveResumeAfterParallelFailure(t, true) })
+}
+
+func testArchiveResumeAfterParallelFailure(t *testing.T, coalesce bool) {
 	src, dst := rawdb.NewMemoryDatabase(), rawdb.NewMemoryDatabase()
 	defer src.Close()
 	defer dst.Close()
@@ -35,6 +40,7 @@ func TestArchiveResumeAfterParallelFailure(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.Dst.ChainData = t.TempDir()
 	cfg.ArchiveHistory.Workers = 2
+	cfg.ArchiveHistory.CoalesceNodeReads = coalesce
 	cfg.ArchiveHistory.MaxInFlight = 2
 	cfg.ArchiveHistory.SpillDirectory = t.TempDir()
 	m := NewMigrator(&cfg)

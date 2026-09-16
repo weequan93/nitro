@@ -114,6 +114,7 @@ type ArchiveHistoryConfig struct {
 	Workers           int    `koanf:"workers"`
 	MaxInFlight       int    `koanf:"max-inflight"`
 	TrieCleanCache    int    `koanf:"trie-clean-cache"`
+	CoalesceNodeReads bool   `koanf:"coalesce-node-reads"`
 	ResultMemoryLimit int    `koanf:"result-memory-limit"`
 	SpillGap          uint64 `koanf:"spill-gap"`
 	MaxTransitionGap  uint64 `koanf:"max-transition-gap"`
@@ -187,6 +188,7 @@ func ConfigAddOptions(f *pflag.FlagSet) {
 	f.Int("archive-history.workers", DefaultConfig.ArchiveHistory.Workers, "number of archive trie-diff workers; results are written in block order")
 	f.Int("archive-history.max-inflight", DefaultConfig.ArchiveHistory.MaxInFlight, "maximum scheduled archive transitions; 0 uses the worker count")
 	f.Int("archive-history.trie-clean-cache", DefaultConfig.ArchiveHistory.TrieCleanCache, "shared hash-trie clean-node cache in megabytes (0 disables)")
+	f.Bool("archive-history.coalesce-node-reads", DefaultConfig.ArchiveHistory.CoalesceNodeReads, "experimental: share concurrent hash-trie cache-miss reads between parallel archive workers")
 	f.Int("archive-history.result-memory-limit", DefaultConfig.ArchiveHistory.ResultMemoryLimit, "maximum megabytes retained by completed parallel results; excess results spill to disk (0 spills all)")
 	f.Uint64("archive-history.spill-gap", DefaultConfig.ArchiveHistory.SpillGap, "use a disk-backed trie diff when retained states are separated by at least N blocks")
 	f.Uint64("archive-history.max-transition-gap", DefaultConfig.ArchiveHistory.MaxTransitionGap, "maximum blocks bridged by one archive history record (0 disables the safety limit)")
