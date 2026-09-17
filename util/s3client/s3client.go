@@ -20,6 +20,8 @@ type Config struct {
 	SecretKey string `koanf:"secret-key"`
 	Region    string `koanf:"region"`
 	Endpoint  string `koanf:"endpoint"`
+	// Nil preserves path-style addressing for custom endpoints. Ignored without an endpoint.
+	UsePathStyle *bool `koanf:"use-path-style"`
 }
 
 var DefaultConfig = Config{}
@@ -29,10 +31,15 @@ func ConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.String(prefix+".secret-key", DefaultConfig.SecretKey, "S3 secret key")
 	f.String(prefix+".region", DefaultConfig.Region, "S3 region")
 	f.String(prefix+".endpoint", DefaultConfig.Endpoint, "custom S3 endpoint URL (for MinIO, localstack, or other S3-compatible services)")
+	f.Bool(prefix+".use-path-style", true, "use path-style addressing with a custom S3 endpoint; set false for virtual-hosted addressing (e.g. Tencent COS); ignored without a custom endpoint")
 }
 
 func NewS3FullClientFromConfig(ctx context.Context, config *Config) (FullClient, error) {
-	return NewS3FullClient(ctx, config.AccessKey, config.SecretKey, config.Region, config.Endpoint)
+	usePathStyle := true
+	if config.UsePathStyle != nil {
+		usePathStyle = *config.UsePathStyle
+	}
+	return newS3FullClient(ctx, config.AccessKey, config.SecretKey, config.Region, config.Endpoint, usePathStyle)
 }
 
 type Uploader interface {
@@ -56,6 +63,10 @@ type s3Client struct {
 }
 
 func NewS3FullClient(ctx context.Context, accessKey, secretKey, region, endpoint string) (FullClient, error) {
+	return newS3FullClient(ctx, accessKey, secretKey, region, endpoint, true)
+}
+
+func newS3FullClient(ctx context.Context, accessKey, secretKey, region, endpoint string, usePathStyle bool) (FullClient, error) {
 	cfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(region), func(options *awsConfig.LoadOptions) error {
 		// remain backward compatible with accessKey and secretKey credentials provided via cli flags
 		if accessKey != "" && secretKey != "" {
@@ -68,10 +79,10 @@ func NewS3FullClient(ctx context.Context, accessKey, secretKey, region, endpoint
 	}
 	var client *s3.Client
 	if endpoint != "" {
-		// Custom endpoint for S3-compatible services like MinIO
+		// Preserve path-style by default, but allow providers requiring virtual-hosted addressing.
 		client = s3.NewFromConfig(cfg, func(o *s3.Options) {
 			o.BaseEndpoint = aws.String(endpoint)
-			o.UsePathStyle = true // Required for MinIO and most S3-compatible services
+			o.UsePathStyle = usePathStyle
 		})
 	} else {
 		client = s3.NewFromConfig(cfg)
