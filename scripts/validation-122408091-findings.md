@@ -210,9 +210,10 @@ and the canonical block-hash check retain their existing behavior.
 
 This extension changes only gethexec recording code, not ArbOS or WASM source.
 It does not restore legacy blacklist enforcement in native consensus execution.
-Scheduled redeems bypass this pre-transaction hook; delegated sender differences
-and other legacy execution differences still need interval testing. The earlier
-initial fee-recipient limitations also remain.
+Scheduled redeems bypass this pre-transaction hook; the follow-up below adds
+scheduling-time witness reads. Delegated sender differences and other legacy
+execution differences still need interval testing. The earlier initial
+fee-recipient limitations also remain.
 
 ### Validation of the extension
 
@@ -230,3 +231,43 @@ initial fee-recipient limitations also remain.
   execution or a production database's retention of those nodes.
 - Full native block recording and legacy WASM replay against a rebuilt image
   remain required, followed by subsequent messages and historical intervals.
+
+
+## Follow-up: scheduled redeem witnesses (message 123476067)
+
+The supplied canonical block contains an internal transaction, a submit-retryable
+transaction (`0x69`), and its automatic redeem (`0x68`). The redeem's ticket ID
+matches the submit transaction hash. Its target is
+`0x6121117fccecdd6dfa7b3230eacd4f53e12905db`, rather than the submit transaction's
+`0x6e` target. The previous recording hook does not run for scheduled redeems.
+
+`legacyRecordingHooks.PostTxFilter` now reads blacklist paths for every retry in
+`ExecutionResult.ScheduledTxes`, using the retry's own sender and target. This
+hook runs after both input transactions and redeems, covering automatic, manual,
+and nested scheduling. Reads happen after the scheduling transaction's writes
+and before queued redeems run. Later writes along these paths are recorded by
+normal execution; extra reads do not enforce blacklist membership or alter state.
+Multiple queued redeems may be prefetched before an earlier sibling executes.
+
+This remains behind `execution.recording-database.legacy-fee-account-preimages`.
+No ArbOS, go-ethereum, WASM source, or default execution behavior is changed.
+Witness errors are retained and returned by the block-recording wrapper.
+
+Focused tests exercise cold-trie absence and membership proofs through the
+scheduled hook, with a parent sender and target different from the redeem's.
+They require the recipient proof to be missing before supplementation, verify
+both proofs afterward, and verify that the state root is unchanged.
+
+The production input was truncated in the chat. The missing hash
+`ae27410c55be70cf13c02b1c7cb4dc2800c1a5ffc4d2c93dd16a8d3dbf14e2fe`
+has not yet been matched to a trie path here. A rebuilt native recorder plus
+legacy WASM replay for message 123476067 must still confirm the expected hash
+`0x71325337992f6a95c1d562622d373cc9513440a158a1aa57ec3a0b678063271c`.
+The code coverage gap is confirmed; this is not a claim of successful production
+replay or exhaustive legacy compatibility.
+
+Local validation of this follow-up: focused fee/blacklist file-list tests passed,
+including the scheduled absence/membership cases; `git diff --check` passed.
+The full gethexec test binary compiled. Running it stopped before tests in
+precompile initialization (`ArbOwnerPublic must implement
+GetScheduledDeriwOSUpgrade`), using the locally generated ABI bindings.

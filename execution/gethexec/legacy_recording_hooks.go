@@ -30,10 +30,30 @@ func (h *legacyRecordingHooks) PreTxFilter(_ *params.ChainConfig, _ *types.Heade
 	return err
 }
 
+// Scheduled redeems bypass PreTxFilter. Read their legacy blacklist paths as
+// soon as the scheduling transaction has executed, before the scheduler runs
+// them. PostTxFilter also runs for redeems, so this covers nested scheduling.
+// These reads collect trie witnesses only; membership never rejects a tx.
+func (h *legacyRecordingHooks) PostTxFilter(_ *types.Header, db *state.StateDB, _ *arbosState.ArbosState, _ *types.Transaction, _ common.Address, _ uint64, result *core.ExecutionResult) error {
+	for _, tx := range result.ScheduledTxes {
+		retry, ok := tx.GetInner().(*types.ArbitrumRetryTx)
+		if !ok {
+			continue
+		}
+		if err := recordLegacyBlacklistPreimages(db, tx, retry.From); err != nil {
+			if h.recordingError == nil {
+				h.recordingError = err
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 // Mirror ProduceBlock's parsing and non-discarding scheduler. Supplement reads
 // immediately before each input transaction so earlier blacklist updates in the
-// same block are visible. Scheduled redeems do not invoke PreTxFilter; this is
-// not a claim of complete legacy execution compatibility for every tx type.
+// same block are visible. PostTxFilter supplements scheduled redeem reads.
+// This does not guarantee complete compatibility with every legacy read path.
 func produceBlockWithLegacyPreimages(message *arbostypes.L1IncomingMessage, delayedMessagesRead uint64, lastBlockHeader *types.Header, db *state.StateDB, chainContext core.ChainContext, prefetch bool, runCtx *core.MessageRunContext, exposeMultiGas bool) (*types.Block, *state.StateDB, types.Receipts, error) {
 	version := types.DeserializeHeaderExtraInformation(lastBlockHeader).ArbOSFormatVersion
 	txs, err := arbos.ParseL2Transactions(message, chainContext.Config().ChainID, version)

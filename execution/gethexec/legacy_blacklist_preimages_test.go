@@ -5,6 +5,7 @@ package gethexec
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -20,10 +21,14 @@ import (
 )
 
 func TestLegacyBlacklistPreimages(t *testing.T) {
-	for _, blocked := range []bool{false, true} {
+	for _, tc := range []struct{ scheduled, blocked bool }{{false, false}, {false, true}, {true, false}, {true, true}} {
+		scheduled, blocked := tc.scheduled, tc.blocked
 		name := "absent"
 		if blocked {
 			name = "blocked"
+		}
+		if scheduled {
+			name = "scheduled/" + name
 		}
 		t.Run(name, func(t *testing.T) {
 			disk := rawdb.NewMemoryDatabase()
@@ -90,12 +95,32 @@ func TestLegacyBlacklistPreimages(t *testing.T) {
 					gap = true
 				}
 			}
+			if scheduled {
+				if _, err := trie.VerifyProof(storageRoot, crypto.Keccak256(slots[1].Bytes()), proof); err == nil {
+					t.Fatal("fixture already contains the scheduled recipient proof")
+				}
+			}
 			if !gap {
 				t.Fatal("fixture does not expose missing blacklist paths")
 			}
 			tx := types.NewTx(&types.LegacyTx{To: &to})
 			// Even a blocked address must only be recorded, never reject the tx here.
-			if err := recordLegacyBlacklistPreimages(recorded, tx, sender); err != nil {
+			if scheduled {
+				// Redeems never reach PreTxFilter. Their destination differs
+				// from the scheduling transaction, and their sender must come
+				// from the redeem, not the parent (manual redeem can differ).
+				hooks := &legacyRecordingHooks{}
+				redeem := types.NewTx(&types.ArbitrumRetryTx{From: sender, To: &to})
+				result := &core.ExecutionResult{ScheduledTxes: types.Transactions{redeem}}
+				parentTo := common.HexToAddress("0x6e")
+				parent := types.NewTx(&types.LegacyTx{To: &parentTo})
+				if err := hooks.PostTxFilter(nil, recorded, nil, parent, common.Address{}, 0, result); err != nil {
+					t.Fatal(err)
+				}
+				if hooks.recordingError != nil {
+					t.Fatal(hooks.recordingError)
+				}
+			} else if err := recordLegacyBlacklistPreimages(recorded, tx, sender); err != nil {
 				t.Fatal(err)
 			}
 			for _, slot := range slots {
