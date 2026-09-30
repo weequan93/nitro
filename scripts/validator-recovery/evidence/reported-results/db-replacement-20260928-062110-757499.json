@@ -1,0 +1,22 @@
+{
+  "provenance": "Operator-pasted server report and docker ps; not independently queried",
+  "run": "/data_new/scripts/db-replacement-20260928-062110-757499",
+  "report": {
+    "source": "/data_mock/validator/config/Deriw Chain/nitro",
+    "target": "/data_new/validator/config/Deriw Chain/nitro",
+    "containersToStop": [],
+    "protectedContainer": "validator-nitro-1",
+    "sourceWasRunning": false,
+    "mode": "execute",
+    "readyForProduction": false,
+    "status": "copy_complete",
+    "verification": "rsync size/mtime/metadata/file-set comparison; not full checksum",
+    "copiedSourceFrozen": true,
+    "testContainersStarted": false
+  },
+  "verifyLogBytes": 0,
+  "observedRunning": {
+    "snapshot-sync": "Up 2 hours",
+    "validator-nitro-1": "Up 5 days"
+  }
+}

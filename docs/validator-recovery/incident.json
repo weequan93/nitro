@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "incident": "legacy-validation-125022703",
+  "recordPreparedOn": "2026-09-30",
+  "recordTimezone": "Asia/Singapore",
+  "branch": "fix/legacy-validation-125022703",
+  "codeCommit": "16c17ee3a9c4",
+  "goEthereumCommit": "e582a7d5fb4887cbd3b4c7bb4fe74d2a5b06bddc",
+  "scope": "Historical incident archive and execution handover; no live chain verification or broadcast by this documentation task.",
+  "overallAcceptance": "partial_evidence_final_acceptance_pending",
+  "chains": {
+    "parent": {
+      "name": "Arbitrum One",
+      "chainId": 42161,
+      "readRpc": "http://10.1.2.16:8547"
+    },
+    "child": {
+      "name": "Deriw",
+      "chainId": 2886,
+      "publicRpc": "https://rpc.deriw.com"
+    },
+    "historicalOwnedForkChainId": 31337
+  },
+  "contracts": {
+    "rollup": "0xa113e2e9620a3bc088a681ebb2c234fdbeb85e21",
+    "sequencerInbox": "0xe79283a775f6a1de250cb3284e7ff3541ff7668a",
+    "bridge": "0x53a7559d1e57e371f3d1e55fea97e9b6748418a3",
+    "outbox": "0x47da6c41d03ac0608924e86f61577df558114bd8",
+    "upgradeExecutor": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+    "governanceSafe": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+    "fastConfirmationSafe": "0x5e16561173ea0422549c3de12b68c8a7d3a76672",
+    "multiSend": "0x9641d764fc13c8b624c04430c7356c1c7c8102e2"
+  },
+  "roles": {
+    "governanceThreshold": 3,
+    "governanceOwnerCount": 4,
+    "fastConfirmationThreshold": 3,
+    "activeValidators": [
+      {
+        "machine": "current server",
+        "address": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+        "container": "validator-nitro-1"
+      },
+      {
+        "machine": "cloud A",
+        "address": "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+        "container": "validator-nitro-1"
+      },
+      {
+        "machine": "cloud B",
+        "address": "0x21d4ea822a07f737c5e69f7951d517e5f2974849",
+        "container": "validator-nitro-1"
+      }
+    ],
+    "retiredRefundOnly": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+    "refundAccounts": [
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95"
+    ],
+    "refundCreditEachWei": "1000000000000",
+    "poster": "0x34993e941d0b58b22a57a0c407589ae060d19e2d",
+    "signing": "Encrypted local EOA keystore; password entered by each operator locally, never stored in this archive."
+  },
+  "software": {
+    "imageTag": "fuhua-container.tencentcloudcr.com/deriw/deriw:v1.3.1.2.v3.10.0-16c17ee3a9c4",
+    "imageId": "sha256:b3571c0d8d4cd4e826a48895ed558927c4b003ea14050f5be3fb5ab09c62148f",
+    "observedClientVersion": "nitro/v1.3.2.v3.10.0-16c17ee3a9c4/linux-amd64/go1.25.14",
+    "oldWasmRoot": "0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f",
+    "newWasmRoot": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421"
+  },
+  "dataPlan": {
+    "protectedOldDatabase": "/data/validator/config",
+    "historicalDisposableDatabase": "/data_new/validator/config/Deriw Chain/nitro",
+    "recoveredDatabaseMount": "/data_mock/validator/config",
+    "databaseCopiedForFinalCutover": false,
+    "keysAndConfigCopiedForFinalCutover": true,
+    "oneWriterRequired": true,
+    "snapshotAndWatchtowerRpc": "http://127.0.0.1:8349",
+    "observedMakeNodesRpc": "http://127.0.0.1:8449",
+    "actualManualDeploymentDiffersFromPreparedCompose": true
+  },
+  "finalCandidate": {
+    "serverWindow": "/data_new/scripts/presign-window-20260929-154302",
+    "originalConfirmedNode": 43123,
+    "parentConfirmedInboxMaxCount": 324089,
+    "before": {
+      "BlockHash": "0x42fea32f2e72edb32eb5a8fb0ec1760a2a26d41ccaf4b96712988be511f71962",
+      "SendRoot": "0x9a0300bf873d9ce0ea8365ac9dd758c6023d13a883ed79e4027d6095838a4603",
+      "Batch": 324089,
+      "PosInBatch": 0
+    },
+    "after": {
+      "BlockHash": "0x9f6ef87c6d5ca1b9e17cc94d4c79a9b64bcf32adccc7aad29c2d4dc8e478a74f",
+      "SendRoot": "0x9a0300bf873d9ce0ea8365ac9dd758c6023d13a883ed79e4027d6095838a4603",
+      "Batch": 324110,
+      "PosInBatch": 122
+    },
+    "checkpointBlock": 127108720,
+    "governanceNumBlocks": 4467,
+    "replay": {
+      "status": "retained_span_replay_passed",
+      "firstMessage": 127104254,
+      "lastMessage": 127108720,
+      "validatedMessagesTotal": 4467,
+      "elapsedSecondsThisRun": 3803.07,
+      "checkedAt": "2026-09-29T08:47:56.670607+00:00",
+      "recordChainSha256": "c0c1ce88ed9d399ccddf7ba696e0a10f35790bc907e28b137a26271699cbc13e",
+      "executionReplayed": true,
+      "parentConfirmedAToBProven": false,
+      "fullPerMessageRecordsAvailableLocally": false,
+      "provenance": "Operator pasted the completed server summary into this conversation. Local import review agrees on endpoint and span; the 4467 raw records remain on the server."
+    },
+    "localReviewFile": "scripts/validator-recovery/evidence/presign-window-20260929-154302-review/review.json"
+  },
+  "production": {
+    "pause": {
+      "safeNonce": 10,
+      "transaction": "0x87a8bb900761a8f21f87f565ce318548d73d1200c5ae16680f86162d56d57131",
+      "receiptBlockHex": "0x1e65d6fe",
+      "receiptBlockHash": "0x51f8d21c232c669d852cf8db1889ea36fa4232fa9dcca302268b16ec5f953119",
+      "acceptanceStatus": "receipt_and_block_state_passed",
+      "provenance": "Operator pasted the production toolkit acceptance summary; full local pause receipt is not part of this archive."
+    },
+    "recovery": {
+      "safeNonce": 11,
+      "transaction": "0x03e938966a6b480e3b907b153e173bd3576b7b84c88a2e2387810441fc7d249e",
+      "safeTxHash": "0x0c4d1e1d549247dbb6bee12d248f0d4f20230a05beb4ecb3e987ef6bcbe9c7b9",
+      "packageIdentity": "f8d7200f6d45d97d0f769689341530ba44816a0de63709f98f9a6828ce912dc3",
+      "receiptBlock": 509991078,
+      "receiptBlockHash": "0x8ccf2017cbbb320d14393ad3050b590ff383f35363a740f2dd515421735e9dd3",
+      "recoveryNode": 43126,
+      "nodeHash": "0x6c679a7d16a4f0e6768f320ff0491e512150902e53404ce8a68974e4aee0c779",
+      "actualInboxMaxCount": 324111,
+      "pausedAfterRecovery": true,
+      "calls": [
+        "forceRefundStaker",
+        "setWasmModuleRoot",
+        "forceCreateNode",
+        "forceConfirmNode"
+      ],
+      "evidenceFile": "scripts/validator-recovery/evidence/executed-recovery-03e938/summary.json",
+      "provenance": "Saved independent public-parent RPC receipt/state check, plus operator production-package acceptance."
+    },
+    "resume": {
+      "plannedSafeNonce": 12,
+      "reviewedSafeTxHash": "0xd3d46cecef80826db10248900275c2a304f857ed71cc4d4d4b3d70ab8f4d343c",
+      "transaction": null,
+      "observedPausedAfter": false,
+      "observedGovernanceNonceAfter": 13,
+      "exactReceiptAccepted": false,
+      "provenance": "Later pinned state shows resumed Rollup and nonce 13. Exact nonce-12 execution hash/receipt was not supplied; state is not an exact receipt check."
+    },
+    "watchtower": {
+      "serverPlan": "/data_new/scripts/validator-cutover-20260929-174736",
+      "container": "validator-recovered-watchtower",
+      "signingEnabled": false,
+      "observationsUtc": [
+        "2026-09-29T09:56:59.610497+00:00",
+        "2026-09-29T09:57:30.802498+00:00"
+      ],
+      "validatedBlock": 127108784,
+      "state": {
+        "BlockHash": "0x3d1b6da7f082beca6bd03d779a2a2cff75ef5fc6f8653957caf280097d21c312",
+        "SendRoot": "0x9a0300bf873d9ce0ea8365ac9dd758c6023d13a883ed79e4027d6095838a4603",
+        "Batch": 324111,
+        "PosInBatch": 0
+      },
+      "provenance": "Operator pasted two cutover checks with the same endpoint. This is beyond B, not proof of continuing growth or fresh replay of all 64 messages in this run."
+    },
+    "zombieCleanup": {
+      "transaction": "0x57531e3cfa42afae4b76fb9dd36f237174fca48222a130b14310e250b92087c6",
+      "sender": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+      "function": "removeOldZombies(0)",
+      "receiptBlock": 510004706,
+      "zombieCountAtCheckedBlock": 0,
+      "checkedParentBlock": 510007413,
+      "evidenceFile": "scripts/validator-recovery/evidence/zombie-cleanup-57531e3c/summary.json"
+    },
+    "firstNormalNode": {
+      "node": 43127,
+      "nodeHash": "0x947f3d434693712f6e6d3f56233216ba18fada0daac6f0fd36b5404f6712c997",
+      "numBlocks": 64,
+      "staker": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+      "fullCreationTransactionHash": null,
+      "observedCreationHashPrefixSuffix": "af1829..309113",
+      "provenance": "Pinned created-node/staker state and operator successful staker logs; full transaction hash not supplied."
+    },
+    "firstFastConfirmation": {
+      "checkedAt": "2026-09-29T10:58:27.117637+00:00",
+      "parentBlock": 510007614,
+      "fastSafeNonce": 37626,
+      "safeHash": "0x25f2bedea04388aa19f5fa0b9161525f229cee71c1587f7da7843e88dac770e8",
+      "approvalsObserved": 1,
+      "requiredApprovals": 3,
+      "latestConfirmed": 43126,
+      "latestCreated": 43127,
+      "finalConfirmationVerified": false,
+      "evidenceFile": "scripts/validator-recovery/evidence/first-recovered-fast-confirm.json"
+    }
+  },
+  "poster": {
+    "provenance": "Operator-pasted production poster logs; no new Sep-30 live RPC or Docker checks in this documentation task.",
+    "originalCalldataBatchSize": 110000,
+    "contractDataTooLarge": {
+      "selector": "0x4634691b",
+      "actual": 108465,
+      "limit": 104857
+    },
+    "intermediateCalldataBatchSize": 100000,
+    "intermediateError": "oversized data at parent transaction submission",
+    "successfulCalldataBatchSize": 90000,
+    "observedCompressedBoundary": 89960,
+    "successfulBatch": {
+      "sequenceNumber": 324151,
+      "receiptBlock": 510014968,
+      "observedHashPrefixSuffix": "fa2f0b..decdf1",
+      "logTimeUtc": "2026-09-29T11:31:40.667+00:00"
+    },
+    "failedDasRpc": "http://47.237.169.89:8976",
+    "failedDasRpcObservation": "Connection refused after 3ms from poster host 10.1.2.13",
+    "ethDaFallbackObserved": true,
+    "latestKeysetError": {
+      "selector": "0x00f20c5d",
+      "name": "NoSuchKeyset(bytes32)",
+      "keysetHash": "0xefecd070797fd8154e149a2fb8b13aceb0e8e3dac51f514cc4e33e79b7dfb8b6",
+      "batch": 324668,
+      "logTimeUtc": "2026-09-29T14:46:54.236+00:00",
+      "resolvedEvidenceAvailable": false
+    }
+  },
+  "openAcceptanceItems": [
+    "Exact resume transaction hash and matching Safe/package receipt acceptance.",
+    "Full first ordinary creation and confirmation receipts, plus sustained new-root progress.",
+    "Cloud A and cloud B upgraded runtime/signing/staking evidence and final 3-of-3 fast confirmation receipt.",
+    "DAS backend reachability, committee/BLS identity and valid on-chain keyset, sustained batch success.",
+    "Final refunds and restaking reconciliation including the retired account.",
+    "Full withdrawal-message history audit remains unperformed; saved spent flags and samples are narrower checks."
+  ],
+  "evidenceLimitations": [
+    "All fixed nodes, nonce values, calldata, hashes and configuration observations are historical.",
+    "No parent-confirmed A-to-B execution proof; recovery was a trusted governance migration.",
+    "Historical impersonation/fork signatures do not verify production ECDSA signers.",
+    "Only locally retained files receive checksums; server-only outputs are explicitly identified as operator reports.",
+    "Some saved runtime reports are partial; missing full hashes and receipts are null, never reconstructed from prefixes.",
+    "No keystore contents, private keys, passwords or archive-provider credentials are included."
+  ]
+}

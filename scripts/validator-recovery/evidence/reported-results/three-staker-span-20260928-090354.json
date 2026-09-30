@@ -1,0 +1,44 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "sourceAttachment": "/Users/super/.codex/attachments/2fd7c16c-361f-4734-ba14-afb73ca727a5/Pasted text.txt",
+  "report": {
+    "status": "message_span_audited",
+    "readyForProduction": false,
+    "executionReplayed": false,
+    "productionNumBlocksApproved": false,
+    "chainMutations": false,
+    "parentBlock": "0x1e5f29da",
+    "confirmedNode": 43005,
+    "parentConfirmedState": {
+      "BlockHash": "0x59b30b51999eb42c11b3498195167cadc871497f7261b87d2e3c6401617ec9be",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321809,
+      "PosInBatch": 0,
+      "machineStatus": 1
+    },
+    "checkpoint": {
+      "BlockHash": "0x057c6c1e73e9822f4a262b1483061904deb544a1328f901680215d5ef26b73a7",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321867,
+      "PosInBatch": 130
+    },
+    "checkpointBlock": 126693840,
+    "localStateAtConfirmedPosition": {
+      "BlockHash": "0xefa72d03f4cc9a6c144e450f13c99b73a35dde87158cab926e8168daa2eb5c07",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321809,
+      "PosInBatch": 0
+    },
+    "localBlockAtConfirmedPosition": 126683262,
+    "localMessageAtConfirmedPosition": 126683262,
+    "localMessageCountAtConfirmedPosition": 126683263,
+    "checkpointMessage": 126693840,
+    "checkpointMessageCount": 126693841,
+    "positionalMessageSpan": 10578,
+    "confirmedBlockHashMatchesLocal": false,
+    "confirmedSendRootMatchesLocal": true,
+    "confirmedGlobalStateMatchesLocal": false,
+    "classification": "parent_confirmed_state_differs_from_local_at_same_position",
+    "note": "positionalMessageSpan measures the retained local message interval only. It is not proof that the parent-confirmed A executes to B, not a production numBlocks selection, and not approval of the synthetic value 1. Historical candidate only; input recording is not WASM replay."
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "report": {
+    "status": "followup_span_replay_passed",
+    "readyForProduction": false,
+    "executionReplayed": true,
+    "parentConfirmedAToBProven": false,
+    "chainMutations": false,
+    "wasmModuleRoot": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421",
+    "parentBlock": "0x1e5f29da",
+    "parentBlockHash": "0xc06fedabd183b222c0be7680a66359e259fa3587417d5664f6623e970c141a8d",
+    "recoveryNode": 43008,
+    "candidateDirectory": "/data_new/scripts/three-staker-fork-20260928-090354",
+    "atomicPass": "/data_new/scripts/three-staker-atomic-mock-20260928-133005/summary.json",
+    "startMessage": 126693840,
+    "startBlock": 126693840,
+    "startState": {
+      "BlockHash": "0x057c6c1e73e9822f4a262b1483061904deb544a1328f901680215d5ef26b73a7",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321867,
+      "PosInBatch": 130
+    },
+    "validatedMessagesTotal": 48,
+    "limitations": "Fresh local B-to-C replay only. Does not prove parent A-to-B or production readiness.",
+    "clientVersionThisRun": "nitro/v1.3.2.v3.10.0-16c17ee3a9c4/linux-amd64/go1.25.14",
+    "currentMessage": 126693888,
+    "checkedAt": "2026-09-28T05:42:43.614724+00:00",
+    "endMessage": 126693888,
+    "endBlock": 126693888,
+    "endState": {
+      "BlockHash": "0xae4dc4e97d4f1eb5c4c01faa09cc3cc66a733471c42debfe245afcd5112a17cb",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321868,
+      "PosInBatch": 0
+    },
+    "recordChainSha256": "10dc47fb6448c3aab4ef1b45460cd945a0993e093103225e444f4639ff1446d9",
+    "numBlocks": 48,
+    "fixedInboxBoundaryReached": true,
+    "elapsedSeconds": 55.25
+  }
+}

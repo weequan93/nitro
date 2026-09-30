@@ -1,0 +1,11 @@
+{
+  "status": "stopped",
+  "packageIdentity": "8dbfbd38956632d6d9a9e56d082d910a6c4e46fe32d0128c01437c006d2f629b",
+  "checkedAt": "2026-09-29T01:50:29.752168+00:00",
+  "readyForProduction": false,
+  "productionSignaturesTested": false,
+  "productionTransactionsSent": false,
+  "lateFailureRollbackTested": true,
+  "error": "Fork outer transaction reverted",
+  "ownedForkStopped": true
+}

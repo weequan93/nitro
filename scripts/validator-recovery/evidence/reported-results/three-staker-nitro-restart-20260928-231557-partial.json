@@ -1,0 +1,68 @@
+{
+  "provenance": "Operator-pasted tail of server summary; full status and opening fields not supplied. Not independently queried.",
+  "run": "/data_new/scripts/three-staker-nitro-restart-20260928-231557",
+  "reportIsPartial": true,
+  "observedFields": {
+    "numBlocks": 48,
+    "temporaryKeySigningTested": true,
+    "automaticCreationTested": true,
+    "automaticConfirmationTested": true,
+    "testSignerImpersonated": false,
+    "transactions": {
+      "creation": "0x7d7b2e4c203fd2112e40ec4ef7346eb68cfd3a4a7c8ba66da701ff9b7f2f8633",
+      "confirmation": "0x73c96bf32739b94f9a93ee599d751f5ad4eabb21d25504b754bac1b6cef877a7"
+    },
+    "validatedEndpoint": {
+      "GlobalState": {
+        "BlockHash": "0xae4dc4e97d4f1eb5c4c01faa09cc3cc66a733471c42debfe245afcd5112a17cb",
+        "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+        "Batch": 321868,
+        "PosInBatch": 0
+      },
+      "WasmRoots": [
+        "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421"
+      ]
+    },
+    "gracefulRestartTested": true,
+    "restartObservationSeconds": 90,
+    "noAdditionalSenderNonceObserved": true,
+    "testContainerStopped": true,
+    "ownedForkStillRunning": false,
+    "watchtowerAutoRestarted": false,
+    "protectedContainersUnchanged": true,
+    "validatorRestartTested": true,
+    "protectedContainersAfter": {
+      "validator-nitro-1": {
+        "id": "05231b8c8c46a7184f932d7f1cbfc753c2683932cae96f0d66552864574cfff9",
+        "startedAt": "2026-09-23T04:56:13.028204072Z"
+      },
+      "snapshot-sync": {
+        "id": "b10de1d447f99d0a2c6bcf0eb9b94bafba582cbbce7a256e90d2559542d61f7d",
+        "startedAt": "2026-09-28T11:07:22.302515279Z"
+      }
+    },
+    "governanceNumBlocks": 10578,
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "freshFullSpanReplayTested": false,
+    "atomicRecoveryTested": true,
+    "allThreeRefundCreditsTested": true,
+    "originalRefundPaymentsTestedThisRun": true,
+    "originalRestakingTestedThisRun": false,
+    "testAddress": "0x818b3cff7a2608ba8af91d0dc9ad06cfcbdc6819",
+    "watchtowerAlreadyStopped": true,
+    "containerId": "eb2e9ce4e313979857ef55a4ee84e8accdbe37c803d622b05bd8d74a8e7feae5",
+    "runtimeEndpointChecked": true,
+    "normalConfirmedNode": 43009,
+    "protectedContainersBefore": {
+      "validator-nitro-1": {
+        "id": "05231b8c8c46a7184f932d7f1cbfc753c2683932cae96f0d66552864574cfff9",
+        "startedAt": "2026-09-23T04:56:13.028204072Z"
+      },
+      "snapshot-sync": {
+        "id": "b10de1d447f99d0a2c6bcf0eb9b94bafba582cbbce7a256e90d2559542d61f7d",
+        "startedAt": "2026-09-28T11:07:22.302515279Z"
+      }
+    }
+  }
+}

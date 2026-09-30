@@ -1,0 +1,63 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "sourceAttachment": "/Users/super/.codex/attachments/995df220-3699-4b20-a93f-e47ba68ebb78/Pasted text.txt",
+  "serverOutputDirectory": "/data_new/scripts/nitro-span-restart-20260928-084752",
+  "report": {
+    "status": "nitro_restart_rehearsal_passed",
+    "readyForProduction": false,
+    "productionSigningTested": false,
+    "originalAccountRuntimeTested": false,
+    "fork": "http://127.0.0.1:18550",
+    "container": "recovery-nitro-span-restart",
+    "previousPass": "/data_new/scripts/nitro-restart-mock-20260928-010622/summary.json",
+    "testAddress": "0x353ae9082a039a92d478bc245bd621597f9f8081",
+    "watchtowerStopped": true,
+    "containerId": "6288436e01f50962f2e4230381e33410316ad12971220c3dd492317895efc02f",
+    "runtimeEndpointChecked": true,
+    "normalConfirmedNode": 42887,
+    "numBlocks": 64,
+    "temporaryKeySigningTested": true,
+    "automaticCreationTested": true,
+    "automaticConfirmationTested": true,
+    "testSignerImpersonated": false,
+    "transactions": {
+      "creation": "0x330d505ddc639fafacaef77e9e088b179723d273b0773315ed40088abe4a29c2",
+      "confirmation": "0x6eba89653fd7ef2c3618291fc462257a36b2905994eb108410a218e4cbb4a482"
+    },
+    "validatedEndpoint": {
+      "GlobalState": {
+        "BlockHash": "0x6fef08565d967d5c57521d4784e9fe58355c60ecf306b8641d477ed5c1011605",
+        "SendRoot": "0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf",
+        "Batch": 320189,
+        "PosInBatch": 0
+      },
+      "WasmRoots": [
+        "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421"
+      ]
+    },
+    "limitations": "Historical fork only; 7838 is a positional-span convention. This runtime test uses sequential Safe recovery; the atomic batch was tested separately. New disposable signer, not original account. Retained validation progress may be reused; no fresh full B-to-C replay. Graceful restart on the same running fork, not crash recovery or new-batch liveness. No A-to-B proof or production action.",
+    "gracefulRestartTested": true,
+    "restartObservationSeconds": 90,
+    "noAdditionalSenderNonceObserved": true,
+    "testContainerStopped": true,
+    "ownedForkStillRunning": false,
+    "watchtowerAutoRestarted": false,
+    "governanceNumBlocks": 7838,
+    "exactGovernanceNodeHashChecked": true,
+    "exactGovernanceNodeHash": "0x1c44f95dd83a8e24c4794528d57b32b053a516204151418fce05e8a75e670b7b",
+    "test": "nitro_span_7838_restart",
+    "priorAtomicPass": "/data_new/scripts/atomic-span-mock-20260928-084057/summary.json",
+    "spanEvidence": {
+      "auditDirectory": "/data_new/scripts/recovery-message-span-20260928-013625",
+      "replayDirectory": "/data_new/scripts/retained-span-replay-20260928-014843",
+      "recordChainSha256": "dfdc67af2b21cb262d39a297e7517c482cba94219c5aa19bbe6ea1fd8f482435",
+      "recordsChecked": 7838,
+      "positionalMessageSpan": 7838,
+      "parentConfirmedAToBProven": false,
+      "productionNumBlocksApproved": false
+    },
+    "productionNumBlocksApproved": false,
+    "parentConfirmedAToBProven": false,
+    "freshExecutionReplayTested": false
+  }
+}

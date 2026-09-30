@@ -1,0 +1,39 @@
+[
+  {
+    "staker": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+    "amountWei": 1000000000000,
+    "index": 0,
+    "latestStakedNode": 158,
+    "currentChallenge": 0,
+    "isStaked": 1
+  },
+  {
+    "staker": "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "amountWei": 1000000000000,
+    "index": 1,
+    "latestStakedNode": 42594,
+    "currentChallenge": 0,
+    "isStaked": 1
+  },
+  {
+    "node": 42592,
+    "prevNum": 42591,
+    "stakerCount": 1,
+    "childStakerCount": 1,
+    "latestChildNumber": 42593
+  },
+  {
+    "node": 42593,
+    "prevNum": 42592,
+    "stakerCount": 1,
+    "childStakerCount": 1,
+    "latestChildNumber": 42594
+  },
+  {
+    "node": 42594,
+    "prevNum": 42593,
+    "stakerCount": 1,
+    "childStakerCount": 0,
+    "latestChildNumber": 0
+  }
+]

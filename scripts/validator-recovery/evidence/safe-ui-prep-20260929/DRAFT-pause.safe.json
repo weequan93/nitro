@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "chainId": "42161",
+  "createdAt": 1790643858469,
+  "meta": {
+    "name": "DRAFT - Deriw Rollup pause - review only",
+    "description": "Preparation only. Not approved for signing or execution. Single pause through UpgradeExecutor; final nonce, Safe transaction and live preflight still required.",
+    "createdFromSafeAddress": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+    "createdFromOwnerAddress": ""
+  },
+  "transactions": [
+    {
+      "to": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+      "value": "0",
+      "data": "0xbca8c7b5000000000000000000000000a113e2e9620a3bc088a681ebb2c234fdbeb85e21000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000048456cb5900000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

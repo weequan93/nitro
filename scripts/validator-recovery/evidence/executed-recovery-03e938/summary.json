@@ -1,0 +1,37 @@
+{
+  "status": "public_rpc_recovery_receipt_and_state_matched",
+  "checkedAt": "2026-09-29T09:45:07.689569+00:00",
+  "transaction": "0x03e938966a6b480e3b907b153e173bd3576b7b84c88a2e2387810441fc7d249e",
+  "executedSafeNonce": 11,
+  "expectedSafeTxHash": "0x0c4d1e1d549247dbb6bee12d248f0d4f20230a05beb4ecb3e987ef6bcbe9c7b9",
+  "receiptBlock": 509991078,
+  "receiptBlockHash": "0x8ccf2017cbbb320d14393ad3050b590ff383f35363a740f2dd515421735e9dd3",
+  "checkedParentBlock": 509991425,
+  "currentSafeNonce": 12,
+  "newWasmRoot": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421",
+  "actualInboxMaxCount": 324111,
+  "receiptPost": {
+    "recoveryNode": 43126,
+    "nodeHash": "0x6c679a7d16a4f0e6768f320ff0491e512150902e53404ce8a68974e4aee0c779",
+    "refundCredits": {
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": 1000000000000,
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d": 1000000000000,
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95": 1000000000000
+    },
+    "paused": true
+  },
+  "currentPost": {
+    "recoveryNode": 43126,
+    "nodeHash": "0x6c679a7d16a4f0e6768f320ff0491e512150902e53404ce8a68974e4aee0c779",
+    "refundCredits": {
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": 1000000000000,
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d": 1000000000000,
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95": 1000000000000
+    },
+    "paused": true
+  },
+  "readyForProduction": false,
+  "runtimeCutoverVerified": false,
+  "productionTransactionsSent": false,
+  "limitations": "Compared with locally reviewed fields and expected three refund credits, not the complete server package file set. No local L3 RPC or runtime access; server package acceptance and runtime checks remain."
+}

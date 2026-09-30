@@ -1,0 +1,33 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "sourceAttachment": "/Users/super/.codex/attachments/d9bdf374-6f8d-4ec4-b198-08a774f82496/Pasted text.txt",
+  "serverOutputDirectory": "/data_new/scripts/three-staker-span-replay-20260928-091247",
+  "installVerified": true,
+  "report": {
+    "status": "running",
+    "readyForProduction": false,
+    "executionReplayed": false,
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "wasmModuleRoot": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421",
+    "firstMessage": 126683263,
+    "lastMessage": 126693840,
+    "totalMessages": 10578,
+    "evidenceMode": "Sequential per-message node recording plus explicit-root execution RPC; each actual replay result must equal the recorded end; adjacent states must match. The execution RPC re-records its own input; it does not execute the saved input blob. Full input blobs are not retained; states, input digest, response and block header are retained.",
+    "limitations": "Local A-prime to B only; initial A-prime is a retained-chain checkpoint. Not an A-to-B proof or production approval. No new full withdrawal audit.",
+    "clientVersionThisRun": "nitro/v1.3.2.v3.10.0-16c17ee3a9c4/linux-amd64/go1.25.14",
+    "checkedAt": "2026-09-28T01:12:53.568569+00:00",
+    "validatedMessagesTotal": 6,
+    "validatedMessagesThisRun": 5,
+    "nextMessage": 126683269,
+    "lastValidatedState": {
+      "BlockHash": "0x25d391e33c1867feb88c092d457738620f1a15a09abe437df47ee21846058c49",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321809,
+      "PosInBatch": 6
+    },
+    "recordChainSha256": "36518163f4201b1df945de16995b2c35c5535268a3fe97417bf13b10fba31c46",
+    "elapsedSecondsThisRun": 5.0,
+    "currentMessage": 126683269
+  }
+}

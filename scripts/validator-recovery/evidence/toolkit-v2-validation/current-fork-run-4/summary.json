@@ -1,0 +1,29 @@
+{
+  "status": "exact_package_fork_passed_with_arbsys_log_shim",
+  "packageIdentity": "8bf8ae1f18b05e3d601201b95810db0be1607a28f77a28539d956374ffba8e59",
+  "checkedAt": "2026-09-29T01:56:04.825575+00:00",
+  "readyForProduction": false,
+  "productionSignaturesTested": false,
+  "productionTransactionsSent": false,
+  "arbsysLogShimUsed": true,
+  "nativeArbitrumExecutionTested": false,
+  "lateFailureRollbackTested": true,
+  "receiptDecoderTested": true,
+  "post": {
+    "recoveryNode": 43105,
+    "nodeHash": "0x5b7c5902b42a2b5e3a15b3e60b00a419aa913977a6ea42aae2de85e1ff616524",
+    "refundCredits": {
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d": 1000000000000,
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": 1000000000000,
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95": 1000000000000
+    },
+    "paused": true,
+    "actualInboxMaxCount": 323749
+  },
+  "thresholdNegativeTested": true,
+  "exactSafeFieldsTested": true,
+  "exactImportTransactionsTested": true,
+  "hashDomain": "Same fields; fork SafeTxHash uses chain31337, production uses42161",
+  "limitations": "Fork owners approveHash; no production ECDSA. Recovery remains paused. No new WASM execution, runtime or full withdrawal audit in this test.",
+  "ownedForkStopped": true
+}

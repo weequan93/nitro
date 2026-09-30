@@ -1,0 +1,67 @@
+{
+  "checkedAt": "2026-09-29T10:57:33.845151+00:00",
+  "transaction": "0x57531e3cfa42afae4b76fb9dd36f237174fca48222a130b14310e250b92087c6",
+  "receiptVerified": true,
+  "function": "removeOldZombies(0)",
+  "sender": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+  "receiptBlock": 510004706,
+  "receiptBlockHash": "0xc42a1b0b8f3e112072951e45ae7e29bbdf7dd3dbb5ede340f7a60ceb21ae0ef8",
+  "checkedParentBlock": 510007413,
+  "checkedParentBlockHash": "0x878eb8e017598539ffaf0240907d7248349a46f25e6d24e4e7992b3531e732dc",
+  "gasUsed": 52387,
+  "feeWei": 1048054374387,
+  "state": {
+    "paused": 0,
+    "zombieCount": 0,
+    "confirmed": 43126,
+    "created": 43127,
+    "stakerCount": 1,
+    "requiredStake": 1000000000000,
+    "stakeToken": 0,
+    "whitelistDisabled": 0,
+    "safeNonce": 13
+  },
+  "wasm": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421",
+  "newWasmMatches": true,
+  "accounts": {
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95": {
+      "zombie": 0,
+      "staked": 1,
+      "whitelisted": 1,
+      "refundCredit": 0,
+      "balanceWei": 28296637618113613,
+      "latestStakedNode": 43127,
+      "currentChallenge": 0
+    },
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": {
+      "zombie": 0,
+      "staked": 0,
+      "whitelisted": 1,
+      "refundCredit": 1000000000000,
+      "balanceWei": 34828359298639000,
+      "latestStakedNode": 0,
+      "currentChallenge": 0
+    },
+    "0x21d4ea822a07f737c5e69f7951d517e5f2974849": {
+      "zombie": 0,
+      "staked": 0,
+      "whitelisted": 1,
+      "refundCredit": 0,
+      "balanceWei": 48142606509672000,
+      "latestStakedNode": 0,
+      "currentChallenge": 0
+    },
+    "0xd38e969ae2947019e0dec0e46937e6aff651834d": {
+      "zombie": 0,
+      "staked": 0,
+      "whitelisted": 1,
+      "refundCredit": 1000000000000,
+      "balanceWei": 205181500000,
+      "latestStakedNode": 0,
+      "currentChallenge": 0
+    }
+  },
+  "productionTransactionsSent": false,
+  "localRuntimeChecked": false,
+  "recoveryNodeHash": "0x6c679a7d16a4f0e6768f320ff0491e512150902e53404ce8a68974e4aee0c779"
+}

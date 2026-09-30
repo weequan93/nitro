@@ -1,0 +1,133 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "sourceAttachment": "/Users/super/.codex/attachments/2fd7c16c-361f-4734-ba14-afb73ca727a5/Pasted text.txt",
+  "report": {
+    "parentBlock": "0x1e5f29da",
+    "parentBlockHash": "0xc06fedabd183b222c0be7680a66359e259fa3587417d5664f6623e970c141a8d",
+    "rollup": "0xA113e2E9620a3Bc088a681eBB2C234FDbeb85e21",
+    "safe": {
+      "address": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+      "codeHash": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c",
+      "owners": [
+        "0xa0c2aed24f5474b2815b2ff61d0f5a01970217c3",
+        "0xc60f0ed09edd696e60574f714cbd7cfec004dd70",
+        "0xc63b7a2dacfa3aed4ea158f4f51ffbe020b9de4c",
+        "0x09ad976b259d9174f4250f0244873c3bc876e2ce"
+      ],
+      "threshold": 3,
+      "nonce": 10,
+      "versionRaw": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000005312e342e31000000000000000000000000000000000000000000000000000000",
+      "guard": "0x0000000000000000000000000000000000000000",
+      "fallbackHandler": "0xfd0732dc9e303f09fcef3a7388ad10a83459ec99",
+      "modules": []
+    },
+    "errors": [],
+    "readyForProduction": false,
+    "chainId": 42161,
+    "nodes": {
+      "confirmed": 43005,
+      "created": 43007,
+      "firstUnresolved": 43006
+    },
+    "stakers": [
+      {
+        "address": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+        "amountStakedWei": "1000000000000",
+        "index": 0,
+        "latestStakedNode": 158,
+        "currentChallenge": 0,
+        "isStaked": true,
+        "withdrawableWei": "0",
+        "isZombie": false,
+        "whitelisted": true,
+        "requiresChallengeReview": false
+      },
+      {
+        "address": "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+        "amountStakedWei": "1000000000000",
+        "index": 1,
+        "latestStakedNode": 43007,
+        "currentChallenge": 0,
+        "isStaked": true,
+        "withdrawableWei": "0",
+        "isZombie": false,
+        "whitelisted": true,
+        "requiresChallengeReview": false
+      },
+      {
+        "address": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+        "amountStakedWei": "1000000000000",
+        "index": 2,
+        "latestStakedNode": 43007,
+        "currentChallenge": 0,
+        "isStaked": true,
+        "withdrawableWei": "0",
+        "isZombie": false,
+        "whitelisted": true,
+        "requiresChallengeReview": false
+      }
+    ],
+    "nodeStorage": {
+      "158": {
+        "stateHash": "0x16b26928d20174f320bd5222da08a9c7234c6aa2ad41bd1dc5200d0027a9592e",
+        "challengeHash": "0x71b60a833ba686ec89414b0092eb11492507240cded7b0d662875bc4848b413a",
+        "confirmData": "0x0158dd9a3bf21f0f6b33de225d4bb7bf67887dbdf8fa9cb712b1a88c8e4dbce8",
+        "prevNum": 157,
+        "deadlineBlock": 22780857,
+        "noChildConfirmedBeforeBlock": 22780954,
+        "stakerCount": 2,
+        "childStakerCount": 1,
+        "firstChildBlock": 22780804,
+        "latestChildNumber": 159,
+        "createdAtBlock": 22780707,
+        "nodeHash": "0x096535d66d8a29b0da4ab1d8feed932d63c4bf018eaacd5cfdeb7400428cd96b"
+      },
+      "43005": {
+        "stateHash": "0x2841ae9e1d49fde6cffa6a6ba47464db32fa9f2be273e97cde277ea4cfbe2da5",
+        "challengeHash": "0x1ef1bbc1b385dbaaf3261cb67e35e5ef6491c2ebc8b43e1d230234c04e96deda",
+        "confirmData": "0x182e5c405f7c5f33b09d044ea63e83bcd4be6d9a61ade8f8e293d94cd461c424",
+        "prevNum": 43004,
+        "deadlineBlock": 26072449,
+        "noChildConfirmedBeforeBlock": 26072525,
+        "stakerCount": 2,
+        "childStakerCount": 2,
+        "firstChildBlock": 26072375,
+        "latestChildNumber": 43006,
+        "createdAtBlock": 26072299,
+        "nodeHash": "0x78c488f3953db7be976c3c7c7915feddfd65394b957c35cb9a434f0d22cc67da"
+      },
+      "43006": {
+        "stateHash": "0xacf52aac37ad5f382ae545dd91519006198ffdb4078d1c055bc682f3222ed4b5",
+        "challengeHash": "0x8e531e16e4061a682bcb8a67b46a93078fd0ebaab418dcea93e0f50756e89395",
+        "confirmData": "0x0d18941f0f1afb788e954e9c0b43498fcd59f5e35fd075fabfde9746dcab820f",
+        "prevNum": 43005,
+        "deadlineBlock": 26072525,
+        "noChildConfirmedBeforeBlock": 26072602,
+        "stakerCount": 2,
+        "childStakerCount": 2,
+        "firstChildBlock": 26072452,
+        "latestChildNumber": 43007,
+        "createdAtBlock": 26072375,
+        "nodeHash": "0x5b24b57e0a2e38f78df5475a9165594a9f46d9aed9d562237a696532ca20ed02"
+      },
+      "43007": {
+        "stateHash": "0xa59b53cde5d6f240b2a2e6a3270ffd82423d0f1c96ffa58e2c8dc5f86c4cee08",
+        "challengeHash": "0x32f661030bd0ebec5f152f1572c03d210f7da3114454ea8b8a3622a88437fee3",
+        "confirmData": "0x3bea2af8d841b6dc6e092927795d53f542585bee7ff989c6adcae788a37f7ef4",
+        "prevNum": 43006,
+        "deadlineBlock": 26072602,
+        "noChildConfirmedBeforeBlock": 26072602,
+        "stakerCount": 2,
+        "childStakerCount": 0,
+        "firstChildBlock": 0,
+        "latestChildNumber": 0,
+        "createdAtBlock": 26072452,
+        "nodeHash": "0xee3c582f2331e014d35943d69517628abeb5c21afed3e86398789b4873b55ead"
+      }
+    },
+    "paused": false,
+    "wasmModuleRoot": "0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f",
+    "status": "inventory_complete",
+    "limitations": "No full withdrawal audit, role-member enumeration, Safe identity/guard audit or production calldata generation."
+  }
+}

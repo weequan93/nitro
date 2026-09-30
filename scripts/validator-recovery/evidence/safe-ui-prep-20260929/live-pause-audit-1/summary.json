@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-09-29T01:14:05.567919+00:00",
+  "readyToSign": false,
+  "readyForProduction": false,
+  "productionTransactionsSent": false,
+  "productionSignaturesTested": false,
+  "draftSha256": "d25f2cca92786a841d33190f5a454195b1bca116231131faa74b663b0836a21e",
+  "status": "review_stopped",
+  "errorType": "HTTPError",
+  "error": "HTTP Error 403: Forbidden",
+  "ownedForkRunning": false,
+  "finishedAt": "2026-09-29T01:14:05.895171+00:00"
+}

@@ -1,0 +1,82 @@
+{
+  "source": "User-pasted server output; not an independently executed fork run",
+  "sourceAttachmentSha256": "80b78e27a711bb700a578645b5caeba6ffae414154ce5362f626dd0fabb46720",
+  "serverReport": "/data_new/scripts/final-roles-fast-confirm-20260929-085552/summary.json",
+  "report": {
+    "status": "contract_rehearsal_passed",
+    "test": "final_roles_and_fast_confirmation",
+    "readyForProduction": false,
+    "refundAccounts": [
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95"
+    ],
+    "postRecoveryStakers": [
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "0x21d4ea822a07f737c5e69f7951d517e5f2974849"
+    ],
+    "retiredAccount": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+    "recoveryNode": 43008,
+    "ordinaryNode": 43009,
+    "governanceNumBlocks": 10578,
+    "normalAssertionNumBlocks": 48,
+    "allOriginalRefundPaymentsTested": true,
+    "retiredAccountNotRestaked": true,
+    "newCloudBStakeTested": true,
+    "sameNodeStakeCount": 3,
+    "ordinaryConfirmationTested": true,
+    "ordinaryConfirmationBranchReverted": true,
+    "fastConfirmationTested": true,
+    "fastSafeIdentity": {
+      "address": "0x5e16561173ea0422549c3de12b68c8a7d3a76672",
+      "owners": [
+        "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+        "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+        "0x21d4ea822a07f737c5e69f7951d517e5f2974849"
+      ],
+      "threshold": 3,
+      "nonce": 37626,
+      "singleton": "0x3e5c63644e683549055b9be8653de26e0b4cd36e"
+    },
+    "fastSafeTransactionHash": "0x38fd6c0c335ae9dcf18d60f15d8b15c3540d963bfa6b9e1a80c95b6cb8a97b32",
+    "fastSafeNonceBefore": 37626,
+    "fastSafeNonceAfter": 37627,
+    "fastSafeThresholdNegativeTested": true,
+    "fastConfirmationPausedCallRejected": true,
+    "fastSafePausedCallRejected": true,
+    "approvalsSurvivePauseResumeTested": true,
+    "fastConfirmedBeforeOrdinaryDeadline": true,
+    "ordinaryConfirmationBeforeDeadlineRejected": true,
+    "finalForkEvmClock": 26072627,
+    "ordinaryDeadline": 26072763,
+    "transactions": {
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95": "0xc31322b48b09191f3d6a0d040acbd28fea4257e1c114beae5212fa7dbf68a1ee",
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": "0x8917a83cbf8a7c18827985668978e2c2d4d01a12f1230bcbf6140c8fb6ee14da",
+      "0x21d4ea822a07f737c5e69f7951d517e5f2974849": "0xe9e4932a8feea0be174c1ade2f5d51c61e0579140e4c475b2ce04f96a51e2e25",
+      "ordinaryConfirmationRevertedBranch": "0x315c4b23610af71471f3e80b98da102404494c7b18fc61c14f0d507b05c11c6b",
+      "fastConfirmation": "0x840edcc87244e4689181324248db916200b818a6457a7598da159d9771acedd5"
+    },
+    "spanEvidence": {
+      "recordsChecked": 10578,
+      "recordChainSha256": "c6c912454a2bc8ce7b33b895b716d8622c42d29058061026abc547a091173e75",
+      "replayDirectory": "/data_new/scripts/three-staker-span-replay-20260928-091247",
+      "auditFile": "/data_new/scripts/three-staker-span-20260928-090354/summary.json"
+    },
+    "followupEvidence": {
+      "recordsChecked": 48,
+      "recordChainSha256": "10dc47fb6448c3aab4ef1b45460cd945a0993e093103225e444f4639ff1446d9",
+      "replayDirectory": "/data_new/scripts/three-staker-followup-20260928-134148"
+    },
+    "productionSignaturesTested": false,
+    "originalAccountRuntimeTested": false,
+    "automaticFastConfirmationTested": false,
+    "freshExecutionReplayTested": false,
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "fullWithdrawalHistoryAudited": false,
+    "dockerAccessed": false,
+    "nodeDatabaseAccessed": false,
+    "limitations": "Owned historical fork only; original EOAs and governance/fast Safe owners impersonated. Fast Safe itself is never impersonated for a transaction. Approved-hash path, not production ECDSA. Ordinary confirmation is rolled back before the fast-confirm branch. Paused rejection via eth_call. Saved 10578+48 replay records reused; no fresh replay or Nitro automatic fast-confirm runtime. Governance span is positional, not an A-to-B proof. No production action."
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "purpose": "Offline independent re-encoding of the pause call; review only",
+  "chainId": 42161,
+  "safe": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+  "to": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+  "value": "0",
+  "operation": 0,
+  "data": "0xbca8c7b5000000000000000000000000a113e2e9620a3bc088a681ebb2c234fdbeb85e21000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000048456cb5900000000000000000000000000000000000000000000000000000000",
+  "decoded": {
+    "signature": "executeCall(address,bytes)",
+    "target": "0xa113e2e9620a3bc088a681ebb2c234fdbeb85e21",
+    "innerSignature": "pause()",
+    "innerData": "0x8456cb59"
+  },
+  "observedNonce": 10,
+  "nonceSelectedForSigning": false,
+  "safeTransactionHash": null,
+  "safeGasParametersFinalized": false,
+  "readyToSign": false,
+  "readyForProduction": false,
+  "sourceReport": "validator-recovery-evidence/reported-results/production-window-prep-20260929-082849.json",
+  "changes": "Pause Rollup only; no root update, refund, recovery node or resume",
+  "limitations": "Local re-encoding only; no direct receipt, real signature, live-state or full Safe execution verification."
+}

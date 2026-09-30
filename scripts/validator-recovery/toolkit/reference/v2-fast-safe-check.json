@@ -1,0 +1,16 @@
+{
+  "status": "fast_safe_identity_passed",
+  "parentBlock": "0x1e644d7b",
+  "parentBlockHash": "0xa7e45aac53445cbbc78bf83f4edb8c5ce120e58321b6f34eac5c833e81d3fbb0",
+  "safe": "0x5e16561173ea0422549c3de12b68c8a7d3a76672",
+  "owners": [
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "0x21d4ea822a07f737c5e69f7951d517e5f2974849"
+  ],
+  "threshold": 3,
+  "nonce": 37626,
+  "readyForProduction": false,
+  "queueAndOfflineApprovalsReviewed": false,
+  "note": "Coordinate pending fast-confirmation proposals/approved hashes separately. No signatures or transactions."
+}

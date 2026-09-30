@@ -1,0 +1,54 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "serverOutputDirectory": "/data_new/scripts/governance-span-mock-20260928-081940",
+  "report": {
+    "status": "governance_span_rejoin_passed",
+    "readyForProduction": false,
+    "stakers": [
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d"
+    ],
+    "historicalStakersCovered": 2,
+    "addressHasCode": {
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": false,
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d": false
+    },
+    "bothRefundPaymentsTested": true,
+    "bothRestakingTested": true,
+    "sameNodeStakeCount": 2,
+    "safeExecutionPathTested": true,
+    "safeThresholdNegativeTested": true,
+    "recoveryNode": 42886,
+    "normalConfirmedNode": 42887,
+    "normalAssertionNumBlocks": 64,
+    "transactions": {
+      "creation": "0xc365894e5c75b61a3503011cf98f205247561dc40da759961efe5def29d52dec",
+      "secondStakerJoin": "0x2d9d7b19585d5c2333b369a6082d8592b0ca01825f05031a1ae9aac3eaeb61d9",
+      "confirmation": "0x5ce5a62290cb228c5587e396d6dd4ddcbca8475d47d62952448d2b1989b908b8"
+    },
+    "originalAccountRuntimeTested": false,
+    "productionSigningTested": false,
+    "governanceNumBlocks": 7838,
+    "productionNumBlocksApproved": false,
+    "parentConfirmedAToBProven": false,
+    "exactGovernanceNodeHashChecked": true,
+    "exactGovernanceNodeHash": "0x1c44f95dd83a8e24c4794528d57b32b053a516204151418fce05e8a75e670b7b",
+    "freshExecutionReplayTested": false,
+    "productionRefundScopeChanged": false,
+    "limitations": "Historical fork, both staker addresses and Safe owners impersonated; mock gas funds. Contract-address impersonation, if applicable, does not test its owner/call path. Reuses prior validated B-to-C endpoint evidence, not a fresh execution replay. Governance numBlocks convention remains unapproved for production; no A-to-B proof. No production signatures, original validator processes, or new full withdrawal audit.",
+    "ownedForkStillRunning": false,
+    "previousPass": "/data_new/scripts/nitro-restart-mock-20260928-010622/summary.json",
+    "candidateDirectory": "/data_new/scripts/candidate-fork-126237291",
+    "dockerAccessed": false,
+    "nodeDatabaseAccessed": false,
+    "priorLocalSpanReplayEvidence": {
+      "auditDirectory": "/data_new/scripts/recovery-message-span-20260928-013625",
+      "replayDirectory": "/data_new/scripts/retained-span-replay-20260928-014843",
+      "recordChainSha256": "dfdc67af2b21cb262d39a297e7517c482cba94219c5aa19bbe6ea1fd8f482435",
+      "recordsChecked": 7838,
+      "positionalMessageSpan": 7838,
+      "parentConfirmedAToBProven": false,
+      "productionNumBlocksApproved": false
+    }
+  }
+}

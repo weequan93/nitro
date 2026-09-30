@@ -1,0 +1,31 @@
+{
+  "provenance": "Operator-pasted final summary; not independently fetched from server",
+  "serverOutputDirectory": "/data_new/scripts/three-staker-span-replay-20260928-091247",
+  "report": {
+    "status": "retained_span_replay_passed",
+    "readyForProduction": false,
+    "executionReplayed": true,
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "wasmModuleRoot": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421",
+    "firstMessage": 126683263,
+    "lastMessage": 126693840,
+    "totalMessages": 10578,
+    "evidenceMode": "Sequential per-message node recording plus explicit-root execution RPC; each actual replay result must equal the recorded end; adjacent states must match. The execution RPC re-records its own input; it does not execute the saved input blob. Full input blobs are not retained; states, input digest, response and block header are retained.",
+    "limitations": "Local A-prime to B only; initial A-prime is a retained-chain checkpoint. Not an A-to-B proof or production approval. No new full withdrawal audit.",
+    "clientVersionThisRun": "nitro/v1.3.2.v3.10.0-16c17ee3a9c4/linux-amd64/go1.25.14",
+    "checkedAt": "2026-09-28T05:17:51.365884+00:00",
+    "validatedMessagesTotal": 10578,
+    "validatedMessagesThisRun": 10577,
+    "nextMessage": null,
+    "lastValidatedState": {
+      "BlockHash": "0x057c6c1e73e9822f4a262b1483061904deb544a1328f901680215d5ef26b73a7",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321867,
+      "PosInBatch": 130
+    },
+    "recordChainSha256": "c6c912454a2bc8ce7b33b895b716d8622c42d29058061026abc547a091173e75",
+    "elapsedSecondsThisRun": 14702.8,
+    "currentMessage": 126693840
+  }
+}

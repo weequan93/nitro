@@ -1,0 +1,64 @@
+{
+  "checkedAt": "2026-09-29T00:35:41.895283+00:00",
+  "parentChainId": 42161,
+  "parentBlock": "0x1e640741",
+  "parentBlockHash": "0xa071addc7b07ce1818966d52923fe6507970674377788acaca410d3754772bb1",
+  "rollup": "0xa113e2e9620a3bc088a681ebb2c234fdbeb85e21",
+  "activeStakerCount": 3,
+  "activeStakers": [
+    "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95"
+  ],
+  "addresses": [
+    {
+      "address": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+      "hasCode": false,
+      "amountStakedWei": "1000000000000",
+      "index": 2,
+      "latestStakedNode": 43099,
+      "currentChallenge": 0,
+      "isStaked": true,
+      "whitelisted": true,
+      "isZombie": false,
+      "withdrawableWei": "0"
+    },
+    {
+      "address": "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "hasCode": false,
+      "amountStakedWei": "1000000000000",
+      "index": 1,
+      "latestStakedNode": 43099,
+      "currentChallenge": 0,
+      "isStaked": true,
+      "whitelisted": true,
+      "isZombie": false,
+      "withdrawableWei": "0"
+    },
+    {
+      "address": "0x21d4ea822a07f737c5e69f7951d517e5f2974849",
+      "hasCode": false,
+      "amountStakedWei": "0",
+      "index": 0,
+      "latestStakedNode": 0,
+      "currentChallenge": 0,
+      "isStaked": false,
+      "whitelisted": true,
+      "isZombie": false,
+      "withdrawableWei": "0"
+    },
+    {
+      "address": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+      "hasCode": false,
+      "amountStakedWei": "1000000000000",
+      "index": 0,
+      "latestStakedNode": 158,
+      "currentChallenge": 0,
+      "isStaked": true,
+      "whitelisted": true,
+      "isZombie": false,
+      "withdrawableWei": "0"
+    }
+  ],
+  "transactionsSent": false
+}

@@ -1,0 +1,12 @@
+{
+  "before": {
+    "BlockHash": "0x15b54418b79ef0bfd107d53bee0632913b2d172fa17e3b1570582fd63ff70ee7",
+    "SendRoot": "0x64fd716ed8afc76877aa0c2548b5d47978431c7b3e8ad3f33f8c2ecdcff6af86",
+    "Batch": 323680,
+    "PosInBatch": 0
+  },
+  "inboxCount": 323680,
+  "expectedStateHash": "0x3536e0587ce84a75d6a26fe191a31b05fe243bd559c0783bad78f5d68c2b2907",
+  "sourceParentBlock": "0x1e64479e",
+  "sourceParentBlockHash": "0x4e26d04a3e68407ebd3ae1c556e9a331f1ffd5ced9b6004c9cdf11946176c668"
+}
