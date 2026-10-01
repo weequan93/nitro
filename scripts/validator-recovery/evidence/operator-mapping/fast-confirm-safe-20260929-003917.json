@@ -1,0 +1,31 @@
+{
+  "checkedAt": "2026-09-29T00:39:13.069305+00:00",
+  "chainId": 42161,
+  "parentBlock": "0x1e640a50",
+  "parentBlockHash": "0x704ed0e89f6522249a1abd9a6497e9d8de4766987596f16d59e0b79622bb5333",
+  "fastConfirmSafe": "0x5e16561173ea0422549c3de12b68c8a7d3a76672",
+  "governanceSafe": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+  "configuredFastConfirmer": "0x5e16561173ea0422549c3de12b68c8a7d3a76672",
+  "matchesConfiguredFastConfirmer": true,
+  "safeCodeHash": "0xb89c1b3bdf2cf8827818646bce9a8f6e372885f8c55e5c07acbd307cb133b000",
+  "owners": [
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "0x21d4ea822a07f737c5e69f7951d517e5f2974849"
+  ],
+  "threshold": 3,
+  "nonce": 37626,
+  "versionRaw": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000005312e332e30000000000000000000000000000000000000000000000000000000",
+  "paused": false,
+  "fastSafeIsStaked": false,
+  "transactionsSent": false,
+  "readyForProduction": false,
+  "errors": [],
+  "guard": "0x0000000000000000000000000000000000000000",
+  "fallbackHandler": "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
+  "singleton": "0x3e5c63644e683549055b9be8653de26e0b4cd36e",
+  "singletonCodeHash": "0x21842597390c4c6e3c1239e434a682b054bd9548eee5e9b1d6a4482731023c0f",
+  "modules": [],
+  "upgradeExecutor_EXECUTOR_ROLE()": false,
+  "upgradeExecutor_ADMIN_ROLE()": false
+}

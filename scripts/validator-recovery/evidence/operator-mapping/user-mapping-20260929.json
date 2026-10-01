@@ -1,0 +1,61 @@
+{
+  "provenance": "User-provided machine/address mapping; runtime logs not yet checked",
+  "productionRefundScopeChanged": false,
+  "machines": [
+    {
+      "machine": "current-server",
+      "stakerReported": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+      "container": "validator-nitro-1"
+    },
+    {
+      "machine": "cloud-A",
+      "stakerReported": "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "container": "validator-nitro-1"
+    },
+    {
+      "machine": "cloud-B",
+      "stakerReported": "0x21d4ea822a07f737c5e69f7951d517e5f2974849",
+      "container": "validator-nitro-1"
+    }
+  ],
+  "previousStakerWithoutMachineMapping": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+  "signatureModeReported": "local password-protected EOA keystore",
+  "imageIdPrefixReported": "becc38893aca",
+  "rpcServiceReported": false,
+  "readyForProduction": false,
+  "retiredStaker": {
+    "address": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+    "userReportsPrivateKeyRetained": true,
+    "privateKeyReadOrRequested": false,
+    "plannedTreatment": "refund credit and owner-controlled withdrawal; no restaking; no validator restart",
+    "signingAbilityVerified": false
+  },
+  "previousStakerMappingResolution": "Retired address, no running machine needed; user holds key",
+  "plannedRestakingAccounts": [
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95"
+  ],
+  "fastConfirmationOwners": [
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "0x21d4ea822a07f737c5e69f7951d517e5f2974849"
+  ],
+  "cloudBNewStakePlanned": true,
+  "notes": "User explicitly requires all three running accounts to stake after recovery. 21d4 is new staking, not a refunded existing stake. d38e is refunded and retired. Preparation only; no production transaction performed.",
+  "plannedNewStakingAccounts": [
+    "0x21d4ea822a07f737c5e69f7951d517e5f2974849"
+  ],
+  "plannedPostRecoveryStakers": [
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+    "0x21d4ea822a07f737c5e69f7951d517e5f2974849"
+  ],
+  "preparationConfirmedByUser": {
+    "newImageTag": "fuhua-container.tencentcloudcr.com/deriw/deriw:v1.3.1.2.v3.10.0-16c17ee3a9c4",
+    "configsPrepared": true,
+    "switchCoordination": "User will arrange separately",
+    "governanceSafeCoordination": "User/team will coordinate using official Safe Global UI",
+    "registryDigestIndependentlyCheckedThisTurn": false,
+    "productionStopOrBroadcastAuthorized": false
+  }
+}

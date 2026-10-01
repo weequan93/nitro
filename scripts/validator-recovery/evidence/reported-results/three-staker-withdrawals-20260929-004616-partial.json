@@ -1,0 +1,35 @@
+{
+  "provenance": "Operator-pasted summary tail; status/opening fields omitted, not independently queried.",
+  "run": "three-staker-withdrawals-20260929-004616",
+  "reportIsPartial": true,
+  "observedFields": {
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "productionSigningTested": false,
+    "originalAccountRuntimeTested": false,
+    "validatorRestartTested": false,
+    "dockerAccessed": false,
+    "nodeDatabaseAccessed": false,
+    "productionRefundScopeChanged": false,
+    "spentFlagsChecked": 8121,
+    "allCoveredSpentFlagsPreserved": true,
+    "withdrawalSamples": [
+      8118,
+      8119,
+      6591
+    ],
+    "naturalUnspentSample": 6591,
+    "naturalPaymentTested": true,
+    "withdrawalPhases": [
+      "before-recovery",
+      "after-atomic-paused",
+      "after-normal-confirmation"
+    ],
+    "withdrawalTestTransactionsReverted": true,
+    "fullWithdrawalHistoryAudited": false
+  },
+  "relatedReplayChains": {
+    "retained10578": "c6c912454a2bc8ce7b33b895b716d8622c42d29058061026abc547a091173e75",
+    "followup48": "10dc47fb6448c3aab4ef1b45460cd945a0993e093103225e444f4639ff1446d9"
+  }
+}

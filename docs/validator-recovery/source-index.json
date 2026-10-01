@@ -1,0 +1,2856 @@
+{
+  "schemaVersion": 1,
+  "hashAlgorithm": "sha256",
+  "scope": "Local incident files; generated index/catalog and logs/caches excluded.",
+  "files": [
+    {
+      "path": "README.md",
+      "category": "record",
+      "bytes": 5627,
+      "sha256": "b1d6ba7b43c6bf7fdf074f7fcfc77f0b00945252e21c12d78a3572365084f16c",
+      "description": "本次记录与执行流程"
+    },
+    {
+      "path": "arbnode/batch_poster.go",
+      "category": "code",
+      "bytes": 93234,
+      "sha256": "f105eaa93656ac11f80ee7d83777edd38716149de5f0a06072a82f5606fedb3e",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "arbos/addressMap/addressMap.go",
+      "category": "code",
+      "bytes": 5762,
+      "sha256": "3dd508b7c9b6f3e6523958935f726ac01983fd0e992a11d4519d8cdc034d8f7e",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "arbos/blacklist/blacklist.go",
+      "category": "code",
+      "bytes": 3364,
+      "sha256": "650af2e3e552d086c5dbb346fda264fe8a3dbd0cecafac6bb6af761e35d7a0cd",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "cmd/genericconf/liveconfig.go",
+      "category": "code",
+      "bytes": 2691,
+      "sha256": "899a97e85d387fa1b6b4337fb54b04bf78cd0376dde39b0188f2ed8e7296ebd6",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "cmd/nitro/config/config.go",
+      "category": "code",
+      "bytes": 17316,
+      "sha256": "945bebc931f09ff9ea8b45534e7ef77907a4f970211d8c39315e3444e45b3f3e",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "cmd/nitro/nitro.go",
+      "category": "code",
+      "bytes": 31263,
+      "sha256": "96d67ea3995786b29bb94df502b36a72e390370adfd69f93d8de5f3bd5695fee",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "contracts-legacy/src/bridge/SequencerInbox.sol",
+      "category": "code",
+      "bytes": 31179,
+      "sha256": "ab17ea874a49b83b07aaa403bbbc9e6e03cac9cc61f5467c312e7b8a4faaaaae",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "contracts-legacy/src/rollup/RollupAdminLogic.sol",
+      "category": "code",
+      "bytes": 15647,
+      "sha256": "64903e8c38ef06f54b10cfddbf940b61eaade4d152644462496e2dacab29298d",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "contracts-legacy/src/rollup/RollupCore.sol",
+      "category": "code",
+      "bytes": 25315,
+      "sha256": "321920d444471840707bce635dd08ac42f9ed0c36024eb57d898bf61cdb2a6e0",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "contracts-legacy/src/rollup/RollupUserLogic.sol",
+      "category": "code",
+      "bytes": 32154,
+      "sha256": "b6105db9fc87b41ce02bce19b70e67c2f0bfed3629a42825d649bee267f8affa",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "docs/manual-withdrawal/.gitignore",
+      "category": "withdrawal",
+      "bytes": 30,
+      "sha256": "95ffec7593285f49695ad9cfd63a75a9d050f71a6f8eb8d5b5e2d809632a23cf",
+      "description": "通用 L3 手动提款方法与说明"
+    },
+    {
+      "path": "docs/manual-withdrawal/README.md",
+      "category": "withdrawal",
+      "bytes": 7042,
+      "sha256": "b8d36a27bd1d5c0d7705283ed75c674b3d5ed78be7081324f8ab53062dd3cb42",
+      "description": "Deriw L3 manual withdrawal"
+    },
+    {
+      "path": "docs/manual-withdrawal/claim-with-wallet.js",
+      "category": "withdrawal",
+      "bytes": 2398,
+      "sha256": "db7043194cd792b74c46a4de6615d004433a066df58ef548838f84d619e2e876",
+      "description": "通用 L3 手动提款方法与说明"
+    },
+    {
+      "path": "docs/manual-withdrawal/prepare.py",
+      "category": "withdrawal",
+      "bytes": 14324,
+      "sha256": "72d77874e0c09a56664d312d2ea4bbb078658280ccd710dbfc68a7b06eca6622",
+      "description": "Check Deriw L3 withdrawals and prepare Outbox claims; never sign or broadcast."
+    },
+    {
+      "path": "docs/manual-withdrawal/tests/test_prepare.py",
+      "category": "withdrawal",
+      "bytes": 8166,
+      "sha256": "081c08b7ee2064671d5691936cea5481b21f02b014fb2e131f01a3662f8f9ee5",
+      "description": "通用 L3 手动提款方法与说明"
+    },
+    {
+      "path": "docs/safe-transactions/.gitignore",
+      "category": "safeadmin",
+      "bytes": 30,
+      "sha256": "95ffec7593285f49695ad9cfd63a75a9d050f71a6f8eb8d5b5e2d809632a23cf",
+      "description": "通用 Safe 黑名单与 owner 交易生成"
+    },
+    {
+      "path": "docs/safe-transactions/README.md",
+      "category": "safeadmin",
+      "bytes": 7810,
+      "sha256": "e48892e44be51ec3de6637f38a5d4c713a9ae6a6ddb9283d02c11dcf456463a3",
+      "description": "Safe transactions: blacklist and owners"
+    },
+    {
+      "path": "docs/safe-transactions/generate.py",
+      "category": "safeadmin",
+      "bytes": 9441,
+      "sha256": "0f6f8a81427c5f9458f65aa9ac6398f21a1a774d35e5bf3e64d0aaa8eea29568",
+      "description": "Generate Safe Builder imports for blacklist additions and owner grants; offline only."
+    },
+    {
+      "path": "docs/safe-transactions/tests/test_generate.py",
+      "category": "safeadmin",
+      "bytes": 4962,
+      "sha256": "d3de7356ed2e0d855c42b59f20459b223e673d0485b7655a52b0424ea3390b2c",
+      "description": "通用 Safe 黑名单与 owner 交易生成"
+    },
+    {
+      "path": "docs/validator-recovery/EXECUTION-RECORD.md",
+      "category": "record",
+      "bytes": 10278,
+      "sha256": "9a2ab49bf10ba221e0b11264f215d7271bbb7d0bd52ef07dcd31aff78bd09c55",
+      "description": "实际执行与证据"
+    },
+    {
+      "path": "docs/validator-recovery/LAYOUT.md",
+      "category": "record",
+      "bytes": 3636,
+      "sha256": "57a45f8c12866de1106be184b01d31fa326c3ba55b803d0427b57bbdbfca61b5",
+      "description": "目录规划与迁移"
+    },
+    {
+      "path": "docs/validator-recovery/README.md",
+      "category": "record",
+      "bytes": 5330,
+      "sha256": "4ef9c16bc6b027445eb8751327efa07f4b969a9110f619a302b2be48b3175ec4",
+      "description": "Deriw validator 恢复工作记录"
+    },
+    {
+      "path": "docs/validator-recovery/RUNBOOK.md",
+      "category": "record",
+      "bytes": 9957,
+      "sha256": "727ca2e68bc43554d7fce911b1293d90331f0bd6e2bac41abb7c2803c165e221",
+      "description": "恢复流程与后续验收"
+    },
+    {
+      "path": "docs/validator-recovery/TROUBLESHOOTING.md",
+      "category": "record",
+      "bytes": 8463,
+      "sha256": "295deb9a7577088f927a3abc460253877e353eb13c2120e167ad15f67bcfd58c",
+      "description": "本次故障、判断和处置"
+    },
+    {
+      "path": "docs/validator-recovery/VALIDATION-RESULTS.md",
+      "category": "record",
+      "bytes": 4415,
+      "sha256": "fe42fed766f577654737ef3854836233375e92cb10781d1799409cd107b6ccf9",
+      "description": "归档验证记录"
+    },
+    {
+      "path": "docs/validator-recovery/catalog.py",
+      "category": "record",
+      "bytes": 15891,
+      "sha256": "505191ccef64666030274d473648b7b0932688381e3454ec568bbbf08e38ca40",
+      "description": "Index and verify local recovery records; never call RPC, Docker or deployment tools."
+    },
+    {
+      "path": "docs/validator-recovery/history/VALIDATOR-RECOVERY-MOCK.md",
+      "category": "historical",
+      "bytes": 6196,
+      "sha256": "5e2acb94e2cc439e9295afc3b874195003a5cea96afc0548bded1fb7044fd4c1",
+      "description": "8149 validator 恢复演练"
+    },
+    {
+      "path": "docs/validator-recovery/history/validation-125022703-recovery-plan.md",
+      "category": "historical",
+      "bytes": 8158,
+      "sha256": "6ec2b4dcb0d755602d71d7645354c912245daaf9847e48757bd55247b685d7cc",
+      "description": "125022703：执行差异证据与保留历史的修复方案"
+    },
+    {
+      "path": "docs/validator-recovery/history/validator-recovery-coordination.md",
+      "category": "historical",
+      "bytes": 5382,
+      "sha256": "919c608005ba0ecfa303f7636466b485350381e566fc2d0174491993deae85e8",
+      "description": "Deriw validator 恢复协作清单"
+    },
+    {
+      "path": "docs/validator-recovery/incident.json",
+      "category": "record",
+      "bytes": 11529,
+      "sha256": "7ec9d156dd70f6b253de80f3593d3dbfce1b01f063bbb71b2cda5197526037c7",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "docs/validator-recovery/layout-migration.json",
+      "category": "record",
+      "bytes": 149345,
+      "sha256": "398a427e77a3a7b29e9b97cbb15b84b37678f33e7417f1a9564138cd34fef2fe",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "execution/gethexec/block_recorder.go",
+      "category": "code",
+      "bytes": 13308,
+      "sha256": "388c2ee05d4924ecf50e391809433ff610eca8cb47e2c89aea7eed4c6ffb203f",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "execution/gethexec/block_recorder_test.go",
+      "category": "code",
+      "bytes": 4369,
+      "sha256": "4af73a62e084128a3ea99ce822078a67ea070ad60e7a3d6987b5e351fcceefd4",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "execution/gethexec/legacy_blacklist_preimages.go",
+      "category": "code",
+      "bytes": 1111,
+      "sha256": "0ff903e4df7d226f204a35b1b687716d43b5e4e517260034b50be12717219253",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "execution/gethexec/legacy_blacklist_preimages_test.go",
+      "category": "code",
+      "bytes": 5172,
+      "sha256": "8bdfa8a58a9aa231f44a6967b8bc2b0a24f586c1c52fa06fa9c4052a3dc88595",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "execution/gethexec/legacy_fee_preimages.go",
+      "category": "code",
+      "bytes": 1406,
+      "sha256": "fdcdae22affbfad9edc33866c3f905eb0ab40be73a75c559cc8a686bf2a08f78",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "execution/gethexec/legacy_recording_hooks.go",
+      "category": "code",
+      "bytes": 3334,
+      "sha256": "8757e66125bad878eb82c7407d0e4b99cd766cfa0d0dac85973d79a7ae09929b",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "execution/gethexec/sequencer.go",
+      "category": "code",
+      "bytes": 72117,
+      "sha256": "81e70199271b0bea5e5d716113146c6756a2131ce97c848cb6e660443c2093d2",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "scripts/validation-122408091-findings.md",
+      "category": "code",
+      "bytes": 15343,
+      "sha256": "6da732610edbf7d17f9ea35f4aa980e94d31f636ec3f32b42b30d159191c72f2",
+      "description": "Message 122408091: legacy replay witness gap"
+    },
+    {
+      "path": "scripts/validator-recovery/.gitignore",
+      "category": "record",
+      "bytes": 49,
+      "sha256": "6c87724eb8d5aa85948469ba70b0ec8e750168f88c867d215a5a0f1ab20892b1",
+      "description": "本次记录与执行流程"
+    },
+    {
+      "path": "scripts/validator-recovery/README.md",
+      "category": "record",
+      "bytes": 2770,
+      "sha256": "dc0fb6e42a7a8d5079ebaa8c4347741fdbd3a37f1780b8e5c6d39c9b32c6e4cd",
+      "description": "Validator 恢复脚本"
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/README.md",
+      "category": "inspection",
+      "bytes": 1115,
+      "sha256": "091654a8c334b2ee152410d1f34d9c7ef7a9fb0c4f6bcb6a0fd0cd4bf84469e7",
+      "description": "诊断与候选采集"
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/audit-recovery-message-span.py",
+      "category": "inspection",
+      "bytes": 9601,
+      "sha256": "73a8a33269fe3ff5a5f1dcc9c9b6ac253be266e9a88b0536991dfb85939eec0b",
+      "description": "Read-only historical A-position/B message-span audit. No signing or chain mutation."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/audit-safe-pause-live.py",
+      "category": "inspection",
+      "bytes": 11086,
+      "sha256": "efd07353ae05842c7660afc801d9310502fbfa9c484155462a0fe18672636954",
+      "description": "Read-only public inventory plus an owned local 31337 fork pause rehearsal."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/check-cutover-data-readonly.sh",
+      "category": "inspection",
+      "bytes": 2183,
+      "sha256": "2070057f9f0c0d2450a3f6b04855d1982c9f8773b48a58707da6d1f523061c72",
+      "description": "诊断、角色与候选采集"
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/check-recovery-candidate-drift.py",
+      "category": "inspection",
+      "bytes": 3891,
+      "sha256": "10d92d4eea9402d96ea98905a6de5d324823114d8ec1c81e807b1f13a9670d96",
+      "description": "Read-only comparison of a rehearsed checkpoint with fresh parent-chain authority data."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/check-snapshot-validation-progress.sh",
+      "category": "inspection",
+      "bytes": 1601,
+      "sha256": "5c1ae388d5db21f405d0f49ad52ca81adc209b411464244af8ecb2f0ea13e9e7",
+      "description": "诊断、角色与候选采集"
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/collect-production-candidate.py",
+      "category": "inspection",
+      "bytes": 5617,
+      "sha256": "4b4de4b1afceaea10dadda94a4604004ae4261ab2ddca0682a5b0e671b7a6742",
+      "description": "Read-only candidate collection. Never signs or declares production readiness."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/diagnose-snapshot-sync.py",
+      "category": "inspection",
+      "bytes": 7176,
+      "sha256": "c2c113fbbc4a6eb50fe4883e9e49b3922e269a910796499fe42c8826513fa175",
+      "description": "Read-only Linux sync diagnosis. Writes reports only; no keys/config dumps."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-data-new-reuse.py",
+      "category": "inspection",
+      "bytes": 4521,
+      "sha256": "e33e366bb879a875c202b6823bfa0f4a6e5c93cdb0a6e519ea0e6db7975c9700",
+      "description": "Inventory prior /data_new use without opening databases or starting a node."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-final-validator-prep.py",
+      "category": "inspection",
+      "bytes": 7223,
+      "sha256": "c31b0ee273a62b85fd7636054d6c79ed027f7977ed606406f94416eb47804dd3",
+      "description": "Read-only Docker preparation report. Does not open configs, keys or databases."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-original-validator-runtime.py",
+      "category": "inspection",
+      "bytes": 8342,
+      "sha256": "013e4bd56bd20d85963222ca8ebc277555f024e9068480e02a4bee9a7bd670a0",
+      "description": "Read-only recovery inventory. Never opens keystores or starts/stops a container."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-original-wallet-metadata.py",
+      "category": "inspection",
+      "bytes": 7228,
+      "sha256": "81d32ea0558ec826832d918751eb84694e81f0da0c726812b2d2f86b3bba9a29",
+      "description": "Read public keystore headers and selected Docker launch switches; never unlock/sign."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-recovery-node-sources.py",
+      "category": "inspection",
+      "bytes": 2619,
+      "sha256": "9a52cf7acc813f163b595e508f230adabae7e6033b1e4f3149c337c9870e749b",
+      "description": "Read-only local Docker/RPC inventory; excludes commands, environment and wallet config."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-recovery-operator.py",
+      "category": "inspection",
+      "bytes": 8103,
+      "sha256": "6ce2a23ecb8bd1d4eb7c6b13e10444b55e5c26f7e6eadd9f143a11184b489b4b",
+      "description": "Portable read-only inventory for a selected recovery validator operator (standard library only)."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-remote-validator.py",
+      "category": "inspection",
+      "bytes": 7227,
+      "sha256": "a2a15d21656e370832fff137f34613fae4ad47c957707b43e76d9540faf322d2",
+      "description": "Portable read-only inventory for the original validator operator (standard library only)."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-snapshot-cutover-config.py",
+      "category": "inspection",
+      "bytes": 3478,
+      "sha256": "a96ed7805d084fe2bd4ebfb7cd0fd0548355ff979cd219faf7dbf56776dea56a",
+      "description": "Read selected snapshot-sync config fields only; no DB/key reads or mutations."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/inspect-snapshot-validation-gates.py",
+      "category": "inspection",
+      "bytes": 3413,
+      "sha256": "4e4854005843edb65d0bb01db64bf063b11862029f55e12e01e57efe0de873db",
+      "description": "Read selected validation controls, process arguments and stop markers; no changes."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/mkdiag.py",
+      "category": "inspection",
+      "bytes": 3045,
+      "sha256": "a4bf554f18cbb38ee9d70fd20eddbcb14ba9aa44c2fae5606d581489139cf110",
+      "description": "诊断、角色与候选采集"
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/probe-production-participants.py",
+      "category": "inspection",
+      "bytes": 7432,
+      "sha256": "654b47f25909dfe42e392bd9564c6bb1e3b101b208bb151f49996a9111e5b855",
+      "description": "Pinned read-only production staker, pending-node and Safe inventory. No signing."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/probe-recovery-authority.py",
+      "category": "inspection",
+      "bytes": 8246,
+      "sha256": "107ed710c49463af286567bb7edf8a0ed32fcfd0e051ac09208784bbe160748e",
+      "description": "Read-only Rollup proxy inventory. No keys, signing or transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/probe-snapshot-next-validation.sh",
+      "category": "inspection",
+      "bytes": 1491,
+      "sha256": "b3d78d8dc70fec70735038e1d490fe6fd97dcc9edbf6bfb0ec4f71a6e115c40f",
+      "description": "诊断、角色与候选采集"
+    },
+    {
+      "path": "scripts/validator-recovery/diagnostics/run-diagnostic.py",
+      "category": "inspection",
+      "bytes": 3711,
+      "sha256": "180c007b13d4fc2682520c3958442e42fc41a6f0022d5d5370a246df307aa43f",
+      "description": "Run two diagnostic binaries offline with only exported witness files mounted."
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/README.md",
+      "category": "distribution",
+      "bytes": 1280,
+      "sha256": "c3c0a9c87f4076cd002f2ad9ce9ebe7d4f4390368378b2116e4ac944613f750a",
+      "description": "安装与分发"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/builders/build-compose-prep-addon.py",
+      "category": "distribution",
+      "bytes": 2998,
+      "sha256": "e1ea19ca36410ee96d89fbae7b743f0268a6a1b736785fa87bc1c80f53d98a32",
+      "description": "读取 toolkit 构建新分发包；输出 distribution/generated，不覆盖历史包。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/builders/build-cutover-addon.py",
+      "category": "distribution",
+      "bytes": 2964,
+      "sha256": "6d7f232f0a6f67cf0d5cd599d7ab224f7884972a4df37087f3f0b0a1520ccc04",
+      "description": "读取 toolkit 构建新分发包；输出 distribution/generated，不覆盖历史包。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/builders/build-cutover-da-fix.py",
+      "category": "distribution",
+      "bytes": 4106,
+      "sha256": "799ff4a9ba35d9a40fe93a3be5e6dd1a2ff00a7bda052489742c14a9852df56e",
+      "description": "读取 toolkit 构建新分发包；输出 distribution/generated，不覆盖历史包。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/builders/build-presign-addon.py",
+      "category": "distribution",
+      "bytes": 2915,
+      "sha256": "6424d5afea1c59bc2ae17f6b7aeb337ffcd3fc825d412ac3dd0a05f2e6c93d09",
+      "description": "读取 toolkit 构建新分发包；输出 distribution/generated，不覆盖历史包。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/builders/build-recovery-toolkit-bundle.py",
+      "category": "distribution",
+      "bytes": 3557,
+      "sha256": "9100cbcbbb7dd594de78ef7a18ca036cc3621c00ec846a49c1217b6b073f11ff",
+      "description": "读取 toolkit 构建新分发包；输出 distribution/generated，不覆盖历史包。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/atomic-span-recovery-tools.tar.gz",
+      "category": "distribution",
+      "bytes": 26612,
+      "sha256": "52b9a1a2deb8d069cb1a6201b9ee84f52171b92ccb3664070d8767628d46c794",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/original-staker-rejoin-tools.tar.gz",
+      "category": "distribution",
+      "bytes": 5130,
+      "sha256": "bda771a8c62b1d91e3ef0915f994abd4093f91cf7e6585993ecd255cd118de35",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/production-recovery-toolkit-v2.tar.gz",
+      "category": "distribution",
+      "bytes": 44567,
+      "sha256": "13ac9266e2240dc49c13294a8cac7a882487f3b0ed2a9158fcfcf111b5135a2a",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/recovery-compose-prep.gz",
+      "category": "distribution",
+      "bytes": 7858,
+      "sha256": "9971cd32b0b3b7cb0cb159db6f557e6f3508e5e7aff6f825765c99e65083c38b",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/recovery-cutover-addon.gz",
+      "category": "distribution",
+      "bytes": 15457,
+      "sha256": "ca4455cbafb2bc2a6c3be7b3c9032262efe04f7fbd43272bb3bc35b2c81c9fd0",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/recovery-cutover-da-fix.gz",
+      "category": "distribution",
+      "bytes": 15639,
+      "sha256": "82220fa20ff1989bf39d4127d004080682a882980cfbef236e945fded5443b16",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/recovery-presign-addon.gz",
+      "category": "distribution",
+      "bytes": 11100,
+      "sha256": "585296d2c85733ffd0bf75d898f9ac7a673b4f0e1e4205808d5ba72dcd38361a",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/bundles/validator-recovery-mock.tar.gz",
+      "category": "distribution",
+      "bytes": 16238,
+      "sha256": "5a669ffb0143513bf4f9c02cb23a7de09f7fee3f72b204c5476dabe1042f6a3b",
+      "description": "历史分发快照；只校验文件，不解压或执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-final-roles-fast-confirm.sh",
+      "category": "distribution",
+      "bytes": 9319,
+      "sha256": "29f34d5fd2d2ab54a3b464d21453fad330ba431f9d147b811c831bdefff7f1ea",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-final-validator-prep.sh",
+      "category": "distribution",
+      "bytes": 5217,
+      "sha256": "0dec64794dce9258478df6cf2357f454cb3669b42e6a338c2ffcc9c9d6134717",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-fix-snapshot-validation-limit.sh",
+      "category": "distribution",
+      "bytes": 8054,
+      "sha256": "38558b9f59389be95500450b09beb3406735608a6f41dffc7b01b7a89f5c8e31",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-inspect-data-new-reuse.sh",
+      "category": "distribution",
+      "bytes": 5301,
+      "sha256": "b7ede6b449532511a5835979cd491b231fdc04d2e679915671cd263cbf8d4f19",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-inspect-snapshot-cutover-config.sh",
+      "category": "distribution",
+      "bytes": 4207,
+      "sha256": "e5d08cf998874356c7c07a56b6d30a815221c81ded8ea8749deb04ebf08de642",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-inspect-snapshot-validation-gates.sh",
+      "category": "distribution",
+      "bytes": 4164,
+      "sha256": "0736fc1c135630ade629248a017d8db28593ca1f36558092c51ffefc0741a383",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-prepare-data-new-parent-check.sh",
+      "category": "distribution",
+      "bytes": 7279,
+      "sha256": "2a1490c434c3c73419149234f7814ea3db28274edbefe2bb933d183953e1579c",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-production-recovery-kit.sh",
+      "category": "distribution",
+      "bytes": 27056,
+      "sha256": "c151da9d9bf621980e949576f4768cd3183918eb4b452dff9ff24393a44dffec",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-production-recovery-toolkit-v2.sh",
+      "category": "distribution",
+      "bytes": 61997,
+      "sha256": "efbb9f50554224f6bbf638578bb74509e1f747c7c067169164307af094304178",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-recovery-compose-prep.sh",
+      "category": "distribution",
+      "bytes": 12532,
+      "sha256": "9b396005c6cb0e459fcfa008dce1295610919e8e5f45453554de79efb25005d9",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-recovery-cutover-addon.sh",
+      "category": "distribution",
+      "bytes": 22767,
+      "sha256": "48a3495b975cec47015e64223f0c71d60d3ccd6ef5dc34e30d549270f8489593",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-recovery-cutover-da-fix.sh",
+      "category": "distribution",
+      "bytes": 23854,
+      "sha256": "32ded1a10b11f26742c49350c4246c5b17038b442b3ab87818e76de949447acc",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-recovery-operator-inspector.sh",
+      "category": "distribution",
+      "bytes": 5106,
+      "sha256": "97befa54825c87a4e32735818e0af127f03ac57e9e6a79cd44464e1d5f84e29a",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-recovery-presign-addon.sh",
+      "category": "distribution",
+      "bytes": 16850,
+      "sha256": "c6232365e0a806a24857bf7402027031f13a92c3eb3a89dcc95b5006f6d2bcf8",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-snapshot-validation-metrics.sh",
+      "category": "distribution",
+      "bytes": 9043,
+      "sha256": "afa12aeb9f404786cacd236b51f63bbde01e965e3be91d1f6c2ba1b11aecf919",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-three-staker-nitro-restart.sh",
+      "category": "distribution",
+      "bytes": 13638,
+      "sha256": "3442011ec074771a6238d06d5a6b2d5fc4570178a3f9045dd255c11fa900bd5e",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-three-staker-rejoin.sh",
+      "category": "distribution",
+      "bytes": 6179,
+      "sha256": "1ddafda6a91293607f21e1ac996337b29a3c24b15becb0604b917938be0a6890",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-three-staker-withdrawals.sh",
+      "category": "distribution",
+      "bytes": 6785,
+      "sha256": "a2b458c6279f217079503b119c26e2e742f559a469468ff4676bb11d15cc6c5a",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-tune-snapshot-recording-eight.sh",
+      "category": "distribution",
+      "bytes": 8993,
+      "sha256": "abff9e300afc9ff672fa07406ecd9221ab0bbb762dd8db2c841aa1d668c877b4",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-tune-snapshot-recording-four-to-sixteen.sh",
+      "category": "distribution",
+      "bytes": 9115,
+      "sha256": "548a430fbeb5d071f95ffc4fb10f4d7e3b503356e10aab9df47e2c9cbde7b03e",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-tune-snapshot-recording-sixteen.sh",
+      "category": "distribution",
+      "bytes": 9019,
+      "sha256": "745602023182054148c5ca2015f6ada015bbe4da025023451b3bc93ed8022341",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-tune-snapshot-recording-thirtytwo.sh",
+      "category": "distribution",
+      "bytes": 9048,
+      "sha256": "268f7980f7a3a0c8ea2eadbb6096a4ed6c1770e4b76d90920e7b24de3202d840",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/distribution/installers/install-tune-snapshot-validation.sh",
+      "category": "distribution",
+      "bytes": 9042,
+      "sha256": "a12a0ac57d047991db27864f67b7d71bad9fd94c0489ecdf0a884d0988d40203",
+      "description": "安装器；内嵌 payload 与当前源码可能属于不同版本。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/ATOMIC-SPAN-MOCK.md",
+      "category": "evidence",
+      "bytes": 3452,
+      "sha256": "9d8a25b84c5815bd808d863c3e9c957edbe2fb9a4ab33df740494e85336be4b9",
+      "description": "7838 原子恢复演练"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/DATA-CUTOVER-PREPARATION.md",
+      "category": "evidence",
+      "bytes": 4258,
+      "sha256": "66c86c74205f5201343e4f2603f5051e709f79545442d3ba8f435a307dd4db1a",
+      "description": "新镜像节点数据切换准备"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/DATA-NEW-REUSE-REVIEW.md",
+      "category": "evidence",
+      "bytes": 2051,
+      "sha256": "8207a8dd5ac9bfaa3e201588bae99c604f27dc2dfb27ebba2b82df3ed04a2038",
+      "description": "/data_new 复用评估：待运行检查"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/DECISION.md",
+      "category": "evidence",
+      "bytes": 5596,
+      "sha256": "d0b930d79cb6551177e452f5592f1b242b7e69fc8df19ad3fadc91aaa9fd77db",
+      "description": "Recovery decision — 2026-09-23 investigation"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/FAST-CONFIRMATION-ADDENDUM-20260929.md",
+      "category": "evidence",
+      "bytes": 2583,
+      "sha256": "8de7d85766cb6d7cc7f689425ad1436a853e4698c7de0096ef9bdeec9e1c025a",
+      "description": "快速确认补充：纳入生产维护流程"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/FINAL-ROLES-PREPARATION-20260929.md",
+      "category": "evidence",
+      "bytes": 4306,
+      "sha256": "196a985a360497faaefb402aaf83459b6bb5ac0ddb43210f7a8fb1a74c217636",
+      "description": "最终账户角色：维护前准备"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/GOVERNANCE-SPAN-MOCK.md",
+      "category": "evidence",
+      "bytes": 4132,
+      "sha256": "0f6e3b457485acd64ed4b252d5af864f97552fdb86103e2b2d4cbff066b55802",
+      "description": "7838位置跨度治理参数演练"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/NITRO-AUTOSUBMIT-MOCK.md",
+      "category": "evidence",
+      "bytes": 7464,
+      "sha256": "1a4f99835ca6250d78040e59e3187cf99b8cce4c20df6090fa025b96a59d71c5",
+      "description": "临时账户的 Nitro 自动签名/提交演练"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/NITRO-SPAN-RESTART.md",
+      "category": "evidence",
+      "bytes": 3026,
+      "sha256": "c31b71292d5cdf69f9172f9314b88b7c18f75080a230f9defe2c44838ab6409e",
+      "description": "7838参数的Nitro自动提交及正常重启"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/OPERATOR-READONLY-CHECK-20260929.md",
+      "category": "evidence",
+      "bytes": 1821,
+      "sha256": "0cf58f72857d31496d106b7e461d8f2369ff8ec06248637a39f6f700ff839eb9",
+      "description": "三账户节点负责人：只读核对"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/ORIGINAL-VALIDATOR-OPERATOR-PLAN.md",
+      "category": "evidence",
+      "bytes": 8021,
+      "sha256": "7995e2493974d9f1884e4dc754d533eb4594483f38eeb3f783dd307786cbed7d",
+      "description": "原 validator 负责人配合操作说明"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PAUSE-105018-REVIEW.md",
+      "category": "evidence",
+      "bytes": 3155,
+      "sha256": "4aa77c44aef6a3cbf0f448d2c16e0362735a61963eb46b8199c134de82404b91",
+      "description": "暂停包 pause-review-20260929-105018 审阅记录"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PAUSE-REVIEW-20260929.md",
+      "category": "evidence",
+      "bytes": 2700,
+      "sha256": "8c4a4323b35d85f8246e11b09d3f9e4249a8dbf9afc8ea46c301c78e3d9f43c2",
+      "description": "独立治理暂停：调用审阅页"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PRODUCTION-EXECUTION-DRAFT.md",
+      "category": "evidence",
+      "bytes": 14827,
+      "sha256": "e782ea156aae99db11aee4e555bef2828720e10c57975fc396f21f0a33899ac1",
+      "description": "生产恢复执行草案"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PRODUCTION-PLAN-CURRENT-20260929.md",
+      "category": "evidence",
+      "bytes": 24652,
+      "sha256": "d70930bfc2c1a573afe37c1efc1db2fd4b3e0d4c44988b61b02e8116b060b468",
+      "description": "Deriw 三账户生产恢复准备方案"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PRODUCTION-RECOVERY-PLAN.md",
+      "category": "evidence",
+      "bytes": 12482,
+      "sha256": "544ab54c056075a234bdb2667eea26d79569e9b1e9e19062ab6298adf6422786",
+      "description": "Deriw 生产恢复准备方案"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PRODUCTION-REFRESH-20260928.md",
+      "category": "evidence",
+      "bytes": 4353,
+      "sha256": "5d64afff025d5690c307a79e29447c257490db17b704f2307a56d35462ee9c95",
+      "description": "生产只读盘点更新"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PRODUCTION-TOOLING-READINESS-20260929.md",
+      "category": "evidence",
+      "bytes": 4105,
+      "sha256": "e7f0006934866965b7a2ed1db5f7269a9f6b5567e536486351289aa924d7edab",
+      "description": "实际文件核对：尚未达到“只等暂停后填参数”"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/PROGRESS-20260925.md",
+      "category": "evidence",
+      "bytes": 56186,
+      "sha256": "ec5bdbdb256a1ed7f37f35e4167f47c9835d8c694e054d8b041c0fee0617228a",
+      "description": "Deriw 恢复演练记录（2026-09-25）"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/README.md",
+      "category": "evidence",
+      "bytes": 1275,
+      "sha256": "35e3253a0f275fd73a5bbdf6c63e9a0c07f039ec8849d47bfd47223d2682b5a0",
+      "description": "证据归档"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/RECOVERY-PARAMETERS.md",
+      "category": "evidence",
+      "bytes": 8843,
+      "sha256": "73337075c2ba6004f1f799f08a5c14e45e1593cb528fe5364ce12de535cfb6b3",
+      "description": "恢复断言参数审阅（2026-09-27）"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/RETAINED-SPAN-REPLAY.md",
+      "category": "evidence",
+      "bytes": 4130,
+      "sha256": "9e3ad0bb2c101eb49c65273970a3f1c5a18125362df0c422bbf65a549b438ce3",
+      "description": "保留链A′→B连续消息重放"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/SIMULATION-ACCEPTANCE.md",
+      "category": "evidence",
+      "bytes": 10336,
+      "sha256": "a0041721e41b611da97d2c67d06976be0d39851a21cc4413857817c52aff6ab1",
+      "description": "恢复模拟验收汇总"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/SIMULATION-CLOSEOUT-20260928.md",
+      "category": "evidence",
+      "bytes": 4679,
+      "sha256": "6bfdc356cc2317d241fffc73b90484fe9ec8bfb4d2a2a7ed8e15f04212411a34",
+      "description": "历史恢复模拟收尾与生产准备"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/THREE-STAKER-ATOMIC.md",
+      "category": "evidence",
+      "bytes": 1695,
+      "sha256": "545a6081f52e5d6737425a1a39387b6bf54fba85b04fe7d101e936c6a26f3b71",
+      "description": "三账户原子恢复模拟"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/THREE-STAKER-CLOSEOUT-20260929.md",
+      "category": "evidence",
+      "bytes": 4544,
+      "sha256": "9f364ef4327729e8b2464bca8b643a3d00efb753a4eacafba742232888e4c84a",
+      "description": "三账户恢复模拟结论与生产准备"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/THREE-STAKER-SPAN.md",
+      "category": "evidence",
+      "bytes": 1378,
+      "sha256": "379d546e3b1d4253a2c4d1e16726d268d7bae2bd464a4fd557b380f078a73fcc",
+      "description": "三账户新候选：10578条本地重放"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/TWO-STAKER-REJOIN-MOCK.md",
+      "category": "evidence",
+      "bytes": 3745,
+      "sha256": "b68d72d9ba0c58464dc12fee7d81e1d8cd1981498aa8587fdbe2ea4c829a5f1c",
+      "description": "两个历史质押账户共同恢复演练"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/check-executed-recovery-03e938.py",
+      "category": "evidence",
+      "bytes": 2296,
+      "sha256": "a1ca14cea6a623938a9d60eda4c094fbeedb965f8fd2a2888c5e69a54dd72104",
+      "description": "Read-only public RPC verification against the locally reviewed Safe fields."
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/check-first-recovered-fast-confirm.py",
+      "category": "evidence",
+      "bytes": 1526,
+      "sha256": "77c408deeaa9319f0758f84e35a8e4efa8bc451b7ffdfe189728a81799748ed7",
+      "description": "本地保存的报告、审阅包与回执"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/check-pause-105018.py",
+      "category": "evidence",
+      "bytes": 1416,
+      "sha256": "62488db44d5ef7b7b32a87bfc8f5d5c8f2c4e37bd41744abb08f015df20d25c5",
+      "description": "Offline review of the user-reported pause fields. No RPC or signing."
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/confirmation-tx-request.json",
+      "category": "evidence",
+      "bytes": 147,
+      "sha256": "4a1591aef02681b71ecbfd3e17b16ede93820a8df505f64d519c3b2fab229a8a",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/confirmation-tx.json",
+      "category": "evidence",
+      "bytes": 880,
+      "sha256": "d4b049dd4626374c9ab41ce20b9ba82c753cf2210842dd8441801f4e35c70e77",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/confirmations.json",
+      "category": "evidence",
+      "bytes": 6879,
+      "sha256": "3c7be79d2e7acd35b33cecdd21be89070ba40e35e9dae9d6b120e486bf1853f7",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/confirmed-endpoint-public.json",
+      "category": "evidence",
+      "bytes": 39,
+      "sha256": "d24b724805fc740a6fe78ed1233a0e4b48d2a3656c6dc63b48059f6eff20eaec",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/current-request.json",
+      "category": "evidence",
+      "bytes": 1232,
+      "sha256": "8cdfc7cbebb7cac03260783fd3ae3a8fda84648d1718378ebf43f008d9e6a0c1",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/current-response.json",
+      "category": "evidence",
+      "bytes": 887,
+      "sha256": "4e205be857ea4c372d0c31edf08fd559f353c060db366578e9758225d0f6b857",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/executed-recovery-03e938/receipt.json",
+      "category": "evidence",
+      "bytes": 22427,
+      "sha256": "f55a9db4f6854ebb5e6a41e680d5054216a417b667aaba124a3016d6e212d4ee",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/executed-recovery-03e938/summary.json",
+      "category": "evidence",
+      "bytes": 1725,
+      "sha256": "ce9f1edec939a7d88769236d1fa3de5454314e65a7713bd3648fa15cc0c827c1",
+      "description": "保存状态：public_rpc_recovery_receipt_and_state_matched"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/first-recovered-fast-confirm.json",
+      "category": "evidence",
+      "bytes": 644,
+      "sha256": "c07635f3e4376e4078b8aedcf36310bfde52a3cefb16d10342371bd8f6961151",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/operator-mapping/address-check-20260929-003541.json",
+      "category": "evidence",
+      "bytes": 1802,
+      "sha256": "7987e5a856a857ba442be70be6e584aa333d5ab2575965bc990e50fda62aebce",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/operator-mapping/check-addresses.py",
+      "category": "evidence",
+      "bytes": 2623,
+      "sha256": "3e417511ee1f5ed027cc19d13516a3158b1cf8415cd5e04d951824a9e2c5fa6b",
+      "description": "Read-only public Arbitrum One address-to-stake comparison. No keys or writes."
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/operator-mapping/check-fast-confirm-safe.py",
+      "category": "evidence",
+      "bytes": 3669,
+      "sha256": "714fa389d327e5f8a8dfe4ebe9d2c32861c71423130b4adb018a91db99a0a405",
+      "description": "Read-only fast confirmer and Safe roles inventory; no private keys or transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/operator-mapping/fast-confirm-safe-20260929-003917.json",
+      "category": "evidence",
+      "bytes": 1456,
+      "sha256": "fd7808d11f2bdc385d2f163ea715ea10c70d9eb41883a149878791a6834beadb",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/operator-mapping/user-mapping-20260929.json",
+      "category": "evidence",
+      "bytes": 2562,
+      "sha256": "8a62bdb8d6086debe3ef925affaf93cac26392238e276834a8b7d564384b43b1",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/pause-call-review-20260929.json",
+      "category": "evidence",
+      "bytes": 1220,
+      "sha256": "b735d0fcf7d3ebced4b0ba0b6c14b5bb7ceb23f86b5e573f2082c58bffb9e8f7",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/presign-window-20260929-154302-review/recovery.safe-fields.json",
+      "category": "evidence",
+      "bytes": 3699,
+      "sha256": "fe66e8571a8d475ace90c1b9531796c76fc9fbb7b208a9dbbf2120e08bc4af48",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/presign-window-20260929-154302-review/recovery.safe-import.json",
+      "category": "evidence",
+      "bytes": 3336,
+      "sha256": "490996482bdaac39637baf67cdedb605d7c36c7cbf3d7b2d2d9ce5a2dbef6bc7",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/presign-window-20260929-154302-review/resume.safe-fields.json",
+      "category": "evidence",
+      "bytes": 563,
+      "sha256": "f382ffffe0ce8d178d654559a15a9ffbbabc599ead1f648fbbc5ca0fdcb2d7b9",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/presign-window-20260929-154302-review/resume.safe-import.json",
+      "category": "evidence",
+      "bytes": 740,
+      "sha256": "617312f903778fc9be9bdae2b1fa3ad61105d314669a9887532fb2608e706a57",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/presign-window-20260929-154302-review/review.json",
+      "category": "evidence",
+      "bytes": 2063,
+      "sha256": "e2a849ce98c2b1ca1ca99c7ef58524d0118fbc6c874d83ae6309a0a7950dbf05",
+      "description": "保存状态：offline_pasted_calls_and_hashes_matched"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/atomic-span-mock-20260928-084057.json",
+      "category": "evidence",
+      "bytes": 2406,
+      "sha256": "d22cdab49acafddbd239927c24355698d293f7babedf5eefc6d127d4a59d81c8",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/db-replacement-20260928-062110-757499.json",
+      "category": "evidence",
+      "bytes": 776,
+      "sha256": "c902ea60b51479238d730b376cf1da9b4e1fb8e4aaa1f9ee7547aee17e251d58",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/final-roles-fast-confirm-20260929-085552.json",
+      "category": "evidence",
+      "bytes": 4180,
+      "sha256": "b17103dcfcb5297356b5916a211dbe9679ca54433edf14d8365cd83e430ec8b8",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/governance-span-mock-20260928-081940.json",
+      "category": "evidence",
+      "bytes": 2745,
+      "sha256": "cc2d4b61854f65a99516505eb253ac0d746bfe1918d7cddd9aa748fcc971e75e",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/nitro-span-restart-20260928-084752.json",
+      "category": "evidence",
+      "bytes": 3186,
+      "sha256": "b7f57cfa5c1a516b7b45280dad37d88f3604323b465632fc5033585642ad016b",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/production-participants-refresh-20260928-085449.json",
+      "category": "evidence",
+      "bytes": 5501,
+      "sha256": "260d0c1fa839363966326cfde5313ce9d9f52c4ffac5838f6e86afab4ed406a8",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/production-refresh-20260928-085449.json",
+      "category": "evidence",
+      "bytes": 4906,
+      "sha256": "a7814975be1bc1a6770e32fa20fd62b3f9feefa81e2998a2b4fc9ff26f7cc9c8",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/production-window-prep-20260929-082849.json",
+      "category": "evidence",
+      "bytes": 1239,
+      "sha256": "961d4193729e2a146d32685a886f27a56fc675d8d2cf23a970a53c6be316ef38",
+      "description": "保存状态：preparation_inventory_passed"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-atomic-mock-20260928-133005.json",
+      "category": "evidence",
+      "bytes": 2347,
+      "sha256": "18538358d3ee20e1fa59ed06eb66120cfd653adcd9d7318c50c928af851f6cbf",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-candidate-20260928-090119.json",
+      "category": "evidence",
+      "bytes": 2474,
+      "sha256": "5703bca67475857a02388fe3e9768e643c1dcbb7be740371427224e03c21edf5",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-followup-20260928-134148.json",
+      "category": "evidence",
+      "bytes": 1817,
+      "sha256": "a1051e8e8ee08e1f1e3c65ef3fe7d224ea134e7d90ca4341fcd52dc9158ded98",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-fork-20260928-090354.json",
+      "category": "evidence",
+      "bytes": 1499,
+      "sha256": "73f0a465cdf07e5145a9a8a8d39d4f01813ab8d4858da7ac5b9a9f58dbd361a3",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-nitro-restart-20260928-231557-partial.json",
+      "category": "evidence",
+      "bytes": 2702,
+      "sha256": "708d75bdbdee9a08ba800ccd12979f29803c9cc89a65ac60681de4c5a86a8a42",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-participants-20260928-090354.json",
+      "category": "evidence",
+      "bytes": 5501,
+      "sha256": "02386b00718e6eecade4e0f806c2f059adeac7ebc33ce1d76fbc609667717e13",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-rejoin-mock-20260928-140344.json",
+      "category": "evidence",
+      "bytes": 2656,
+      "sha256": "f7fbe106e4cf80618d6ddc927d8749f157a835187e3fe85bf9d7c21a5c6d5d21",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-replay-20260928-090354.json",
+      "category": "evidence",
+      "bytes": 1368,
+      "sha256": "132f62e0b8a4d850be57b9d9094f46b537a713e2c1412c921aa12c4fba41c596",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-runtime-db-precheck-20260928.txt",
+      "category": "evidence",
+      "bytes": 6622,
+      "sha256": "b85c9a1221549524e5124d10208539f5424f2ef10c63444b896d04e1862d777c",
+      "description": "本地保存的报告、审阅包与回执"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-span-20260928-090354.json",
+      "category": "evidence",
+      "bytes": 2068,
+      "sha256": "2936af2878a5a4e40d898ab40e0a99c8ac8003db2f06b35b3977d8ae13a33211",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-span-replay-20260928-091247-passed.json",
+      "category": "evidence",
+      "bytes": 1764,
+      "sha256": "d041c7fb3b9aa384557aa45ff9bbd28d198b7d5cea7fda622596190595e69b34",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-span-replay-20260928-091247-started.json",
+      "category": "evidence",
+      "bytes": 1873,
+      "sha256": "c3b80f5a9702ab4ceecea114884195e7125571ac83a83b9abee509233a63fc54",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/reported-results/three-staker-withdrawals-20260929-004616-partial.json",
+      "category": "evidence",
+      "bytes": 1152,
+      "sha256": "08861ef6cb9bbd92d5890b679f95ed2d5393d58d58b08861ba796bc833816963",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/review-presign-154302.py",
+      "category": "evidence",
+      "bytes": 3858,
+      "sha256": "d9df26ab3f98454edc9459f51a4eb9a971827e855eacf8c7680ac38ccbf66b08",
+      "description": "Offline re-encoding and EIP-712 check of pasted production proposal imports."
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-child-code.json",
+      "category": "evidence",
+      "bytes": 381,
+      "sha256": "5f4541b4a8cd9ce8a8510ffdfffa9ca847439fb254f70af5fdda099d1df3840f",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-fbb37-request.json",
+      "category": "evidence",
+      "bytes": 1124,
+      "sha256": "40de5b132fa2ac1ad14d5f03b5ac30d8298a270343e82794b0e99c27964f6575",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-fbb37-response.json",
+      "category": "evidence",
+      "bytes": 1450,
+      "sha256": "bd2f83c82f10cef11f90063de6bcbaf4b5b577559b404fca9f167b7747204098",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-latest-request.json",
+      "category": "evidence",
+      "bytes": 1124,
+      "sha256": "1401416656cbc2da3c0b5e2b3d30b344f654c05635cc2bff920f963fa4767d2c",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-latest-response.json",
+      "category": "evidence",
+      "bytes": 404,
+      "sha256": "a712fd04b2b8c4a7adce28575899387d6cc323d9990b5122e3a143d7af39847b",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-request.json",
+      "category": "evidence",
+      "bytes": 1072,
+      "sha256": "1e758b27b8ec34f3f1bb4ff42e2cfa04dd7dc848d5346117e099bad6d336288c",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-response.json",
+      "category": "evidence",
+      "bytes": 353,
+      "sha256": "cd5e7e4c1f014f1ec98240a731c1af628b3faa64b7a22262c6841d7c4631da4f",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/DRAFT-pause.safe.json",
+      "category": "evidence",
+      "bytes": 838,
+      "sha256": "d25f2cca92786a841d33190f5a454195b1bca116231131faa74b663b0836a21e",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/PAUSE-CONTENT-REVIEW.md",
+      "category": "evidence",
+      "bytes": 4397,
+      "sha256": "a134694cb8b913393a67c22ea5c3c48834f5d4f33b8f2bcf5933f761bdfab47d",
+      "description": "暂停交易专项复核结果"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/README.md",
+      "category": "evidence",
+      "bytes": 2804,
+      "sha256": "4db183a37905850fc66c3acd5ca13e0ade4139be801cdd80cc417029cddab031",
+      "description": "官方Safe Global UI：治理交易准备"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-1/summary.json",
+      "category": "evidence",
+      "bytes": 451,
+      "sha256": "958eea87fe0158c0750be82a0a76e9c2921656aec06b758ff9a5a3dced3cd0ed",
+      "description": "保存状态：review_stopped"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-2/live-inventory.json",
+      "category": "evidence",
+      "bytes": 3864,
+      "sha256": "e440587f9401135aaf7683d5a0503dc0ea1097d502456966723fc9f4c50846dd",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-2/summary.json",
+      "category": "evidence",
+      "bytes": 4147,
+      "sha256": "912b927addc36728d9ed25c41b9bf9a09f085d6202dd03f913c9965991c10bf7",
+      "description": "保存状态：review_stopped"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-3/live-inventory.json",
+      "category": "evidence",
+      "bytes": 3864,
+      "sha256": "0f9c886482be349d18d386894d630795affcf27fff574dffac0078c0da398865",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-3/queue-response.txt",
+      "category": "evidence",
+      "bytes": 74,
+      "sha256": "b1194d8fa47983af17c4faa54009e317279671a51f1f5880e158490e775e9074",
+      "description": "本地保存的报告、审阅包与回执"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-3/receipt-and-queue-review.json",
+      "category": "evidence",
+      "bytes": 859,
+      "sha256": "ef28493d70f3ca3576ae260d92fbb3a1130780d6fb79dcddd308581f7a085fe6",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-3/steps.json",
+      "category": "evidence",
+      "bytes": 13057,
+      "sha256": "5b927bd6d802cf34e943ff639e5033f33b6747e99583182ece0c228711faada8",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/live-pause-audit-3/summary.json",
+      "category": "evidence",
+      "bytes": 4671,
+      "sha256": "84dd985ff2d74f6d3952062c86409af1fd09d1df8104ece423d2b06b1fc54398",
+      "description": "保存状态：pause_review_and_fork_passed"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/safe-ui-prep-20260929/review.json",
+      "category": "evidence",
+      "bytes": 1522,
+      "sha256": "aca4c5c09708e51c0c6ad58cc8f904d64cb36e9045943887fd4208bcfb84c506",
+      "description": "保存状态：offline_draft_prepared"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/stake-details-decoded.json",
+      "category": "evidence",
+      "bytes": 772,
+      "sha256": "fd99673dc1adc0d62e265f7577bbfe259c6148b06ac323e1a080826a3949b468",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/stake-details-request.json",
+      "category": "evidence",
+      "bytes": 1183,
+      "sha256": "891bf3c6e2c5666d032cc84123c6f57c03de7b417d5fd3d466e1a6f5ff91523c",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/stake-details-response.json",
+      "category": "evidence",
+      "bytes": 3239,
+      "sha256": "fbb46894d92d61ba17ccd977184e77babad4d61663f6015f2666566bb5fbb13d",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/stakes-request.json",
+      "category": "evidence",
+      "bytes": 1302,
+      "sha256": "3fd7e1a668b3c5b95a9c81aa8b4d1a0213ef36868aa2d814c3295d095c44554b",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/stakes-response.json",
+      "category": "evidence",
+      "bytes": 826,
+      "sha256": "7182868a97a9c674163e3a4e4f98a6bf0ba875b3cf2c3c886e90421d9253c2fa",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package/REVIEW.md",
+      "category": "evidence",
+      "bytes": 1341,
+      "sha256": "f6bbca3ec92d6fdcd849572b2a29ea544796d397ecd8f391d09200f75b53784f",
+      "description": "recovery：需审阅，程序没有广播能力"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package/checksums.json",
+      "category": "evidence",
+      "bytes": 262,
+      "sha256": "c5143c89e2c650d9b3d706d31637e5c9e9fbd524003bce5a1cca6aa89949b039",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package/package.json",
+      "category": "evidence",
+      "bytes": 14956,
+      "sha256": "570730638d619c1943d05ad648dfc7f9783e253908c165ef3158cd4bc9673a7f",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package/safe-import.json",
+      "category": "evidence",
+      "bytes": 3336,
+      "sha256": "fa1f1681fc8682431100be90092ef6652faa98d892c92c121d1485c5913ca666",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-2/REVIEW.md",
+      "category": "evidence",
+      "bytes": 1341,
+      "sha256": "f6bbca3ec92d6fdcd849572b2a29ea544796d397ecd8f391d09200f75b53784f",
+      "description": "recovery：需审阅，程序没有广播能力"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-2/checksums.json",
+      "category": "evidence",
+      "bytes": 262,
+      "sha256": "8518df31efd8669572c7ea7ac82b76c12a4f142e8eb713994a2fe962d107be04",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-2/package.json",
+      "category": "evidence",
+      "bytes": 14956,
+      "sha256": "6394ff3b3a740b4452811d12b73e4952493d01eb2987c5766a6ced0092c3ce5d",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-2/safe-import.json",
+      "category": "evidence",
+      "bytes": 3336,
+      "sha256": "432008c6a36eb90d311bc7a783619721c92a208996500715d370bdc35ff73819",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-3/REVIEW.md",
+      "category": "evidence",
+      "bytes": 1341,
+      "sha256": "31abd0247850689d057f8c9e26c0acbadf40ba14f578b41f62f754613c638d94",
+      "description": "recovery：需审阅，程序没有广播能力"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-3/checksums.json",
+      "category": "evidence",
+      "bytes": 262,
+      "sha256": "7fbd3d349797ecd7d773736b88ac5056627f6f0fbbaf85e533a235e89662b3a4",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-3/package.json",
+      "category": "evidence",
+      "bytes": 14957,
+      "sha256": "b285af803aa985f4d8f86a5530162d9b4c322058a88f68df9f50b780a7763617",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-3/safe-import.json",
+      "category": "evidence",
+      "bytes": 3336,
+      "sha256": "e0d8a7cf9e41aea063971e9d6f8a18d99be6d58e1e19ccf0cb6392fbfdacd568",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-4/REVIEW.md",
+      "category": "evidence",
+      "bytes": 1341,
+      "sha256": "31abd0247850689d057f8c9e26c0acbadf40ba14f578b41f62f754613c638d94",
+      "description": "recovery：需审阅，程序没有广播能力"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-4/checksums.json",
+      "category": "evidence",
+      "bytes": 262,
+      "sha256": "99b3f0ed2ae0c764a18d072f78a435eb68f2595091119545719d53a4442a0266",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-4/package.json",
+      "category": "evidence",
+      "bytes": 14957,
+      "sha256": "2138c4a9bbb755aaaea603d28ccac4d07587179241a17af4c27fafd6b0cfb487",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-contract-package-4/safe-import.json",
+      "category": "evidence",
+      "bytes": 3336,
+      "sha256": "e61595b7bb233fd1043b91a9cceb17c36b593713d35cd78d24c2e82ea5c7cc3e",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/negative-trace.json",
+      "category": "evidence",
+      "bytes": 33064,
+      "sha256": "fe0295d0bca819253d9e3f203ef556efe0892b68df10121ae601f20c672bb77b",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/negative.json",
+      "category": "evidence",
+      "bytes": 11278,
+      "sha256": "297cef2e359519765cfd2752ab748b4971efd645a438740d5996f52eab295e9b",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x0974272bc3f2f6613a4cec5389cfd7564b02e0b760a5d7abe4da495d65a1f3c7.json",
+      "category": "evidence",
+      "bytes": 6243,
+      "sha256": "fec26547b883f968f30842dcd6bcf4b14f6982b84b9e3013532bd32b1d9cf363",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x22d3ca6722556d7f5ec0d2c3098718cfcef14aea6e388b4ba69e80cad026cf15.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "1bedb5ca5e19103368fff42d9e5ad822b9f63d300b800d395ecf29db1cb37a50",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x23df4dc6cc9fbc9ebc5c39da7b5536767b7c3b415d320e755ff350d16efe1b30.json",
+      "category": "evidence",
+      "bytes": 1821,
+      "sha256": "3d6deaa05dbeda8609e12f7aa2d3d1b3d9d17b00c2757450f3742da7ca2c680c",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x2ab62be0f5de95e3172523285ea66a29fd441a344987012ff6181a33c06f2191.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "d4402330dae9c35371a8c2c106bce5eb18d78f4bd57f9beebb6e4cf5231cb7ab",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x33ac5886a4c864916632e2e711793619965263cae31603a651df1e080a4849e4.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "a12d01fc68525e8c130f1f250234cdc6ba67bfc348248cf533f0226b0648093c",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x3950cc085fbc196eaaa6248589f42b1d8654da62ad61d0bbbeba7005cd72f2c5.json",
+      "category": "evidence",
+      "bytes": 1821,
+      "sha256": "3ba106d438fff036ddfb36ab98824705659d0fa96706bdc4bcf2481098fc79d6",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x3d365c494ea0add5dcb4ef44bc72231a3810a4bdfd82dc531d9b94a2c7126cfe.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "1a6e3cf001856494ea6733b968f870af1612d2253dcf66c1a839bdfa4212a3f7",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x49969850fa96d04ba7580743e8a9d8fad2ba55696e8970906825defb5480ecc1.json",
+      "category": "evidence",
+      "bytes": 6243,
+      "sha256": "309372331e8550573e663f497b0953d62484f2fd6e64ee96208ddd8802eddcf3",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x52e97c3dd9ebeaaf83c139bad2c9b3c00c948f08f0c73a692c40c1ec65a71697.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "f3444d495c795911a931b63d1250fc2f705a1fdc00f86f9f702797bfec216c6c",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x683ec56c24910bce4626034ab37cae120d2d19460e1e5213487a588ed5b6680c.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "95c638c25f5b4003f0f150472605d52eff431c734a5404f25ec141237f71402f",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x6e03e8e9cee475e9010228253d52a0c1818fb65bc8d251492c52083dd6159946.json",
+      "category": "evidence",
+      "bytes": 1821,
+      "sha256": "5267edde25b1f8915c75a4005b71e0fbc20d14325a6eec2a382efa3d227bb7d7",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x7e78fdef5ebc7a9e3c73010946640652bf8387d0122516752843d0062c56aa00.json",
+      "category": "evidence",
+      "bytes": 22350,
+      "sha256": "429abc8a451c010868aad1e18e3c174bffc0109f55430b7a3e0f4aebcc13ae60",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x8f59109bab8a4250e5bc00ec0f52dd60de588808736f8ac5beee25b5186a6cac.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "e3119e95afe90036c5ffc4366bd57b853d03f3b2b14ecbd624cbb0a1426057f4",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x95561923f4c52fbe1da790aefe1213b80953ffc676cf0cdd17152411b1f51907.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "a96ecd40096a036fd829bacce6b2f5dccc43a7f6dc044ddf861f657083474e9c",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0x96843e7bcdce975a46ac3b647e3b10a790ebfdb89d0a536cfd75511489ae74f4.json",
+      "category": "evidence",
+      "bytes": 1772,
+      "sha256": "d652899053658969ef0ea7e0d6bee5e237368c881f5dcc4bc20ba4beffba2244",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0xa3ec9912295d664fed65cb74c1d420a06b3dc336d5e4518b6789f66fd48b9667.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "ffae5397f61017084b4dbfafdcf27a4f90ba52db0d691d2e7a5926fa309e0806",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0xbe75eec130057543477b727441c5bb3a2a5758b47113120721dc68ec4079afe4.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "62c334e17510e4cb45c9d11c18688741c9c78deb3f2991203ed83800ec89bf25",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0xd3612687cab715f45ba541fb1b02ba349f709ddc635d0e62c22e2f9556b2895e.json",
+      "category": "evidence",
+      "bytes": 7289,
+      "sha256": "68d13038d0552f23e6504b3ef865063bd9fa30f2f50b96de1f040e73b45e5dda",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/receipt-0xfd7da7ff79036f8129eda03727503b19db703b4a270c98e093936eb67544555f.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "23762a9566e61700efe0c0be15bac6ad850b80603dad64e9427c91adc2d6e6c7",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/refund-test.json",
+      "category": "evidence",
+      "bytes": 564,
+      "sha256": "df41ef88e9dcbd2cd55b783201017d45ffdb5b509eacb79b54e7bc9f579ad4a5",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/resume-test.json",
+      "category": "evidence",
+      "bytes": 7178,
+      "sha256": "30177f537d9b5baabe692eccdd2b8882dc8fe333e3b7998a8e6b86f9cca23596",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/simulation-pause.json",
+      "category": "evidence",
+      "bytes": 7178,
+      "sha256": "4a73e05e85a9da54aa269395ec4d9ec593c039e1626d462eb66141904c624c80",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/success.json",
+      "category": "evidence",
+      "bytes": 26849,
+      "sha256": "746ff5a6dd3d2fb514a4676c0c17fbea98dd1c113b6db50545b8b5600125006c",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-followups/summary.json",
+      "category": "evidence",
+      "bytes": 1326,
+      "sha256": "2235f8a240256912a1c9e3af19a190d8a7b1ccd7ff34778528b847b09c49ea2f",
+      "description": "保存状态：exact_package_fork_passed_with_arbsys_log_shim"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run/summary.json",
+      "category": "evidence",
+      "bytes": 344,
+      "sha256": "ef8a48f3aad2dbcfa67ffc9d4aae13fa37da9664446b83a4f3871e51e706e0f6",
+      "description": "保存状态：stopped"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/negative.json",
+      "category": "evidence",
+      "bytes": 11280,
+      "sha256": "dc62764a84d2eeee02fb71ba55eda1841aaecddf7650cf3ad819709ee0e7eec1",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x040c8dbee233714e0eeaa511e12931e2f710ac3dedd44beebf32fb8894b1e4b4.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "c7243a9ac9af554cd92a3ca4cd34b1e73ee7058095c263f4bed6d4bbff8dc6e1",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x307a63d9bbf3edbeeba355cae62646554beaa98c6a6720b9d9bafa80dfb11963.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "a9404a0df407a6c8f25b465b40d5d2c315695b1cb796e3118e025fedd6eab26a",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x358acb96f9dad0aae497f63a7bfef9de8dbee3c700d781489126f3802dd3df6f.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "73d2fab119e5c12a134e60dadea365dbbbe0a7ad75c4ef76099aec8927179c53",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x424203e37a22a655566e2ca54488568f1819a03cee916d889fc060e8f104bdb4.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "027cca85ea8f67f7ef6882bfff4cf470645e17cb2ac44bab8b04485f21381f86",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x449e419a0a50c25c0fd35e9c03bd4db785401dd894d19bac6ba5a3be81342f87.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "3a406eb62b6a4c0a8fc0d0660c84dea5c572456174bfb02aab7cfeddad84de48",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x68badb1ccc2e110e3b99d4693fc154c3e17f5768656dc3cea152a44347010a70.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "224dca4a14bee14f534a2c1e5f08d421329a2d491b88675d0295f8e7f01e6fa1",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x7458420285a4402a47752dad42ec83c1849542d148f7928e4a30eb55d2d2bd76.json",
+      "category": "evidence",
+      "bytes": 6243,
+      "sha256": "542ee7c1218726fbb2e11f7f4add4f72798a91c4d8d0c2f972921030a77c2c4d",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0x9d4e52dd729bd8fafef3bc4d43ea47acaae570501015d79f1f59ac02d356be95.json",
+      "category": "evidence",
+      "bytes": 1079,
+      "sha256": "d64f0c9aed34ea902fd7f6ade8642285a462606f4a32ed2403d2183c175bd70a",
+      "description": "保存状态：0x0"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0xa2df733ca1c9f3cf4dd764fd430b1723d728593d9ef023412e2b3e5eecaffe72.json",
+      "category": "evidence",
+      "bytes": 7291,
+      "sha256": "76a244e4f521596c5920ff62821d9a233cf34cb9bd3f6f8dbfdff3dc7e5fafb2",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0xa51ae46fcd9b2660ba2535d926c80e6db6a891057fced8c9f24413b32929e4ae.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "3d41332d8f50122dcebe2d192125e84f3a431fb8f1e367adb0c0a2d98d98b509",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0xd1d0f9791cb23fb18f5c72d5e9f993d2f3da5fb3e9de5fd220ce659d76ae13c7.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "a767ec608fda35247985c40ab73a301bc98de93333d5958f7a2d71df6e2730c7",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/receipt-0xd7a0bbd9fbb38338515ceca7d0220b28fdeaf49868c415d5b806c41f232b7b0c.json",
+      "category": "evidence",
+      "bytes": 1772,
+      "sha256": "17227c9b8661a4dad5d16abef8cfcfbc2a73734ced928c6dc257ea8625c6898f",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/simulation-pause.json",
+      "category": "evidence",
+      "bytes": 7178,
+      "sha256": "8110af004db636cd9dc824b0c3bf9c0c3274716a65926856b5097f8cd53c97b6",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-2/summary.json",
+      "category": "evidence",
+      "bytes": 386,
+      "sha256": "9e3134c9e7be4fe4e2114bdc67f6d7ec53f60b5db9fb8d61e9ef998a9aa0220e",
+      "description": "保存状态：stopped"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/negative-trace.json",
+      "category": "evidence",
+      "bytes": 29676,
+      "sha256": "4a366b57a79921082b355ea2092bd59e1b7f883e547444d56e58ce94044998fd",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0x079ff5a25a59da7854f15ede4e83065093acf7eec771286cbbe2ecdab4ba5a73.json",
+      "category": "evidence",
+      "bytes": 6243,
+      "sha256": "b4a25a9e7aaac568a87b291a5a4cace4448f8a8c94d731a78f48acbe650f0719",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0x1f460ea51a335bee0323abb09b4dda63e2c0b6eb5043c1042a410ba79653f3d1.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "7892baef67aff6a3d3afb4246a654b61d6f27665a56cf52d45b616f4de55ca59",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0x305498715b15c34febdb7504df2a070bc5a69e9a207bc6551343eb0c7c4fccc8.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "3aa8617d72eab2d5c7350146d870722f387880c63151175efa9e97297bc7abf3",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0x4a70a322889ec7166ca7c65bb3ce7b733b107b778d032b09e0d7bd5847d5a84c.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "90eea76b2779b3f45dd2538364f3874465484b059bfd51f73ca99bb20a4ddb63",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0x6e97d8cd858dc7a0ca0989b408d2e6bc5407b187cbc7afdbc49c1eeb3c0a355f.json",
+      "category": "evidence",
+      "bytes": 7291,
+      "sha256": "d9fed50e56254f69fded3947991f6e625afb2db5df32242361cfdbe938340eab",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0xa6dc8284a5fe5db61a617d6e1c8588bee92b4c9d0bb5dff2549118fe37c4db58.json",
+      "category": "evidence",
+      "bytes": 1772,
+      "sha256": "599020dc1a170485469037a1be8efc1b8c6cc51bf46eabf21c8739cdde561f82",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0xbb031419c4285826cedb9793b0b1b0a00263700d1bc8c21b2c4035ffac5ea1ad.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "bda977c3b53f21f4b516bc1fe5af3c28981b6ba537c3823c2fa7682d22d61e08",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/receipt-0xcf191156d33488de4134ff968da0ab08bed537c2146540d82d47e149417ef330.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "733ac521f4c9b69d57d737d31c7ae9988976f13e0eb79cd2d883199ddbcc6fee",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/simulation-pause.json",
+      "category": "evidence",
+      "bytes": 7178,
+      "sha256": "a716c313f5f8759887645e458c3cef874a45ad8e218ebcafb9432367fd379ae8",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-3/summary.json",
+      "category": "evidence",
+      "bytes": 369,
+      "sha256": "8bef0302f372291240910baa2b76ee3a37f7db27eae4558db010924d0d70ee8e",
+      "description": "保存状态：stopped"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/negative-trace.json",
+      "category": "evidence",
+      "bytes": 33064,
+      "sha256": "fe0295d0bca819253d9e3f203ef556efe0892b68df10121ae601f20c672bb77b",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/negative.json",
+      "category": "evidence",
+      "bytes": 11278,
+      "sha256": "b8a6fdcd34eff62d755228e0b94106020a7f4aed543c59be928d8876a50ab161",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x22d3ca6722556d7f5ec0d2c3098718cfcef14aea6e388b4ba69e80cad026cf15.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "6805014ad01c74d68c6cf45d3152ed84377370efd7afb6d742760088af18fa51",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x2ab62be0f5de95e3172523285ea66a29fd441a344987012ff6181a33c06f2191.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "331f04657a9b27d64fd4eb5f56eeaf1fdf0f54ce1ba686d447c31de98f4c87bc",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x33ac5886a4c864916632e2e711793619965263cae31603a651df1e080a4849e4.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "09e66d065d40e7fa0222f46199e5101806b4fc89e31cb260b3fae24e4e314251",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x49969850fa96d04ba7580743e8a9d8fad2ba55696e8970906825defb5480ecc1.json",
+      "category": "evidence",
+      "bytes": 6243,
+      "sha256": "fef39e74aadc254da207b73f75bab56616cdb32cdd093aa10c0d09616f58fafe",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x7e78fdef5ebc7a9e3c73010946640652bf8387d0122516752843d0062c56aa00.json",
+      "category": "evidence",
+      "bytes": 22350,
+      "sha256": "7e7463114fbb0db8bd8186f9848bb58e89f955fe21d1f79385b39e0587e7e9c4",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x8f59109bab8a4250e5bc00ec0f52dd60de588808736f8ac5beee25b5186a6cac.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "19ccf383444f16df7c9a356285f9f3b1f917c10c9490fa1513c5340710c3f78a",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x95561923f4c52fbe1da790aefe1213b80953ffc676cf0cdd17152411b1f51907.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "77034b80628a9b768e3030999de4f2010816ab5c50a6c2c1a43d1faf1035df47",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0x96843e7bcdce975a46ac3b647e3b10a790ebfdb89d0a536cfd75511489ae74f4.json",
+      "category": "evidence",
+      "bytes": 1772,
+      "sha256": "d652899053658969ef0ea7e0d6bee5e237368c881f5dcc4bc20ba4beffba2244",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0xa3ec9912295d664fed65cb74c1d420a06b3dc336d5e4518b6789f66fd48b9667.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "4e8f67b8a8795a54714d88e120206742cfcaf45b259fd5b41a307555ba4a85af",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0xbe75eec130057543477b727441c5bb3a2a5758b47113120721dc68ec4079afe4.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "62c334e17510e4cb45c9d11c18688741c9c78deb3f2991203ed83800ec89bf25",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0xd3612687cab715f45ba541fb1b02ba349f709ddc635d0e62c22e2f9556b2895e.json",
+      "category": "evidence",
+      "bytes": 7289,
+      "sha256": "d7e7acfc6ad8fd1e76ee8c3dd8f15b20b8b0e1f3c8bb85e7c4d70743c4dc4d34",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/receipt-0xfd7da7ff79036f8129eda03727503b19db703b4a270c98e093936eb67544555f.json",
+      "category": "evidence",
+      "bytes": 1771,
+      "sha256": "988085a1e8a6d397e231a56b1700d3583f435e2a24b69ab5815daf88c7e3789d",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/simulation-pause.json",
+      "category": "evidence",
+      "bytes": 7178,
+      "sha256": "8a30ac6a9768878baf3be2ce72825f6b69d70865340855e5d18013b137f4292d",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/success.json",
+      "category": "evidence",
+      "bytes": 26849,
+      "sha256": "f432e256e839f70954a7c8299cdd231edd7c7c953c61a2fa9e644b82af8963df",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/current-fork-run-4/summary.json",
+      "category": "evidence",
+      "bytes": 1252,
+      "sha256": "83aa48f4cc6bb4e55d4ede2a965d65152807c0b76f5b7753f8aa6f6ba0170e0f",
+      "description": "保存状态：exact_package_fork_passed_with_arbsys_log_shim"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/toolkit-v2-validation/fast-safe-live.json",
+      "category": "evidence",
+      "bytes": 621,
+      "sha256": "61153bf46e007ec808b2c76e910786e533989704ab848e59c4708ae909f465f7",
+      "description": "保存状态：fast_safe_identity_passed"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/withdrawal-fixture-three/inspect-spent.py",
+      "category": "evidence",
+      "bytes": 980,
+      "sha256": "684d802dd626b269c43b4222a22247894da094db2df5dd5420e204686f5e2e93",
+      "description": "本地保存的报告、审阅包与回执"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/zombie-cleanup-57531e3c/check.py",
+      "category": "evidence",
+      "bytes": 4242,
+      "sha256": "6bc5fbc72af3bae31e4aa7d3e626d19ae642ccd0098ee7ca5402c85f11690545",
+      "description": "Read-only verification of cleanup receipt and a pinned current parent state."
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/zombie-cleanup-57531e3c/raw-state.json",
+      "category": "evidence",
+      "bytes": 5232,
+      "sha256": "d2cdcb6e37f2c4844fb899e9a34fa129de802abfe6ffeb548e8c0cb8f43244d9",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/zombie-cleanup-57531e3c/receipt.json",
+      "category": "evidence",
+      "bytes": 1135,
+      "sha256": "39bfa3f1c7ecbc042a232a8cd7d07a01d31dd28e7e15bdc7eb9c22b1fdc3fc20",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/zombie-cleanup-57531e3c/summary.json",
+      "category": "evidence",
+      "bytes": 2074,
+      "sha256": "9cf1ae53e708081821e2886eca4595d448b228b10162c2ff7f45615ee45a266d",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/evidence/zombie-cleanup-57531e3c/transaction.json",
+      "category": "evidence",
+      "bytes": 859,
+      "sha256": "e92fbaae0fcd0963096b7b7696003272c03336122c73a96c0f47f9164d99ef37",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/README.md",
+      "category": "rehearsal",
+      "bytes": 1095,
+      "sha256": "ee6c64fa9669f86d331a14023de3b563bec60d7e10b147e8c6c8aa74558ee643",
+      "description": "历史演练与工具包"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/mock-validator-recovery.py",
+      "category": "historical",
+      "bytes": 14038,
+      "sha256": "dd991d6adbaf4d472b33c6c85bb4f6d56f931ffe218fff3e47d9ab0ce2ec7c70",
+      "description": "Contract-only recovery rehearsal. Starts a private Anvil; NEVER signs production transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/rehearse-atomic-recovery.py",
+      "category": "historical",
+      "bytes": 8970,
+      "sha256": "2bc03894043ef0140b11eeb20fe4dd01c84f2a3bb97938305d79ea3521f847fe",
+      "description": "Historical private Anvil only: Safe batch success and late-failure rollback."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/rehearse-atomic-span-recovery.py",
+      "category": "historical",
+      "bytes": 6787,
+      "sha256": "a9ecafa402ec3488416a633503ffddd1485ab42be4fdd00f10c9effc9c173d69",
+      "description": "Fixed historical Anvil: atomic recovery with the audited 7838 position span."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/rehearse-safe-recovery.py",
+      "category": "historical",
+      "bytes": 7568,
+      "sha256": "217e224763f80de2938cbaf68a156f53655d4d126450906741987671f123dd7b",
+      "description": "Local fork only: recovery via Safe approveHash + execTransaction, no production keys."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/rehearse-two-staker-rejoin.py",
+      "category": "historical",
+      "bytes": 22235,
+      "sha256": "b0a904af45f2e26a3ac1e13eed735fbbd2b05424eda09f88798afe2d7634b072",
+      "description": "Historical Anvil-only test: refund both known stakers, rejoin, ordinary confirm."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/replay-retained-message-span.py",
+      "category": "historical",
+      "bytes": 11337,
+      "sha256": "7e150efdbf6c0b7ebcefc7bb9948c8a1f38896ba6ed6c32ffb3315f08c976028",
+      "description": "Sequential, resumable replay of the fixed local A-prime -> B interval."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/resume-original-staker-current-fork.py",
+      "category": "historical",
+      "bytes": 10650,
+      "sha256": "52fddbc2cc1a20e336d091acfac08ac811b9334b6ed210d7475a57d6380f3da1",
+      "description": "Continue the specific paused 18549 Anvil: Safe resume, original EOA restake,"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/atomic-span-recovery-tools/validator-recovery-evidence/ATOMIC-SPAN-MOCK.md",
+      "category": "historical",
+      "bytes": 2828,
+      "sha256": "a2941f41547d292f9ec89faaeff2aeff88bc8cd0a9b000e4487960b8c0760abd",
+      "description": "7838 原子恢复演练"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/original-staker-rejoin-tools/README.md",
+      "category": "historical",
+      "bytes": 1965,
+      "sha256": "449added7948f45312d66bf5b82ced6b818b603e2e46ec5989d36f3fe217d0fd",
+      "description": "原账户退款后重新质押：第二个 Anvil 测试"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/original-staker-rejoin-tools/run.sh",
+      "category": "historical",
+      "bytes": 420,
+      "sha256": "579b819bb071a660bca9e1a873c06ee55d40084c9c0a004d2b0df479dc068b6f",
+      "description": "早期工具副本与历史说明"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/original-staker-rejoin-tools/test-original-staker-rejoin.py",
+      "category": "tests",
+      "bytes": 7566,
+      "sha256": "0f4ace8cdc5633b71610b270f88cf4b124529d12703aa4aa0044742a01927eaf",
+      "description": "Replay a Nitro-created assertion from a refunded original account on a SECOND Anvil."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/MANIFEST.sha256",
+      "category": "historical",
+      "bytes": 625,
+      "sha256": "20b89f637d8bf118e29ed6720c516fe52617a0df3763ca0d5153aa55a36fda5b",
+      "description": "早期工具副本与历史说明"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/RUNBOOK.md",
+      "category": "historical",
+      "bytes": 10177,
+      "sha256": "288456c18c9fdd7f34ec62c8bc32e495463e0f3a1c0e30c336f85a7366e07948",
+      "description": "Deriw 三节点恢复：维护准备包"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/inspect-recovery-operator.py",
+      "category": "historical",
+      "bytes": 8103,
+      "sha256": "6ce2a23ecb8bd1d4eb7c6b13e10444b55e5c26f7e6eadd9f143a11184b489b4b",
+      "description": "Portable read-only inventory for a selected recovery validator operator (standard library only)."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/operator-roster.json",
+      "category": "historical",
+      "bytes": 2092,
+      "sha256": "c32827145b28c25480332f1f4114ee4732ff1e9c4940d619d44c4420441300f0",
+      "description": "保存状态：template_not_executable"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/prepare-window.py",
+      "category": "historical",
+      "bytes": 12750,
+      "sha256": "d9ac5c267508d096a7580c6b6a829b09afdbc88a9ab84ba4d7c432d57f607f50",
+      "description": "Collect a pinned read-only inventory and a non-signable pause review draft."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/probe-production-participants.py",
+      "category": "historical",
+      "bytes": 7487,
+      "sha256": "9de5ec2b2fe5b8c30ed2388229d16965a56a181a841067781f37a2729e1f63f8",
+      "description": "Pinned read-only production staker, pending-node and Safe inventory. No signing."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/probe-recovery-authority.py",
+      "category": "historical",
+      "bytes": 8246,
+      "sha256": "107ed710c49463af286567bb7edf8a0ed32fcfd0e051ac09208784bbe160748e",
+      "description": "Read-only Rollup proxy inventory. No keys, signing or transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/production-recovery-kit-20260929/test_prepare_window.py",
+      "category": "tests",
+      "bytes": 4603,
+      "sha256": "b62b46769ccd7c859c66c03499b119cc1acc2cde89db596e17b316bdd9eb5e47",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/validator-recovery-mock/VALIDATOR-RECOVERY-MOCK.md",
+      "category": "historical",
+      "bytes": 5853,
+      "sha256": "91075a0213070472bb4bdeecd6c0180f83f5cac7e1856d632ebd934943d08544",
+      "description": "8149 validator 恢复演练"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/validator-recovery-mock/mock-validator-recovery.py",
+      "category": "historical",
+      "bytes": 13015,
+      "sha256": "82811c52d1f980f23ee93965f45500fc299cc5c575b94894e9627470e2385caf",
+      "description": "Contract-only recovery rehearsal. Starts a private Anvil; NEVER signs production transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/validator-recovery-mock/prepare-recovery-fork.py",
+      "category": "historical",
+      "bytes": 9807,
+      "sha256": "30678d56457aff2ccb1b1d62d7e6d4768bd53bd3a840ed64d32e20569bab9bfc",
+      "description": "Collect a recovery checkpoint for fork analysis. Read-only; no signing or transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/validator-recovery-mock/probe-recovery-authority.py",
+      "category": "historical",
+      "bytes": 8246,
+      "sha256": "107ed710c49463af286567bb7edf8a0ed32fcfd0e051ac09208784bbe160748e",
+      "description": "Read-only Rollup proxy inventory. No keys, signing or transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/validator-recovery-mock/run-validator-recovery-mock.sh",
+      "category": "historical",
+      "bytes": 1332,
+      "sha256": "15d5d993ca7a29134abb12975376b978a593d9ec156f52d6e2067a5297b1b1a9",
+      "description": "早期工具副本与历史说明"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/packages/validator-recovery-mock/test-mock-validator-recovery.py",
+      "category": "tests",
+      "bytes": 5121,
+      "sha256": "abd5a12a92bc5a785926fd0fcbe0ed9e0e84a37ba7edaca592300bab94ffbd66",
+      "description": "Local tests of rehearsal guards and postconditions; does not access any RPC."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/fixtures/withdrawal-145d72e9/receipt.json",
+      "category": "tests",
+      "bytes": 9812,
+      "sha256": "a14cb908cc29d60e0f3f8a434232cee4a820638be8b04d70166e3c3294b36253",
+      "description": "保存状态：0x1"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-atomic-span-recovery.py",
+      "category": "tests",
+      "bytes": 4446,
+      "sha256": "43a7adfea7bcc79627c39c3d43d127013d775271d84f609a239bbbedba2e8b49",
+      "description": "Offline checks for parameter capture, evidence guards and result handling."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-final-roles-fast-confirm.py",
+      "category": "tests",
+      "bytes": 4491,
+      "sha256": "1f597084084dfca7d3bb86591eb7f3d787d80b49afa6567e0b5bc3618801414c",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-final-validator-prep.py",
+      "category": "tests",
+      "bytes": 2827,
+      "sha256": "bff3d4463aaa1ed1b9a8136b9c4e59f7d8f2072c99c99cc8f3deb0fcd3b69dda",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-mock-validator-recovery.py",
+      "category": "tests",
+      "bytes": 5140,
+      "sha256": "011d92127d9fac27cfa1efc9f6304cc0563188197aae830de2595f2bb8ebbe33",
+      "description": "Local tests of rehearsal guards and postconditions; does not access any RPC."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-nitro-span-restart.py",
+      "category": "tests",
+      "bytes": 4605,
+      "sha256": "774aa320777b7dd0176e50bf4b31754865552ed512ac068c294cddb1eb1cf0a3",
+      "description": "Offline runtime adapter guards; no Docker, RPC or node DB access."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-original-staker-rejoin.py",
+      "category": "tests",
+      "bytes": 7566,
+      "sha256": "0f4ace8cdc5633b71610b270f88cf4b124529d12703aa4aa0044742a01927eaf",
+      "description": "Replay a Nitro-created assertion from a refunded original account on a SECOND Anvil."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-recovery-message-span.py",
+      "category": "tests",
+      "bytes": 2066,
+      "sha256": "1965612c285b2cd6bb3eea248efaf6e9eeebf8ec731ca1cc2c48d82eecf84f14",
+      "description": "Offline boundary/guard checks; no RPC access."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-retained-message-span.py",
+      "category": "tests",
+      "bytes": 5152,
+      "sha256": "eca4062e8080ce10a9ad61aac591e38de89c7303aa49e8d5c759857550fae5f4",
+      "description": "Offline end-to-end resume/failure checks with deterministic RPC fixtures."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-three-staker-atomic.py",
+      "category": "tests",
+      "bytes": 3368,
+      "sha256": "fd6041f01d35635ca1bf75cf1e938502275c7e18903e745139db4c676bc212f9",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-three-staker-followup.py",
+      "category": "tests",
+      "bytes": 3728,
+      "sha256": "c68b8b6ab639aac02421e3c22121470abc6598e1be292c5a5339b46e2ba2a1cc",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-three-staker-nitro-restart.py",
+      "category": "tests",
+      "bytes": 4216,
+      "sha256": "2017f06e5af31a55e2fb2f5ae88e2bb796fd15b9e5fa5b45d773c59829275998",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-three-staker-rejoin.py",
+      "category": "tests",
+      "bytes": 3647,
+      "sha256": "baaed21c12137e248e5e985caed6f3467031d05b15b11b83a7389c757c0bce15",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-three-staker-span.py",
+      "category": "tests",
+      "bytes": 3195,
+      "sha256": "fe435ff1b7f113c7ee22d7d7490f921259463041083543da3c4eb532d1a08fa7",
+      "description": "Offline pinned fixture / first-message / resume regression checks."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-three-staker-withdrawals.py",
+      "category": "tests",
+      "bytes": 2830,
+      "sha256": "ff76877a2ee231a92416721fb87eb135f62b9346dadb689ca937550f00cc7f88",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tests/test-two-staker-rejoin.py",
+      "category": "tests",
+      "bytes": 7514,
+      "sha256": "5614a42d6a1ad3067a2a15141321cf00f1fe446d37c796e3ef705379853432a5",
+      "description": "Offline guard/ABI tests. No RPC, keys, Docker or node database access."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/export-native-input.py",
+      "category": "replay",
+      "bytes": 1900,
+      "sha256": "3583ceab5e9ad107e430b2040876c019a4b892d9bc83f45a4fc5314bf82e8d5a",
+      "description": "Export the saved single-batch, Keccak-only case for cmd/replay native mode."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/mock-validator-recovery.py",
+      "category": "rehearsal",
+      "bytes": 14038,
+      "sha256": "dd991d6adbaf4d472b33c6c85bb4f6d56f931ffe218fff3e47d9ab0ce2ec7c70",
+      "description": "Contract-only recovery rehearsal. Starts a private Anvil; NEVER signs production transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/pack-candidate-fork.py",
+      "category": "rehearsal",
+      "bytes": 5868,
+      "sha256": "f7b86666273721324b40648c80aa63da30832d5290ab430a1dbf371b32e264af",
+      "description": "Build a pinned fork snapshot from collected candidate and replay evidence; read-only RPCs."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/prepare-recovery-fork.py",
+      "category": "rehearsal",
+      "bytes": 9835,
+      "sha256": "c0439493c6f641b33f1a46fd7005445bcdeaf12aacbc63dad4c6cecc7d22e542",
+      "description": "Collect a recovery checkpoint for fork analysis. Read-only; no signing or transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-atomic-recovery.py",
+      "category": "rehearsal",
+      "bytes": 8980,
+      "sha256": "38fca3244d64852de13e3d119a733045e8446921c8ab376ac282b8a117638228",
+      "description": "Historical private Anvil only: Safe batch success and late-failure rollback."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-atomic-span-recovery.py",
+      "category": "rehearsal",
+      "bytes": 6787,
+      "sha256": "a9ecafa402ec3488416a633503ffddd1485ab42be4fdd00f10c9effc9c173d69",
+      "description": "Fixed historical Anvil: atomic recovery with the audited 7838 position span."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-final-roles-fast-confirm.py",
+      "category": "rehearsal",
+      "bytes": 16933,
+      "sha256": "280470c91db780b7f9638ffcd547b4ccacf5e5eea75ffcf711387510337fc114",
+      "description": "Historical owned Anvil: retire d38e, stake 65fa/5cda/21d4, test 3/3 fast Safe."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-nitro-autosubmit.py",
+      "category": "rehearsal",
+      "bytes": 27938,
+      "sha256": "08da917befc5b3096d3a3840a14fdc8cd92a98278890af88a15a6610ea74e57f",
+      "description": "Fresh historical Anvil + Nitro MakeNodes with a NEW disposable signing key."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-nitro-span-restart.py",
+      "category": "rehearsal",
+      "bytes": 5733,
+      "sha256": "a4dac51b0e08d68ec8cd4d73adc933dac633801194b2a653b9c830c6b06fb28f",
+      "description": "7838 governance + Nitro signing and graceful restart, historical fork only."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-paused-recovery.py",
+      "category": "rehearsal",
+      "bytes": 6343,
+      "sha256": "ef9d5716106d6a48a2b667fc47e5ddaf865ac6facadc3995691fcc25e95a42da",
+      "description": "Owned local Anvil only. Stop recovery before resume; never opens a validator database."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-safe-recovery.py",
+      "category": "rehearsal",
+      "bytes": 7568,
+      "sha256": "217e224763f80de2938cbaf68a156f53655d4d126450906741987671f123dd7b",
+      "description": "Local fork only: recovery via Safe approveHash + execTransaction, no production keys."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-three-staker-atomic.py",
+      "category": "rehearsal",
+      "bytes": 7194,
+      "sha256": "746e5889edce2d55b71961845cdec76e92a3caab0c855f59da8f38954cd73f1b",
+      "description": "Pinned three-staker Anvil rehearsal; no Docker or production transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-three-staker-nitro-restart.py",
+      "category": "rehearsal",
+      "bytes": 28443,
+      "sha256": "709cd6ba4efe4aee7ae32662da83c17d1aa644edc917022f681922b4417fe606",
+      "description": "Three-staker historical atomic recovery + Nitro signing and graceful restart."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-three-staker-rejoin.py",
+      "category": "rehearsal",
+      "bytes": 10085,
+      "sha256": "7a53ae6dbb95696813a997256b1f6c434142281869c2d969cb030be07b0ecf70",
+      "description": "Owned historical Anvil: atomic recovery, resume, three refunds/rejoins, normal confirmation."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-three-staker-withdrawals.py",
+      "category": "rehearsal",
+      "bytes": 11228,
+      "sha256": "f082962d44671796a3f446412777414f79e1faa036c78b3e42b05a56d30dab38",
+      "description": "Historical fork: spent preservation, natural unspent payment, duplicate rejection."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-two-staker-rejoin.py",
+      "category": "rehearsal",
+      "bytes": 22255,
+      "sha256": "b818c032abd67778fb42bb74f715adf3c2082fa97f20d942ebb4721a671b8172",
+      "description": "Historical Anvil-only test: refund both known stakers, rejoin, ordinary confirm."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/rehearse-withdrawal-recovery.py",
+      "category": "rehearsal",
+      "bytes": 12227,
+      "sha256": "ed889b9781fab0efc5f7a84e2db19a3b2a679957b1a337e4385ead11b45a559b",
+      "description": "Fixed-candidate local fork withdrawal tests. Never broadcasts to production."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/replay-production-candidate.py",
+      "category": "replay",
+      "bytes": 4784,
+      "sha256": "4802813c751ff88b21644777cf09ce29bc9e6434b26bfd24427cd2938d0bac94",
+      "description": "Replay the collected candidate message via local arbdebug; never send transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/replay-retained-message-span.py",
+      "category": "replay",
+      "bytes": 11337,
+      "sha256": "7e150efdbf6c0b7ebcefc7bb9948c8a1f38896ba6ed6c32ffb3315f08c976028",
+      "description": "Sequential, resumable replay of the fixed local A-prime -> B interval."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/replay-three-staker-followup.py",
+      "category": "replay",
+      "bytes": 7306,
+      "sha256": "948fb36fcfe51b3ea401305c3bced47d47e4a1d9e6d188f80fb7f6a647ca2e94",
+      "description": "Replay B to the fixed parent inbox boundary for the next runtime rehearsal."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/replay-three-staker-span.py",
+      "category": "replay",
+      "bytes": 1302,
+      "sha256": "ba75dbb3f2202ce89abdb02e3c563e0f211d4413629ccfbdc66889b0c4c347bb",
+      "description": "Replay the pinned 10578-message local A-prime to B interval; no transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/resume-assertion-path.py",
+      "category": "rehearsal",
+      "bytes": 8976,
+      "sha256": "db3ed2c79093d8a559fd9be99aef62c04dc278ce6eeb829b99f7f90ba0dd0196",
+      "description": "Validate a contiguous local message path with one WASM root, stopping at any mismatch."
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/resume-original-staker-current-fork.py",
+      "category": "rehearsal",
+      "bytes": 10660,
+      "sha256": "cb54a112ebcf50aaaf6b1da633ebf7ba7bdda81832fe3db4b7cfc3e1b0bc127a",
+      "description": "Continue the specific paused 18549 Anvil: Safe resume, original EOA restake,"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/run-validator-recovery-mock.sh",
+      "category": "rehearsal",
+      "bytes": 1978,
+      "sha256": "35f420ea79c8ebc088597dd1d1d5872128d0d74db27c67a28cd711020e6f19d3",
+      "description": "历史 fork、契约与运行演练"
+    },
+    {
+      "path": "scripts/validator-recovery/legacy/tools/start-paused-watchtower.py",
+      "category": "rehearsal",
+      "bytes": 7380,
+      "sha256": "7816d39d1dd34a738d26e824cca5664fb9fb4712ed34cf08fb4d6bf69580feac",
+      "description": "Start an isolated Watchtower on the replaced disposable DB and paused local fork."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/README.md",
+      "category": "data",
+      "bytes": 1297,
+      "sha256": "ba8d099e2e9194b08b2a06991cf24368cec4503b009035b652fa6f6ec309327c",
+      "description": "Snapshot 数据与验证准备"
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/fix-snapshot-validation-limit.py",
+      "category": "data",
+      "bytes": 7343,
+      "sha256": "0db39acd56544d7dc5b989323205f894c7d72132cfa7f8398bd55476964a33c2",
+      "description": "Plan or apply one config fix; restart only snapshot-sync, never production validators."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/prepare-data-new-parent-check.py",
+      "category": "data",
+      "bytes": 6530,
+      "sha256": "10e38e2b21206c87230ca974f46d39f4e1560270b380ceaff2ca10133df6933a",
+      "description": "Prepare a non-staking real-parent check of /data_new; --start explicitly opens it writable."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/prepare-snapshot-diagnostics.py",
+      "category": "data",
+      "bytes": 3862,
+      "sha256": "f411cd58ea6dc7d2573aa08f216f1fa9905d29890993c5e144e6a46f57495591",
+      "description": "Enable on-demand diagnostics on the stopped snapshot-sync node, without staking."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/prepare-snapshot-sync.py",
+      "category": "data",
+      "bytes": 4332,
+      "sha256": "f70d323b5f1ca1ba76a0226ae0f4ec10516b10d9a2072ac3cfc2b3ee2434eb86",
+      "description": "Prepare a non-staking snapshot-sync config. Does not start Nitro or edit its DB."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/replace-recovery-test-db.py",
+      "category": "data",
+      "bytes": 6956,
+      "sha256": "72cee6cd580a8dbe2a8dbc1b9286ae5a677a8b28bcb0db93b2cc8619ccc38b13",
+      "description": "Replace the explicitly authorized disposable DB. Never stops validator-nitro-1."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/snapshot-validation-metrics.py",
+      "category": "data",
+      "bytes": 8350,
+      "sha256": "091e1f63b7580f5ed7e13949bd396620c9297ce770cac9a51c42b8d8e959be53",
+      "description": "Enable or disable local validation metrics; restart only snapshot-sync."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/tune-snapshot-recording-eight.py",
+      "category": "data",
+      "bytes": 8283,
+      "sha256": "a8bf1ffe0f2f40e40594a9e9766ae5b9040f25b278305afb0cfe3a4ec2253ad0",
+      "description": "Plan/apply/rollback bounded validation preparation tuning; restart only snapshot-sync."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/tune-snapshot-recording-four-to-sixteen.py",
+      "category": "data",
+      "bytes": 8295,
+      "sha256": "e74d9856e2da7922deef7c3d8edcf0a213db3b573e3634d18642c2e90e637540",
+      "description": "Plan/apply/rollback bounded validation preparation tuning; restart only snapshot-sync."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/tune-snapshot-recording-sixteen.py",
+      "category": "data",
+      "bytes": 8287,
+      "sha256": "b01ba74c546b2a351e3d67210e167f804dce5bb85f10ef5379f19289ec985550",
+      "description": "Plan/apply/rollback bounded validation preparation tuning; restart only snapshot-sync."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/tune-snapshot-recording-thirtytwo.py",
+      "category": "data",
+      "bytes": 8294,
+      "sha256": "c6f8afc863a7b2ba4e12764044ca0e8ed4623e4ea7e703d39ba87cd1fbbc94c5",
+      "description": "Plan/apply/rollback bounded validation preparation tuning; restart only snapshot-sync."
+    },
+    {
+      "path": "scripts/validator-recovery/snapshot/tune-snapshot-validation.py",
+      "category": "data",
+      "bytes": 8380,
+      "sha256": "65ebbd41ded497bc088e70ed5c9fab870453612eb22c81882a5e42edcb7ebb5f",
+      "description": "Plan/apply/rollback bounded validation preparation tuning; restart only snapshot-sync."
+    },
+    {
+      "path": "scripts/validator-recovery/tests/run-offline.py",
+      "category": "tests",
+      "bytes": 2899,
+      "sha256": "122e481a69d6f5318c8e0314474e94e4ccd199e13ca6fc44a4ef83c6496f49be",
+      "description": "Run existing offline recovery tests and syntax checks; skip RPC/fork CLI integrations."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/COMPOSE-PREPARATION.md",
+      "category": "production",
+      "bytes": 4015,
+      "sha256": "e65036170a475111dcdd52727362a0cd475c34f3eae4ca6eecdec537908c41e5",
+      "description": "Compose 准备：保留 /data_mock 数据库"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/CUTOVER-RUNBOOK.md",
+      "category": "production",
+      "bytes": 7842,
+      "sha256": "65963f2131212ac8893b4cc61cbe0567086c8549b37d4425d3046d4f6c639a32",
+      "description": "snapshot-sync → 验证节点：本机分阶段交接"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/MANIFEST.sha256",
+      "category": "production",
+      "bytes": 1973,
+      "sha256": "fcecdf21bf6551155558c0e7f73cf0563d590a4c4c1154392fc8134d1677276f",
+      "description": "正式 v2 工具与附加模块"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/PRESIGN-RUNBOOK.md",
+      "category": "production",
+      "bytes": 6629,
+      "sha256": "5ca107507a0771d66fb13b5a05a7981fba229f30ee0afbab533ff027db25d6c6",
+      "description": "一次集中签署，操作员分阶段执行"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/RUNBOOK.md",
+      "category": "production",
+      "bytes": 13306,
+      "sha256": "3e686d819e00df1024f30c93a6aad61ab738e38f806ec8e7f4b6215864b4e4db",
+      "description": "执行手册：先准备，获得具体授权后才进入生产窗口"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/START-HERE.md",
+      "category": "production",
+      "bytes": 3419,
+      "sha256": "8f10b208bee253e1c402170a24098405ef3d133dedad61171dda3e251e8a67f4",
+      "description": "Deriw 恢复工具包 v2"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/TEST-RESULTS.md",
+      "category": "production",
+      "bytes": 2786,
+      "sha256": "82b4f5b72b1bcc6df591102eee62b3d58abdc6ddf5a8720e2e418d5171b8a953",
+      "description": "v2 测试记录（2026-09-29）"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/collect.py",
+      "category": "production",
+      "bytes": 5362,
+      "sha256": "a0d3ddf562b6c070379f5363dc0e768618a7d63ccc1ab7bf27df7caa8010003e",
+      "description": "Collect a pinned candidate and locate local A-prime; no chain writes or WASM replay."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/core.py",
+      "category": "production",
+      "bytes": 15449,
+      "sha256": "1d4258994f24389c98a798a651a6339c523a0d7c8e7d2a484dab1da7800e5a9a",
+      "description": "Deriw preparation primitives. Public clients have an explicit read-only RPC allowlist."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/cutover.py",
+      "category": "production",
+      "bytes": 25295,
+      "sha256": "3117e6daa02ddb7084fe5c1c6ab92b424567922098a7885e2a492ca8b9efab52",
+      "description": "Prepare and gate a keyless Watchtower handover. Never enables MakeNodes."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/fast-safe-check.py",
+      "category": "production",
+      "bytes": 2401,
+      "sha256": "b376cbea0d251ebdd5ee3cac1d64d8756e8bcf38e8a0c134d3a21009a6fcfbee",
+      "description": "Read-only fast-confirmation Safe identity check; cannot enumerate offline signatures."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/owner-check.py",
+      "category": "production",
+      "bytes": 4601,
+      "sha256": "e65cbc6ea480839c9a177fc0a66b9b478f35e1ff57a0681be95d74b2565e739a",
+      "description": "Read-only refund/runtime checks. Does not read keystores or send transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/prepare-compose.py",
+      "category": "production",
+      "bytes": 10218,
+      "sha256": "c45da918ef85f2263bcb962950976bb40705d5bbb85df5eeea5363e4648bfb13",
+      "description": "Prepare Compose/config and copy one encrypted keystore. Never starts a validator."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/presign.py",
+      "category": "production",
+      "bytes": 16969,
+      "sha256": "5ba9d4cb13b88d472c039e50d7772c20cbe9830977c26d8312c94ba13f112cc6",
+      "description": "Prepare fixed consecutive Safe transactions; only owned forks may send transactions."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/recovery.py",
+      "category": "production",
+      "bytes": 15260,
+      "sha256": "835447a8c4d871c391e9764e0a9e027fcc6bcec6c4ed367d742c1d731fbc856f",
+      "description": "Prepare/review Deriw recovery packages. Never signs or broadcasts to production."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/reference/FAST-CONFIRMATION-ADDENDUM-20260929.md",
+      "category": "production",
+      "bytes": 2583,
+      "sha256": "8de7d85766cb6d7cc7f689425ad1436a853e4698c7de0096ef9bdeec9e1c025a",
+      "description": "快速确认补充：纳入生产维护流程"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/reference/FINAL-ROLES-PREPARATION-20260929.md",
+      "category": "production",
+      "bytes": 4306,
+      "sha256": "196a985a360497faaefb402aaf83459b6bb5ac0ddb43210f7a8fb1a74c217636",
+      "description": "最终账户角色：维护前准备"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/reference/PAUSE-CONTENT-REVIEW.md",
+      "category": "production",
+      "bytes": 4397,
+      "sha256": "a134694cb8b913393a67c22ea5c3c48834f5d4f33b8f2bcf5933f761bdfab47d",
+      "description": "暂停交易专项复核结果"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/reference/operator-mapping.json",
+      "category": "production",
+      "bytes": 2562,
+      "sha256": "8a62bdb8d6086debe3ef925affaf93cac26392238e276834a8b7d564384b43b1",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/reference/v2-fast-safe-check.json",
+      "category": "production",
+      "bytes": 621,
+      "sha256": "61153bf46e007ec808b2c76e910786e533989704ab848e59c4708ae909f465f7",
+      "description": "保存状态：fast_safe_identity_passed"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/reference/v2-fork-summary.json",
+      "category": "production",
+      "bytes": 1326,
+      "sha256": "2235f8a240256912a1c9e3af19a190d8a7b1ccd7ff34778528b847b09c49ea2f",
+      "description": "保存状态：exact_package_fork_passed_with_arbsys_log_shim"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/replay-span.py",
+      "category": "production",
+      "bytes": 11047,
+      "sha256": "c15a9e7ef3806f430f4ebd82598053e7691e9057488ec892db01cb40dac5971d",
+      "description": "Sequential, resumable replay of the input audit local A-prime -> B interval."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/integration_current.py",
+      "category": "tests",
+      "bytes": 2079,
+      "sha256": "9c2e338a3df14d3915106c821f469b1147f0ed8a585f583740b03fe3723f0b08",
+      "description": "Contract-only smoke fixture from current pending old-WASM assertions. NEVER production evidence."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/integration_historical.py",
+      "category": "tests",
+      "bytes": 1496,
+      "sha256": "4884a93e14f337cee01dec49ca98804d8d15d2c3721cf778c904c8ced66e7d30",
+      "description": "Test-only historical fixture, not a production package generator or replay."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/safe-receipt-fixture.json",
+      "category": "tests",
+      "bytes": 7178,
+      "sha256": "8110af004db636cd9dc824b0c3bf9c0c3274716a65926856b5097f8cd53c97b6",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/state-fixture.json",
+      "category": "tests",
+      "bytes": 487,
+      "sha256": "a15742563618d669374fa781ccfe783fee817ade073fca5dd999277ad6eda887",
+      "description": "JSON 参数 / 报告 / 交易内容；查看来源与观察时间。"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/test_compose_preparation.py",
+      "category": "tests",
+      "bytes": 5377,
+      "sha256": "c70d8e89c50d9f13363215d3b0875093e6e8f5127f4d636619304ce2fa5ee1a3",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/test_cutover.py",
+      "category": "tests",
+      "bytes": 15230,
+      "sha256": "040f19f07e8a1c5ae7545d47affbe3a021b6366d7f0975bb171823628b56e780",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/test_presign.py",
+      "category": "tests",
+      "bytes": 8859,
+      "sha256": "067741776df8ad8cd1521c2beeb05806883e9d43115344c43d7b98edb3dee0f3",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/tests/test_toolkit.py",
+      "category": "tests",
+      "bytes": 5829,
+      "sha256": "bde64d51205e5a6411cbb4a1d9f4ec24e4780bf3fcbfd976f28302839dda13c0",
+      "description": "测试入口；integration_* 可连接 RPC，未在本次归档中执行。"
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/verify-fork.py",
+      "category": "production",
+      "bytes": 11500,
+      "sha256": "1133b93592ab0628c32ced38cdacc71e4a0fb1271e5ef24e912722b6af60ab9b",
+      "description": "Execute the exact prepared CALL list only on a newly owned loopback Anvil 31337."
+    },
+    {
+      "path": "scripts/validator-recovery/toolkit/withdraw-refund.sh",
+      "category": "production",
+      "bytes": 1806,
+      "sha256": "a41851277e11c248e6019c1c6bf7ddb4d01bb44c4539c0e329eea31c9d793880",
+      "description": "正式 v2 工具与附加模块"
+    },
+    {
+      "path": "staker/block_validator.go",
+      "category": "code",
+      "bytes": 57242,
+      "sha256": "d5bc60d5007a68b71b68e5171cb79a79e1aef9391a73b006edda1e38692d9599",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "staker/legacy/fast_confirm.go",
+      "category": "code",
+      "bytes": 7565,
+      "sha256": "132a86c181a7aa9ff86c1c7be2650844a391eea8ec73887a5b2f4f180d090b2e",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "staker/legacy/staker.go",
+      "category": "code",
+      "bytes": 49327,
+      "sha256": "5fe7f2499e965fbaab492df1b438a371faf90cf00cb5c2bee39c3fe6857e0cda",
+      "description": "本分支的协议或运行实现参考。"
+    },
+    {
+      "path": "staker/stateless_block_validator.go",
+      "category": "code",
+      "bytes": 19727,
+      "sha256": "709fe2c9b6682cf5f82e8c00432f27b14a21f25f2c52e55673447da526b2980f",
+      "description": "本分支的协议或运行实现参考。"
+    }
+  ]
+}

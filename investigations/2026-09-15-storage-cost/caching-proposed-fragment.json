@@ -1,0 +1,6 @@
+{
+  "caching": {
+    "archive": false,
+    "trie-dirty-cache": 4096
+  }
+}

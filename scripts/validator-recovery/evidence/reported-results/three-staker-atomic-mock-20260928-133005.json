@@ -1,0 +1,44 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "serverOutputDirectory": "/data_new/scripts/three-staker-atomic-mock-20260928-133005",
+  "report": {
+    "status": "contract_rehearsal_passed",
+    "test": "three_staker_atomic_span_10578",
+    "readyForProduction": false,
+    "recoveryNode": 43008,
+    "paused": true,
+    "batchAddress": "0x9641d764fc13c8b624c04430c7356c1c7c8102e2",
+    "batchCodeHash": "0xecd5bd14a08c5d2122379900b2f272bdf107a7e92423c10dd5fe3254386c9939",
+    "exactExpectedNodeHash": "0xd86bb1e3277e2cf5565f945d2954f670f4b4dc88df11f1d53359b706fd5f5da2",
+    "innerRollbackTested": true,
+    "atomicSuccessTested": true,
+    "failureTransaction": "0x0af21fad6cb6af5bae4273efe7d64b1565f99670f81897cc07f8907d830fe562",
+    "successTransaction": "0x865b9c23f37410d89accf710b4943e1fc86a84268e5ac0b1943dfc0518329406",
+    "productionOwnerSignaturesTested": false,
+    "validatorRestartTested": false,
+    "fullWithdrawalHistoryAudited": false,
+    "limitations": "Historical fork only. Three accounts refunded in simulation. Reference refund payments are tested then reverted. Atomic success remains paused with refund credits. Safe owners are impersonated; no production signatures. 10578 is a positional span, not an A-to-B proof. Saved replay records checked; no fresh execution replay, restaking, Nitro restart or full withdrawal audit in this run.",
+    "stakers": [
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95"
+    ],
+    "governanceNumBlocks": 10578,
+    "exactGovernanceNodeHashChecked": true,
+    "spanEvidence": {
+      "recordsChecked": 10578,
+      "recordChainSha256": "c6c912454a2bc8ce7b33b895b716d8622c42d29058061026abc547a091173e75",
+      "replayDirectory": "/data_new/scripts/three-staker-span-replay-20260928-091247",
+      "auditFile": "/data_new/scripts/three-staker-span-20260928-090354/summary.json"
+    },
+    "allThreeRefundCreditsTested": true,
+    "referenceRefundPaymentsTested": true,
+    "restakingTested": false,
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "freshExecutionReplayTested": false,
+    "productionRefundScopeChanged": false,
+    "dockerAccessed": false,
+    "nodeDatabaseAccessed": false
+  }
+}

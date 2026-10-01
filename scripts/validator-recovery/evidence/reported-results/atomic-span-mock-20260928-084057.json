@@ -1,0 +1,40 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "serverOutputDirectory": "/data_new/scripts/atomic-span-mock-20260928-084057",
+  "report": {
+    "status": "contract_rehearsal_passed",
+    "test": "atomic_safe_recovery_span_7838",
+    "readyForProduction": false,
+    "recoveryNode": 42886,
+    "paused": true,
+    "batchAddress": "0x9641d764fc13c8b624c04430c7356c1c7c8102e2",
+    "batchCodeHash": "0xecd5bd14a08c5d2122379900b2f272bdf107a7e92423c10dd5fe3254386c9939",
+    "exactExpectedNodeHash": "0x1c44f95dd83a8e24c4794528d57b32b053a516204151418fce05e8a75e670b7b",
+    "innerRollbackTested": true,
+    "atomicSuccessTested": true,
+    "failureTransaction": "0x1f873f58c56c7f27bfa25b0e13a46bbec6178c92fa6d1fbd5947425ec7dfd435",
+    "successTransaction": "0x1deb305fb9fa30401a3c13e10fccc0da36e60b6101ed74dd41cd04e1c4edc207",
+    "productionOwnerSignaturesTested": false,
+    "validatorRestartTested": false,
+    "fullWithdrawalHistoryAudited": false,
+    "limitations": "Historical fork only. Governance 7838 is a positional-span convention, not a parent-confirmed A-to-B execution proof. Saved replay records are checked; no fresh WASM replay. Reference uses direct Safe impersonation and is reverted. Atomic batches use impersonated owners approveHash and Safe delegatecall. Negative batch records ExecutionFailure and consumes the Safe nonce while inner changes roll back. Success remains paused; no runtime restart, production signatures, production calldata approval or full withdrawal history audit.",
+    "governanceNumBlocks": 7838,
+    "exactGovernanceNodeHashChecked": true,
+    "spanEvidence": {
+      "auditDirectory": "/data_new/scripts/recovery-message-span-20260928-013625",
+      "replayDirectory": "/data_new/scripts/retained-span-replay-20260928-014843",
+      "recordChainSha256": "dfdc67af2b21cb262d39a297e7517c482cba94219c5aa19bbe6ea1fd8f482435",
+      "recordsChecked": 7838,
+      "positionalMessageSpan": 7838,
+      "parentConfirmedAToBProven": false,
+      "productionNumBlocksApproved": false
+    },
+    "previousGovernancePass": "/data_new/scripts/governance-span-mock-20260928-081940/summary.json",
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "freshExecutionReplayTested": false,
+    "productionRefundScopeChanged": false,
+    "dockerAccessed": false,
+    "nodeDatabaseAccessed": false
+  }
+}

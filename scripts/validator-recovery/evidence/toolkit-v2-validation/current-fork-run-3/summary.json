@@ -1,0 +1,10 @@
+{
+  "status": "stopped",
+  "packageIdentity": "f098d408e3a133b28044d689f7caa7cecd80d035992cb2bca3b2e682cd2f698c",
+  "checkedAt": "2026-09-29T01:53:15.175242+00:00",
+  "readyForProduction": false,
+  "productionSignaturesTested": false,
+  "productionTransactionsSent": false,
+  "error": "Negative case failed before final confirmation call",
+  "ownedForkStopped": true
+}

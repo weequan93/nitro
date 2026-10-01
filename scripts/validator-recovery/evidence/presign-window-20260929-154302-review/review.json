@@ -1,0 +1,55 @@
+{
+  "status": "offline_pasted_calls_and_hashes_matched",
+  "chainId": 42161,
+  "safe": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+  "parentConfirmedNode": 43123,
+  "parentConfirmedInboxMaxCount": 324089,
+  "recoveryNode": 43126,
+  "recoveryNodeHash": "0x6c679a7d16a4f0e6768f320ff0491e512150902e53404ce8a68974e4aee0c779",
+  "checkpointBlock": 127108720,
+  "governanceNumBlocks": 4467,
+  "before": {
+    "BlockHash": "0x42fea32f2e72edb32eb5a8fb0ec1760a2a26d41ccaf4b96712988be511f71962",
+    "SendRoot": "0x9a0300bf873d9ce0ea8365ac9dd758c6023d13a883ed79e4027d6095838a4603",
+    "Batch": 324089,
+    "PosInBatch": 0
+  },
+  "after": {
+    "BlockHash": "0x9f6ef87c6d5ca1b9e17cc94d4c79a9b64bcf32adccc7aad29c2d4dc8e478a74f",
+    "SendRoot": "0x9a0300bf873d9ce0ea8365ac9dd758c6023d13a883ed79e4027d6095838a4603",
+    "Batch": 324110,
+    "PosInBatch": 122
+  },
+  "newWasmRoot": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421",
+  "refundAccounts": [
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+    "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95"
+  ],
+  "transactions": [
+    {
+      "kind": "recovery",
+      "nonce": 11,
+      "to": "0x9641d764fc13c8b624c04430c7356c1c7c8102e2",
+      "operation": 1,
+      "calls": 4,
+      "safeTxHash": "0x0c4d1e1d549247dbb6bee12d248f0d4f20230a05beb4ecb3e987ef6bcbe9c7b9",
+      "exactCalldataMatched": true,
+      "eip712Matched": true
+    },
+    {
+      "kind": "resume",
+      "nonce": 12,
+      "to": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+      "operation": 0,
+      "calls": 1,
+      "safeTxHash": "0xd3d46cecef80826db10248900275c2a304f857ed71cc4d4d4b3d70ab8f4d343c",
+      "exactCalldataMatched": true,
+      "eip712Matched": true
+    }
+  ],
+  "parentConfirmedAToBProven": false,
+  "productionStateQueried": false,
+  "productionTransactionsSent": false,
+  "limitations": "Pasted import content checked offline. Does not verify current state, complete remote package checksums, real UI fields/signatures or upstream nodeHash derivation inputs."
+}

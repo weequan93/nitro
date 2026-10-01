@@ -66,13 +66,25 @@ the CI counterpart.
 
 ## License
 
-Nitro is currently licensed under a [Business Source License](./LICENSE.md), similar to our friends at Uniswap and Aave, with an "Additional Use Grant" to ensure that everyone can have full comfort using and running nodes on all public Arbitrum chains.
+Nitro is currently licensed under a [Business Source License](LICENSE.md), similar to our friends at Uniswap and Aave, with an "Additional Use Grant" to ensure that everyone can have full comfort using and running nodes on all public Arbitrum chains.
 
 The Additional Use Grant also permits the deployment of the Nitro software, in a permissionless fashion and without cost, as a new blockchain provided that the chain settles to either Arbitrum One or Arbitrum Nova.
 
 For those that prefer to deploy the Nitro software either directly on Ethereum (i.e. an L2) or have it settle to another Layer-2 on top of Ethereum, the [Arbitrum Expansion Program (the "AEP")](https://docs.arbitrum.foundation/aep/ArbitrumExpansionProgramTerms.pdf) was recently established. The AEP allows for the permissionless deployment in the aforementioned fashion provided that 10% of net revenue (as more fully described in the AEP) is contributed back to the Arbitrum community in accordance with the requirements of the AEP.
 
 For the chain deployment information see [docs](https://docs.deriw.com/)
+
+## Validator recovery records
+
+The [legacy validation recovery record](docs/validator-recovery/README.md) collects the scripts, execution history, evidence, operational runbook and remaining acceptance items for the September 2026 recovery. Fixed transaction packages and node parameters in this archive are historical.
+
+The [recovery scripts](scripts/validator-recovery/README.md) are organized by toolkit, diagnostics, snapshot preparation, historical rehearsals, distributions and evidence.
+
+The [manual L3 withdrawal guide](docs/manual-withdrawal/README.md) contains the reusable status/proof preparation tool and CLI or wallet claim method. Per-request outputs are ignored rather than kept as root-level case directories.
+
+The [Safe transaction guide](docs/safe-transactions/README.md) generates reviewable blacklist additions, blacklist/chain administrator grants and Safe signer additions for Transaction Builder.
+
+The [dev integration record](docs/integration/legacy-validation-into-deriw-dev-20261001.md) documents the legacy merge, conflict decisions, regression tests and before/after WASM comparison.
 
 ## Contact
 

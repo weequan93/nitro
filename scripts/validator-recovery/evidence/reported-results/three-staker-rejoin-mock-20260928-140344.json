@@ -1,0 +1,50 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "report": {
+    "status": "contract_rehearsal_passed",
+    "test": "three_staker_atomic_rejoin_48",
+    "readyForProduction": false,
+    "stakers": [
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95"
+    ],
+    "recoveryNode": 43008,
+    "normalConfirmedNode": 43009,
+    "governanceNumBlocks": 10578,
+    "normalAssertionNumBlocks": 48,
+    "sameNodeStakeCount": 3,
+    "allThreeRefundPaymentsTested": true,
+    "allThreeRestakingTested": true,
+    "atomicRecoveryThenRejoinTested": true,
+    "normalConfirmationTested": true,
+    "exactGovernanceNodeHash": "0xd86bb1e3277e2cf5565f945d2954f670f4b4dc88df11f1d53359b706fd5f5da2",
+    "normalNodeHash": "0x7c66ab55a96a457b84bebdc203540e8e3a8eea1c679d3503e0dcb08b5de2462b",
+    "transactions": {
+      "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": "0x55ac0b2b516113901539eb0418956f17ba29226fb7917e4d9e9bd48db5747ff1",
+      "0xd38e969ae2947019e0dec0e46937e6aff651834d": "0x76e0f1356b7055c767520add457d276e98fcb4b3319606fbda94f9f88bf84c15",
+      "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95": "0x12d93720540633837b0b29f6294a37b3e511d3196a15037bf1f8c5b0b0c57595",
+      "confirmation": "0xeb143cde12e14b1ccbe031d9330a6234e2a44ed0ba54bc8ba49fc063f37d95b8"
+    },
+    "spanEvidence": {
+      "recordsChecked": 10578,
+      "recordChainSha256": "c6c912454a2bc8ce7b33b895b716d8622c42d29058061026abc547a091173e75",
+      "replayDirectory": "/data_new/scripts/three-staker-span-replay-20260928-091247",
+      "auditFile": "/data_new/scripts/three-staker-span-20260928-090354/summary.json"
+    },
+    "followupEvidence": {
+      "recordsChecked": 48,
+      "recordChainSha256": "10dc47fb6448c3aab4ef1b45460cd945a0993e093103225e444f4639ff1446d9",
+      "replayDirectory": "/data_new/scripts/three-staker-followup-20260928-134148"
+    },
+    "parentConfirmedAToBProven": false,
+    "productionNumBlocksApproved": false,
+    "productionSigningTested": false,
+    "originalAccountRuntimeTested": false,
+    "validatorRestartTested": false,
+    "dockerAccessed": false,
+    "nodeDatabaseAccessed": false,
+    "productionRefundScopeChanged": false,
+    "limitations": "Historical owned Anvil only. Safe owners and original EOAs impersonated; mock gas. Successful atomic recovery is resumed on the same fork, all three refunds paid and accounts rejoined to the ordinary 48-message node. Saved replay evidence checked, no fresh replay here. No Nitro runtime, production signatures, A-to-B proof, or full withdrawal audit."
+  }
+}

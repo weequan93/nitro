@@ -41,3 +41,6 @@ tmp/*
 go.work
 go.work.sum
 fastcache
+# Generated Python caches
+__pycache__/
+*.py[cod]

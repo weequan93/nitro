@@ -1,0 +1,57 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "sourceAttachment": "/Users/super/.codex/attachments/d897e5f9-c9ee-4478-9534-d24dbe41b828/Pasted text.txt",
+  "report": {
+    "readyForProduction": false,
+    "executionReplayed": false,
+    "parentBlock": "0x1e5f29da",
+    "confirmedNode": {
+      "number": 43005,
+      "creationBlock": 509543330,
+      "transactionHash": "0x1e35f1a1ed3145599adab8e80da62a43b376f437758c8880499ab79c69dfbfaa",
+      "before": {
+        "BlockHash": "0xa2c4191344ac166cffd4290a5a2e880e56d2fa5f2b1c80a8493bdbffb53a23bc",
+        "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+        "Batch": 321792,
+        "PosInBatch": 0,
+        "machineStatus": 1
+      },
+      "after": {
+        "BlockHash": "0x59b30b51999eb42c11b3498195167cadc871497f7261b87d2e3c6401617ec9be",
+        "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+        "Batch": 321809,
+        "PosInBatch": 0,
+        "machineStatus": 1
+      },
+      "inboxMaxCount": 321809,
+      "wasmModuleRoot": "0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f"
+    },
+    "clientVersion": "nitro/v1.3.2.v3.10.0-16c17ee3a9c4/linux-amd64/go1.25.14",
+    "head": 126693904,
+    "candidateBlock": 126693840,
+    "candidateHash": "0x057c6c1e73e9822f4a262b1483061904deb544a1328f901680215d5ef26b73a7",
+    "sendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+    "sendCount": "0x1fb9",
+    "candidateMessageUnverifiedUntilInputChecked": 126693840,
+    "bridgeInboxCount": 321868,
+    "candidateSendRootRegistration": "0x59b30b51999eb42c11b3498195167cadc871497f7261b87d2e3c6401617ec9be",
+    "checkpoint": {
+      "BlockHash": "0x057c6c1e73e9822f4a262b1483061904deb544a1328f901680215d5ef26b73a7",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321867,
+      "PosInBatch": 130
+    },
+    "aheadOfConfirmed": true,
+    "batchesAvailable": true,
+    "status": "candidate_input_collected_replay_required",
+    "note": "Root registration is not full withdrawal audit; no A-to-B execution proof or production action."
+  },
+  "subsequentStep": {
+    "script": "probe-production-participants.py",
+    "status": "failed",
+    "reason": "HTTPS connection timeout while reading getStaker(address)",
+    "replayStarted": false,
+    "packStarted": false,
+    "spanAuditStarted": false
+  }
+}

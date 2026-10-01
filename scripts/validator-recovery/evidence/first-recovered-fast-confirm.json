@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-09-29T10:58:27.117637+00:00",
+  "parentBlock": 510007614,
+  "node": 43127,
+  "nodeHash": "0x947f3d434693712f6e6d3f56233216ba18fada0daac6f0fd36b5404f6712c997",
+  "fastSafe": "0x5e16561173ea0422549c3de12b68c8a7d3a76672",
+  "fastSafeNonce": 37626,
+  "threshold": 3,
+  "safeHash": "0x25f2bedea04388aa19f5fa0b9161525f229cee71c1587f7da7843e88dac770e8",
+  "approvals": {
+    "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95": 1,
+    "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a": 0,
+    "0x21d4ea822a07f737c5e69f7951d517e5f2974849": 0
+  },
+  "latestConfirmed": 43126,
+  "latestCreated": 43127,
+  "productionTransactionsSent": false
+}

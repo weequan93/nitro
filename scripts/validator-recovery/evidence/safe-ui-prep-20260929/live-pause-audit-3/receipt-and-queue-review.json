@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-09-29T01:16:56.134072+00:00",
+  "forkReceiptDecoded": true,
+  "safe": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+  "to": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+  "value": "0",
+  "operation": 0,
+  "actualDataEqualsDraft": true,
+  "forkSafeGasFieldsZero": true,
+  "rollupPausedEventCallerMatchesExecutor": true,
+  "queueServiceFollowup": {
+    "available": true,
+    "httpStatus": 200,
+    "url": "https://api.safe.global/tx-service/arb1/api/v1/safes/0xFbB37c66372f7B40361fBC8C8A235ae92711399D/multisig-transactions/?executed=false&nonce__gte=10&limit=100",
+    "count": 0,
+    "nonceGte": 10,
+    "completeServicePagination": true,
+    "excludesUnpublishedApprovals": true
+  },
+  "draftSha256": "d25f2cca92786a841d33190f5a454195b1bca116231131faa74b663b0836a21e",
+  "readyToSign": false,
+  "productionSignaturesTested": false
+}

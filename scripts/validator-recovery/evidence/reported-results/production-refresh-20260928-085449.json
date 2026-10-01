@@ -1,0 +1,105 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "sourceAttachment": "/Users/super/.codex/attachments/1cef9db8-3119-42ec-8bd3-c5f160c71727/Pasted text.txt",
+  "report": {
+    "rollup": "0xA113e2E9620a3Bc088a681eBB2C234FDbeb85e21",
+    "parentBlock": "0x1e5f2472",
+    "parentBlockHash": "0xc27f22eb27ce0b599773dc23ffdf6db6e9b9305c96f2d4ee87ba3f3f9587ae08",
+    "slots": {
+      "admin": {
+        "address": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+        "raw": "0x0000000000000000000000001333480e92de9511dc9bb01f70901ff3ee94f613",
+        "codeBytes": 2147,
+        "codeHash": "0x8736329b580cfc0c0c39ee6700515e0bc51652afb614640db9e34a5d784933e8"
+      },
+      "primaryImplementation": {
+        "address": "0xf9725312bd91ccfa3ad797e78a8a10b6d692fcd6",
+        "raw": "0x000000000000000000000000f9725312bd91ccfa3ad797e78a8a10b6d692fcd6",
+        "codeBytes": 23372,
+        "codeHash": "0x8cf117fd02db7f12da04db8ac71d302b4a34dffbc17c629b4f7aa6cd5ffcacc5"
+      },
+      "secondaryImplementation": {
+        "address": "0xf916bfe431b7a7aae083273f5b862e00a15d60f4",
+        "raw": "0x000000000000000000000000f916bfe431b7a7aae083273f5b862e00a15d60f4",
+        "codeBytes": 24565,
+        "codeHash": "0x8bf14ad1722eceef8f77dfdffb79393a42662fdce14d957db1e323084a8145c1"
+      }
+    },
+    "calls": {
+      "wasmModuleRoot()": "0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f",
+      "latestConfirmed()": "0x000000000000000000000000000000000000000000000000000000000000a7fd",
+      "latestNodeCreated()": "0x000000000000000000000000000000000000000000000000000000000000a7ff",
+      "paused()": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "bridge()": "0x00000000000000000000000053a7559d1e57e371f3d1e55fea97e9b6748418a3",
+      "outbox()": "0x00000000000000000000000047da6c41d03ac0608924e86f61577df558114bd8",
+      "challengeManager()": "0x0000000000000000000000006a3b4dda4b766c3160cd761f94fb5f6de3bf4892"
+    },
+    "nodeNumbers": {
+      "latestConfirmed": 43005,
+      "latestNodeCreated": 43007
+    },
+    "confirmedNode": {
+      "number": 43005,
+      "creationBlock": 509543330,
+      "transactionHash": "0x1e35f1a1ed3145599adab8e80da62a43b376f437758c8880499ab79c69dfbfaa",
+      "before": {
+        "BlockHash": "0xa2c4191344ac166cffd4290a5a2e880e56d2fa5f2b1c80a8493bdbffb53a23bc",
+        "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+        "Batch": 321792,
+        "PosInBatch": 0,
+        "machineStatus": 1
+      },
+      "after": {
+        "BlockHash": "0x59b30b51999eb42c11b3498195167cadc871497f7261b87d2e3c6401617ec9be",
+        "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+        "Batch": 321809,
+        "PosInBatch": 0,
+        "machineStatus": 1
+      },
+      "inboxMaxCount": 321809,
+      "wasmModuleRoot": "0x767c9a47cced7ccc3bf419a7efdd9ffb0f23a5dba42f30f3de64f32e2f82c55f"
+    },
+    "localChain": {
+      "clientVersion": "nitro/v1.3.2.v3.10.0-16c17ee3a9c4/linux-amd64/go1.25.14",
+      "head": 126692371,
+      "confirmedEndpointFound": false
+    },
+    "adminContract": {
+      "address": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+      "proxySlots": {
+        "admin": {
+          "address": "0xefc830e1498bad4de904ad0c28ef5a03a36bbe1f",
+          "codeBytes": 1856,
+          "codeHash": "0xdf42de18ce8ffeb9592b92fceea883f369ee2bdca7087d6a462e6e33b3eaf13c"
+        },
+        "implementation": {
+          "address": "0x12b1389fbf261e781bdc3094d28636abfb03c5b3",
+          "codeBytes": 6204,
+          "codeHash": "0x0d88feac198ef1b50b99fddf06aa9f6b1050bfe7211d6f04173de9b6d8953bcb"
+        }
+      },
+      "calls": {
+        "owner()": {
+          "error": "{'jsonrpc': '2.0', 'id': 1, 'error': {'code': 3, 'message': 'execution reverted', 'data': '0x'}}"
+        },
+        "getOwners()": {
+          "error": "{'jsonrpc': '2.0', 'id': 1, 'error': {'code': 3, 'message': 'execution reverted', 'data': '0x'}}"
+        },
+        "getThreshold()": {
+          "error": "{'jsonrpc': '2.0', 'id': 1, 'error': {'code': 3, 'message': 'execution reverted', 'data': '0x'}}"
+        },
+        "ADMIN_ROLE()": "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775",
+        "hasRole:ADMIN_ROLE()": {
+          "authority": "0xFbB37c66372f7B40361fBC8C8A235ae92711399D",
+          "raw": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "EXECUTOR_ROLE()": "0xd8aa0f3194971a2a116679f7c2090f6939c8d4e01a2a8d7e41d55e5351469e63",
+        "hasRole:EXECUTOR_ROLE()": {
+          "authority": "0xFbB37c66372f7B40361fBC8C8A235ae92711399D",
+          "raw": "0x0000000000000000000000000000000000000000000000000000000000000001"
+        }
+      }
+    },
+    "note": "Optional interface calls may revert. Successful calls alone do not verify contract identity."
+  }
+}

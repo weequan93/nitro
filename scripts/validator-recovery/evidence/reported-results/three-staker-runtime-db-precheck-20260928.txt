@@ -1,0 +1,67 @@
+Provenance: operator-pasted container status, mounts and historical logs; not a live database query.
+
+root@deriw-prod-validator:/data_new/scripts# docker ps -a --format 'table {{.Names}}\t{{.Status}}'
+
+for NAME in recovery-nitro-span-restart recovery-nitro-restart-check recovery-nitro-autosubmit recovery-paused-watchtower; do
+  if docker inspect "$NAME" >/dev/null 2>&1; then
+    printf '\n=== %s ===\n' "$NAME"
+    docker inspect --format \
+      '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' \
+      "$NAME"
+    docker logs "$NAME" 2>&1 |
+      grep -E 'Loaded most recent local block|validated execution' |
+      tail -n 5
+  fi
+done
+NAMES                          STATUS
+recovery-nitro-span-restart    Exited (0) 5 hours ago
+recovery-nitro-restart-check   Exited (0) 13 hours ago
+recovery-nitro-autosubmit      Exited (0) 13 hours ago
+recovery-paused-watchtower     Exited (0) 13 hours ago
+snapshot-sync                  Up 27 hours
+recovery-makenodes             Exited (0) 3 days ago
+recovery-watchtower            Exited (0) 3 days ago
+validator-debug-nitro-1        Exited (0) 3 days ago
+validator_new-nitro-1          Exited (0) 7 days ago
+validator-nitro-1              Up 5 days
+prometheus-metrics-exporter    Up 5 days
+
+=== recovery-nitro-span-restart ===
+/data_new/validator/config -> /home/user/.arbitrum
+/data_new/scripts/nitro-span-restart-20260928-084752/config.json -> /test.json
+/data_new/scripts/nitro-span-restart-20260928-084752/entry.sh -> /test-entry.sh
+
+INFO [09-28|00:48:41.010] Loaded most recent local block           number=126,249,124 hash=f80c6e..fd3b2b age=1d6h55m
+INFO [09-28|00:48:44.442] validated execution                      messageCount=126,237,356 globalstate="BlockHash: 0x6fef08565d967d5c57521d4784e9fe58355c60ecf306b8641d477ed5c1011605, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320189, PosInBatch: 0" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+INFO [09-28|00:49:34.326] Loaded most recent local block           number=126,249,124 hash=f80c6e..fd3b2b age=1d6h56m
+INFO [09-28|00:49:37.668] validated execution                      messageCount=126,237,356 globalstate="BlockHash: 0x6fef08565d967d5c57521d4784e9fe58355c60ecf306b8641d477ed5c1011605, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320189, PosInBatch: 0" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+
+=== recovery-nitro-restart-check ===
+/data_new/validator/config -> /home/user/.arbitrum
+/data_new/scripts/nitro-restart-mock-20260928-010622/config.json -> /test.json
+/data_new/scripts/nitro-restart-mock-20260928-010622/entry.sh -> /test-entry.sh
+
+INFO [09-27|17:07:00.164] Loaded most recent local block           number=126,249,124 hash=f80c6e..fd3b2b age=23h14m2s
+INFO [09-27|17:07:02.899] validated execution                      messageCount=126,237,356 globalstate="BlockHash: 0x6fef08565d967d5c57521d4784e9fe58355c60ecf306b8641d477ed5c1011605, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320189, PosInBatch: 0" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+INFO [09-27|17:07:49.168] Loaded most recent local block           number=126,249,124 hash=f80c6e..fd3b2b age=23h14m51s
+INFO [09-27|17:07:52.082] validated execution                      messageCount=126,237,356 globalstate="BlockHash: 0x6fef08565d967d5c57521d4784e9fe58355c60ecf306b8641d477ed5c1011605, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320189, PosInBatch: 0" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+
+=== recovery-nitro-autosubmit ===
+/data_new/scripts/nitro-autosubmit-retry-20260928-005748/entry.sh -> /test-entry.sh
+/data_new/validator/config -> /home/user/.arbitrum
+/data_new/scripts/nitro-autosubmit-retry-20260928-005748/config.json -> /test.json
+
+INFO [09-27|16:58:47.502] Loaded most recent local block           number=126,249,124 hash=f80c6e..fd3b2b age=23h5m49s
+INFO [09-27|16:58:51.318] validated execution                      messageCount=126,237,356 globalstate="BlockHash: 0x6fef08565d967d5c57521d4784e9fe58355c60ecf306b8641d477ed5c1011605, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320189, PosInBatch: 0" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+
+=== recovery-paused-watchtower ===
+/data_new/validator/config -> /home/user/.arbitrum
+/data_new/scripts/paused-watchtower-20260927-155930-966441/config.json -> /paused.json
+/data_new/scripts/paused-watchtower-20260927-155930-966441/entry.sh -> /paused-entry.sh
+
+INFO [09-27|16:00:27.118] validated execution                      messageCount=126,237,322 globalstate="BlockHash: 0xfdcda04cb69ad25da4057e0d0c54bd8b41517c94331c0710211dec009012c862, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320188, PosInBatch: 255" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+INFO [09-27|16:00:28.119] validated execution                      messageCount=126,237,327 globalstate="BlockHash: 0xadb71db5306b02bf8f463fc727cc0e01a2ac51570dc066b06eb5a90a9a09f5bc, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320188, PosInBatch: 260" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+INFO [09-27|16:00:29.120] validated execution                      messageCount=126,237,336 globalstate="BlockHash: 0x337e082b131176b7ba7a8bcd28a5188d6de79d466519e2a3153445921720fd65, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320188, PosInBatch: 269" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+INFO [09-27|16:00:30.120] validated execution                      messageCount=126,237,348 globalstate="BlockHash: 0x35d091a989c04945a195e53e744ecc823c85fb026b6c6aae2616fe70e1d1fd83, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320188, PosInBatch: 281" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+INFO [09-27|16:00:31.120] validated execution                      messageCount=126,237,356 globalstate="BlockHash: 0x6fef08565d967d5c57521d4784e9fe58355c60ecf306b8641d477ed5c1011605, SendRoot: 0xac44727106df865ba77137bcea131330935688cf48174d77b2b41a65613b03cf, Batch: 320189, PosInBatch: 0" WasmRoots=[0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421]
+root@deriw-prod-validator:/data_new/scripts# 

@@ -1,0 +1,30 @@
+{
+  "source": "User-pasted prepare-window.py summary, not independently fetched from production RPC",
+  "serverReport": "/data_new/scripts/production-window-prep-20260929-082849/summary.json",
+  "checkedAt": "2026-09-29T00:28:49.555653+00:00",
+  "status": "preparation_inventory_passed",
+  "parentBlock": "0x1e640172",
+  "parentBlockHash": "0xc124509961bc5961e48a691f29d1b4ad211b61289b214aff40e01aa616ad1ae3",
+  "nodes": {
+    "confirmed": 43096,
+    "created": 43098,
+    "firstUnresolved": 43097
+  },
+  "safeNonceObserved": 10,
+  "threshold": 3,
+  "paused": false,
+  "safeSingleton": {
+    "address": "0x29fcb43b46531bca003ddc8fcb67ffe91900c762",
+    "codeHash": "0xb1f926978a0f44a2c0ec8fe822418ae969bd8c3f18d61e5103100339894f81ff",
+    "officialContract": "SafeL2",
+    "officialVersion": "1.4.1",
+    "officialNetwork": 42161,
+    "matchesOfficialDeploymentMetadata": true,
+    "officialSource": "https://raw.githubusercontent.com/safe-global/safe-deployments/main/src/assets/v1.4.1/safe_l2.json",
+    "onChainValuesSource": "User report; official metadata independently retrieved"
+  },
+  "readyForProduction": false,
+  "broadcastEnabled": false,
+  "fullSafeExecutionSimulatedThisRun": false,
+  "productionSignaturesVerified": false
+}

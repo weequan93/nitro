@@ -1,0 +1,30 @@
+{
+  "status": "offline_draft_prepared",
+  "readyToSign": false,
+  "readyForProduction": false,
+  "userConfirmedSigningInterface": "Official Safe Global UI on Arbitrum One",
+  "chainId": 42161,
+  "safe": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+  "transactionFile": "DRAFT-pause.safe.json",
+  "transactionFileSha256": "d25f2cca92786a841d33190f5a454195b1bca116231131faa74b663b0836a21e",
+  "expectedSafeOperation": 0,
+  "expectedTarget": "0x1333480e92de9511dc9bb01f70901ff3ee94f613",
+  "expectedValue": "0",
+  "expectedCalldata": "0xbca8c7b5000000000000000000000000a113e2e9620a3bc088a681ebb2c234fdbeb85e21000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000048456cb5900000000000000000000000000000000000000000000000000000000",
+  "decoded": {
+    "signature": "executeCall(address,bytes)",
+    "target": "0xa113e2e9620a3bc088a681ebb2c234fdbeb85e21",
+    "innerSignature": "pause()",
+    "innerData": "0x8456cb59"
+  },
+  "nonceSelected": false,
+  "safeTransactionHash": null,
+  "gasParametersFinalized": false,
+  "uiImportTested": false,
+  "livePreflightPerformedThisTurn": false,
+  "proposalCreated": false,
+  "transactionBroadcast": false,
+  "localCalldataReencodingPassed": true,
+  "schemaSource": "https://raw.githubusercontent.com/safe-global/safe-react-apps/main/apps/tx-builder/src/typings/models.ts",
+  "note": "DRAFT metadata is a human-readable label, not a technical execution restriction. No recovery or resume transaction generated."
+}

@@ -1,0 +1,26 @@
+{
+  "provenance": "Operator-pasted server report; not independently fetched from server",
+  "sourceAttachment": "/Users/super/.codex/attachments/2fd7c16c-361f-4734-ba14-afb73ca727a5/Pasted text.txt",
+  "report": {
+    "readyForProduction": false,
+    "executionReplayed": true,
+    "wasmModuleRoot": "0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421",
+    "candidateDirectory": "/data_new/scripts/three-staker-candidate-20260928-090119",
+    "note": "One-message replay from local predecessor only. No parent-confirmed A-to-B execution proof; no production transaction.",
+    "candidateBlock": 126693840,
+    "message": 126693840,
+    "checkpoint": {
+      "BlockHash": "0x057c6c1e73e9822f4a262b1483061904deb544a1328f901680215d5ef26b73a7",
+      "SendRoot": "0xda325c2af6759775b183fab5c9dcf966968e0f46b2c15f283610511dfe103e3f",
+      "Batch": 321867,
+      "PosInBatch": 130
+    },
+    "clientVersion": "nitro/v1.3.2.v3.10.0-16c17ee3a9c4/linux-amd64/go1.25.14",
+    "savedInputSha256": "6a5419ffc0c58897845684a466b2192e6e8b2f6a2e7d8ca8fd2974006bb0adbd",
+    "validatedMessagesThisRun": 1,
+    "status": "candidate_single_message_replay_passed",
+    "latency": "964ms",
+    "inputSource": "Node re-records the pinned message; saved input is used to check predecessor and expected end state.",
+    "checkedAt": "2026-09-28T01:03:57.019499+00:00"
+  }
+}

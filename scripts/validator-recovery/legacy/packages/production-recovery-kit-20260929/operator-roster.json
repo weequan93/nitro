@@ -1,0 +1,73 @@
+{
+  "status": "template_not_executable",
+  "containsSecrets": false,
+  "readyForProduction": false,
+  "known": {
+    "pureValidators": true,
+    "rpcService": false,
+    "oldImageIdPrefix": "becc38893aca",
+    "oldImageTag": "fuhua-container.tencentcloudcr.com/deriw/deriw:prod",
+    "signerType": "local_password_protected_EOA_keystore",
+    "containerKeystorePath": "/keys",
+    "strategy": "MakeNodes"
+  },
+  "operators": [
+    {
+      "staker": "0x5cda45a9ae0e52f1d5110dc3819f6fb96bade33a",
+      "machineAlias": null,
+      "containerName": null,
+      "operator": null,
+      "fullImageId": null,
+      "restartSupervisor": null,
+      "newImageDistributionDigest": null,
+      "productionDataSource": null,
+      "dataAlignmentVerified": false,
+      "unlockProcedureRetainedLocally": null,
+      "plannedOrder": null
+    },
+    {
+      "staker": "0xd38e969ae2947019e0dec0e46937e6aff651834d",
+      "machineAlias": null,
+      "containerName": null,
+      "operator": null,
+      "fullImageId": null,
+      "restartSupervisor": null,
+      "newImageDistributionDigest": null,
+      "productionDataSource": null,
+      "dataAlignmentVerified": false,
+      "unlockProcedureRetainedLocally": null,
+      "plannedOrder": null
+    },
+    {
+      "staker": "0x65fa6c1d1efc338dfe8f07d5de84b3e7b76cbc95",
+      "machineAlias": null,
+      "containerName": null,
+      "operator": null,
+      "fullImageId": null,
+      "restartSupervisor": null,
+      "newImageDistributionDigest": null,
+      "productionDataSource": null,
+      "dataAlignmentVerified": false,
+      "unlockProcedureRetainedLocally": null,
+      "plannedOrder": null
+    }
+  ],
+  "governance": {
+    "safe": "0xfbb37c66372f7b40361fbc8c8a235ae92711399d",
+    "threshold": 3,
+    "signingInterface": null,
+    "signersAvailable": null,
+    "maintenanceWindowUTC": null
+  },
+  "doNotInclude": [
+    "private keys",
+    "passwords",
+    "authenticated RPC URLs",
+    "raw Docker environment"
+  ],
+  "protected": [
+    "/data",
+    "validator-nitro-1 until explicit specific maintenance authorization",
+    "snapshot-sync"
+  ]
+}
