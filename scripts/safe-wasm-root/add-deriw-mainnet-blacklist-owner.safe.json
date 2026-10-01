@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "chainId": "2886",
+  "createdAt": 1790588838131,
+  "meta": {
+    "name": "Deriw mainnet: add blacklist owner",
+    "description": "Add 0x26a5ccec74e4e193cb47350e473b85410ea02d82 as blacklist owner through the currently authorized mainnet Safe. Direct CALL to DeriwBlacklist; zero value.",
+    "txBuilderVersion": "1.18.0",
+    "createdFromSafeAddress": "0x2F996bC558818D33DE37aF36Bee7de24bA3Fc4dF",
+    "createdFromOwnerAddress": ""
+  },
+  "transactions": [
+    {
+      "to": "0x00000000000000000000000000000000000007ec",
+      "value": "0",
+      "data": "0x8dabebe800000000000000000000000026a5ccec74e4e193cb47350e473b85410ea02d82",
+      "contractMethod": {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "addBlacklistOwner",
+        "payable": false
+      },
+      "contractInputsValues": {
+        "newOwner": "0x26a5ccec74e4e193cb47350e473b85410ea02d82"
+      }
+    }
+  ]
+}

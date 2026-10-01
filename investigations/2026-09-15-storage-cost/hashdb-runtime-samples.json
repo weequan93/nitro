@@ -1,0 +1,26 @@
+[
+  {
+    "timestamp": "2026-09-24T06:14:12Z",
+    "gcproc": 1121503777444,
+    "size": 1073639305,
+    "commit_bytes": 0,
+    "commit_nodes": 0,
+    "flush_bytes": 224845240347,
+    "flush_nodes": 564734118,
+    "gc_bytes": 0,
+    "gc_nodes": 0,
+    "disk_size": 1593467941088
+  },
+  {
+    "timestamp": "2026-09-24T06:15:12Z",
+    "gcproc": 1126583004728,
+    "size": 1073639005,
+    "commit_bytes": 0,
+    "commit_nodes": 0,
+    "flush_bytes": 224895554424,
+    "flush_nodes": 564859727,
+    "gc_bytes": 0,
+    "gc_nodes": 0,
+    "disk_size": 1593467941088
+  }
+]

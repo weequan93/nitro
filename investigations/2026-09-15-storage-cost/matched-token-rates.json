@@ -1,0 +1,785 @@
+{
+  "method": "Old event-ID differences over token-specific observation windows September 9\u201314, compared to exact counters September 16\u201324; not equal calendar windows or complete workload totals.",
+  "tokens": [
+    {
+      "token": "0x2da9eb625357bca55e1d6076cbf491501eaa4a65",
+      "oldDailyRate": 38121.406702590415,
+      "newDailyRate": 40272.98039651912,
+      "oldFirst": [
+        1788917321,
+        735487
+      ],
+      "oldLast": [
+        1789414114,
+        954682
+      ]
+    },
+    {
+      "token": "0x9f18bcddb0ecfaf2c646cc1f8307468d363ecfc6",
+      "oldDailyRate": 19228.749676341413,
+      "newDailyRate": 20564.42280541128,
+      "oldFirst": [
+        1788928092,
+        345210
+      ],
+      "oldLast": [
+        1789132783,
+        390765
+      ]
+    },
+    {
+      "token": "0xafe00a563a11428d1de0ab3a89ad849f56b201ca",
+      "oldDailyRate": 36907.96777591164,
+      "newDailyRate": 42876.55540058357,
+      "oldFirst": [
+        1788928092,
+        2360821
+      ],
+      "oldLast": [
+        1789068608,
+        2420846
+      ]
+    },
+    {
+      "token": "0xb7e20ee2392f940df344a1a940c37030df0363a0",
+      "oldDailyRate": 24262.415667966638,
+      "newDailyRate": 32012.63658688937,
+      "oldFirst": [
+        1788928092,
+        18595524
+      ],
+      "oldLast": [
+        1789068608,
+        18634983
+      ]
+    },
+    {
+      "token": "0xa0750ef1fa99a393ca82771bf91ba80e709ca692",
+      "oldDailyRate": 47578.188520993695,
+      "newDailyRate": 81497.56560876894,
+      "oldFirst": [
+        1788928092,
+        17760765
+      ],
+      "oldLast": [
+        1789381633,
+        18010518
+      ]
+    },
+    {
+      "token": "0x64a2b61135f34f6991286a73a54f204942c7c6b3",
+      "oldDailyRate": 28032.904231255892,
+      "newDailyRate": 26458.877185176312,
+      "oldFirst": [
+        1788928092,
+        498928
+      ],
+      "oldLast": [
+        1789132783,
+        565341
+      ]
+    },
+    {
+      "token": "0x93185618ed8f9497284bf9b9aba47be80cd8f5f8",
+      "oldDailyRate": 47975.50419549536,
+      "newDailyRate": 44205.82029144241,
+      "oldFirst": [
+        1788928092,
+        920225
+      ],
+      "oldLast": [
+        1789111503,
+        1022068
+      ]
+    },
+    {
+      "token": "0xb283060456f46bcb2cbea518adb71976756e01bd",
+      "oldDailyRate": 27390.40454958829,
+      "newDailyRate": 40239.83502614083,
+      "oldFirst": [
+        1788928092,
+        700157
+      ],
+      "oldLast": [
+        1789414114,
+        854235
+      ]
+    },
+    {
+      "token": "0x479605c9831d451f653b603ac28014729df465eb",
+      "oldDailyRate": 17639.54448412485,
+      "newDailyRate": 19070.90966654402,
+      "oldFirst": [
+        1788928092,
+        323405
+      ],
+      "oldLast": [
+        1789132783,
+        365195
+      ]
+    },
+    {
+      "token": "0x5c7988e803a8d75588f11a5a2d4d08acc038ffba",
+      "oldDailyRate": 18241.348320695837,
+      "newDailyRate": 27535.91689698546,
+      "oldFirst": [
+        1788928092,
+        2709764
+      ],
+      "oldLast": [
+        1789370954,
+        2803264
+      ]
+    },
+    {
+      "token": "0xf3d3e20ff3e842acacc60e50724175a12275318e",
+      "oldDailyRate": 38381.943514858984,
+      "newDailyRate": 37223.72953870639,
+      "oldFirst": [
+        1788928092,
+        717432
+      ],
+      "oldLast": [
+        1789132783,
+        808363
+      ]
+    },
+    {
+      "token": "0x34f894f87a255d89f323f8a2eabf650911717d6e",
+      "oldDailyRate": 28741.732083193638,
+      "newDailyRate": 31084.073348336144,
+      "oldFirst": [
+        1788928092,
+        576007
+      ],
+      "oldLast": [
+        1789014589,
+        604781
+      ]
+    },
+    {
+      "token": "0x2f599e228815b4a6a4eea0fb0a765f9300a430b8",
+      "oldDailyRate": 13699.914773604032,
+      "newDailyRate": 24811.21959150145,
+      "oldFirst": [
+        1788928092,
+        456485
+      ],
+      "oldLast": [
+        1789349323,
+        523277
+      ]
+    },
+    {
+      "token": "0xde1b53eda49eb820f34b8b6b49e448e25ac84dce",
+      "oldDailyRate": 43146.02344320793,
+      "newDailyRate": 35981.33262597654,
+      "oldFirst": [
+        1788938969,
+        1494623
+      ],
+      "oldLast": [
+        1789316733,
+        1683269
+      ]
+    },
+    {
+      "token": "0x2cccc94b52f91bee4c3a60d2e500e3fcf096e020",
+      "oldDailyRate": 44281.13213540729,
+      "newDailyRate": 31963.96587573909,
+      "oldFirst": [
+        1788938969,
+        1411510
+      ],
+      "oldLast": [
+        1789316733,
+        1605119
+      ]
+    },
+    {
+      "token": "0x962dbfbc7ae6d49ccbbee77bcd1cb72938d302f8",
+      "oldDailyRate": 24725.929319563107,
+      "newDailyRate": 28623.06040199543,
+      "oldFirst": [
+        1788938969,
+        2985489
+      ],
+      "oldLast": [
+        1789349323,
+        3102924
+      ]
+    },
+    {
+      "token": "0x881e8ef8a6ac1fd7f850978361d9ff67902f0cac",
+      "oldDailyRate": 28297.299472690313,
+      "newDailyRate": 32263.259945065758,
+      "oldFirst": [
+        1788938969,
+        16683676
+      ],
+      "oldLast": [
+        1789132783,
+        16747153
+      ]
+    },
+    {
+      "token": "0xee45bc4f63618feb669147af65c79eeed70b100b",
+      "oldDailyRate": 2338.599928130108,
+      "newDailyRate": 8951.221473983245,
+      "oldFirst": [
+        1788938969,
+        125628
+      ],
+      "oldLast": [
+        1789111503,
+        130298
+      ]
+    },
+    {
+      "token": "0x1c97dbe5e3b9dd1ddc459cef5f5ef0db5b198547",
+      "oldDailyRate": 69370.39633210152,
+      "newDailyRate": 59723.64482702559,
+      "oldFirst": [
+        1788938969,
+        11350236
+      ],
+      "oldLast": [
+        1789316733,
+        11653542
+      ]
+    },
+    {
+      "token": "0xc48566c3a2a4358f34bef026b1148f1a2cd47856",
+      "oldDailyRate": 24931.18492111115,
+      "newDailyRate": 50392.54537208964,
+      "oldFirst": [
+        1788949963,
+        19305710
+      ],
+      "oldLast": [
+        1789403259,
+        19436511
+      ]
+    },
+    {
+      "token": "0x2474b4a9a100d727b72bc35cc76f71b6fbf63ddf",
+      "oldDailyRate": 20150.075484082703,
+      "newDailyRate": 21381.967535745764,
+      "oldFirst": [
+        1788949963,
+        353890
+      ],
+      "oldLast": [
+        1789132783,
+        396527
+      ]
+    },
+    {
+      "token": "0xa7924b62bd3887fc779c98653fe4f2dd5140d73e",
+      "oldDailyRate": 19977.074000899825,
+      "newDailyRate": 19080.76702576433,
+      "oldFirst": [
+        1788949963,
+        393040
+      ],
+      "oldLast": [
+        1789154447,
+        440320
+      ]
+    },
+    {
+      "token": "0xfc071612175321d23f679b79c62631491f6f4a03",
+      "oldDailyRate": 20214.338073735544,
+      "newDailyRate": 25773.421068393985,
+      "oldFirst": [
+        1788949963,
+        3873397
+      ],
+      "oldLast": [
+        1789370954,
+        3971893
+      ]
+    },
+    {
+      "token": "0xd3da1a0592ca6c7f40dbc3753f75ecf294bc5804",
+      "oldDailyRate": 17735.757203254823,
+      "newDailyRate": 33111.23927199295,
+      "oldFirst": [
+        1788949963,
+        2551623
+      ],
+      "oldLast": [
+        1789392506,
+        2642466
+      ]
+    },
+    {
+      "token": "0xdb3e0fdc31c41e492468c6d328b0407786e01626",
+      "oldDailyRate": 12377.504352418771,
+      "newDailyRate": 12664.858343244885,
+      "oldFirst": [
+        1788949963,
+        242619
+      ],
+      "oldLast": [
+        1789154447,
+        271913
+      ]
+    },
+    {
+      "token": "0x1ee3699f80f8aa4f38b77e5c3b1cea69e2c6992d",
+      "oldDailyRate": 33303.16935620685,
+      "newDailyRate": 45403.36621971985,
+      "oldFirst": [
+        1788949963,
+        5889775
+      ],
+      "oldLast": [
+        1789339001,
+        6039731
+      ]
+    },
+    {
+      "token": "0x0b6c726e5a41e5850a047765810e79d6fcf0a530",
+      "oldDailyRate": 4641.021662588769,
+      "newDailyRate": 18496.225623999933,
+      "oldFirst": [
+        1788949963,
+        23930
+      ],
+      "oldLast": [
+        1789100776,
+        32031
+      ]
+    },
+    {
+      "token": "0x3af24c47fe884653d64dc2edf00b8a07e2cbc764",
+      "oldDailyRate": 26648.58696110245,
+      "newDailyRate": 34903.183961255105,
+      "oldFirst": [
+        1788949963,
+        12479010
+      ],
+      "oldLast": [
+        1789068608,
+        12515604
+      ]
+    },
+    {
+      "token": "0xc0c5630b8b57c88f48626a5aff0ab4de5bcfd8a2",
+      "oldDailyRate": 16374.158653846154,
+      "newDailyRate": 39651.22746369805,
+      "oldFirst": [
+        1788949963,
+        12147449
+      ],
+      "oldLast": [
+        1789349323,
+        12223134
+      ]
+    },
+    {
+      "token": "0x8f0b88c57792e8ea53098dd08176f723925a234a",
+      "oldDailyRate": 14073.467375698609,
+      "newDailyRate": 17681.26845046078,
+      "oldFirst": [
+        1788949963,
+        2339673
+      ],
+      "oldLast": [
+        1789274537,
+        2392542
+      ]
+    },
+    {
+      "token": "0x52cf6d93800a62286daf4e9a91fb766f87588baa",
+      "oldDailyRate": 11181.616936981552,
+      "newDailyRate": 22245.10255247418,
+      "oldFirst": [
+        1788949963,
+        535506
+      ],
+      "oldLast": [
+        1789111503,
+        556412
+      ]
+    },
+    {
+      "token": "0x69d1ebd1887ff6953c986d69c45529c7988bd514",
+      "oldDailyRate": 26198.620247072035,
+      "newDailyRate": 42241.61824980533,
+      "oldFirst": [
+        1788949963,
+        3339009
+      ],
+      "oldLast": [
+        1789392506,
+        3473199
+      ]
+    },
+    {
+      "token": "0xb5b48d6894e919b28d415a88aa54d2a670ea96a0",
+      "oldDailyRate": 6402.730554643912,
+      "newDailyRate": 15052.680397374794,
+      "oldFirst": [
+        1788949963,
+        512442
+      ],
+      "oldLast": [
+        1789132783,
+        525990
+      ]
+    },
+    {
+      "token": "0x52ba92b6fd30378c86ecebe4438eabe8f488c045",
+      "oldDailyRate": 44738.77256317689,
+      "newDailyRate": 42169.28987652631,
+      "oldFirst": [
+        1788949963,
+        810687
+      ],
+      "oldLast": [
+        1789132783,
+        905353
+      ]
+    },
+    {
+      "token": "0x9e3ceaba7134aea85130fe52d8d1b33a4b62b7f0",
+      "oldDailyRate": 17197.61382252032,
+      "newDailyRate": 18720.11089529123,
+      "oldFirst": [
+        1788949963,
+        705040
+      ],
+      "oldLast": [
+        1789079375,
+        730799
+      ]
+    },
+    {
+      "token": "0xc0d4805b2f2be713b3d76e0afd6d62f35a6a265e",
+      "oldDailyRate": 16835.07492661826,
+      "newDailyRate": 18616.97827444873,
+      "oldFirst": [
+        1788949963,
+        398892
+      ],
+      "oldLast": [
+        1789047058,
+        417811
+      ]
+    },
+    {
+      "token": "0x168890d0e2caaa57a4477f7e6431795e6b990cbe",
+      "oldDailyRate": 13144.312438464063,
+      "newDailyRate": 17278.841760291612,
+      "oldFirst": [
+        1788949963,
+        284338
+      ],
+      "oldLast": [
+        1789132783,
+        312151
+      ]
+    },
+    {
+      "token": "0xa15494a9f9740d37dbad658412d9b433c88fd037",
+      "oldDailyRate": 12785.37199335933,
+      "newDailyRate": 19133.996765554006,
+      "oldFirst": [
+        1788960669,
+        1002519
+      ],
+      "oldLast": [
+        1789090174,
+        1021683
+      ]
+    },
+    {
+      "token": "0x1f1441e6c7528dd1f1241b47be31cf09769ed311",
+      "oldDailyRate": 27160.848190405177,
+      "newDailyRate": 40001.533366989825,
+      "oldFirst": [
+        1788960669,
+        4332911
+      ],
+      "oldLast": [
+        1789392506,
+        4468664
+      ]
+    },
+    {
+      "token": "0x8892549ddca0f14ee3b4b0de9a5b6de5087fe12f",
+      "oldDailyRate": 30553.471854405267,
+      "newDailyRate": 45326.602034791686,
+      "oldFirst": [
+        1788960669,
+        26236258
+      ],
+      "oldLast": [
+        1789306176,
+        26358439
+      ]
+    },
+    {
+      "token": "0x078a3f7f28766d10fb9b9e92138d142bc8513083",
+      "oldDailyRate": 24138.447943292063,
+      "newDailyRate": 33378.250489873106,
+      "oldFirst": [
+        1788960669,
+        5564488
+      ],
+      "oldLast": [
+        1789381633,
+        5682097
+      ]
+    },
+    {
+      "token": "0x652606b80b4e7d5a7f709b1b0d382e7d8d9e187d",
+      "oldDailyRate": 56741.798768084394,
+      "newDailyRate": 63685.31749766829,
+      "oldFirst": [
+        1788960669,
+        6520407
+      ],
+      "oldLast": [
+        1789100776,
+        6612420
+      ]
+    },
+    {
+      "token": "0x5dc0b487249cd4655d8d381b43062d9ffbfc3896",
+      "oldDailyRate": 59843.86703216092,
+      "newDailyRate": 35908.38816774624,
+      "oldFirst": [
+        1788960669,
+        5984906
+      ],
+      "oldLast": [
+        1789090174,
+        6074606
+      ]
+    },
+    {
+      "token": "0x69ed5c59cc40c98857860322a47630d2c0d1a022",
+      "oldDailyRate": 22239.59132728321,
+      "newDailyRate": 25892.69511495974,
+      "oldFirst": [
+        1788960669,
+        5060760
+      ],
+      "oldLast": [
+        1789392506,
+        5171916
+      ]
+    },
+    {
+      "token": "0x3ac3f59330a7775fe1648da4e7e6595d1fc01fb5",
+      "oldDailyRate": 17576.377960859787,
+      "newDailyRate": 19637.214953750845,
+      "oldFirst": [
+        1788960669,
+        852464
+      ],
+      "oldLast": [
+        1789349323,
+        931528
+      ]
+    },
+    {
+      "token": "0x2619bdb6ca015e489d350ff85feb60c477fb8006",
+      "oldDailyRate": 4812.090133845372,
+      "newDailyRate": 11562.435931443435,
+      "oldFirst": [
+        1788971439,
+        275426
+      ],
+      "oldLast": [
+        1789414114,
+        300081
+      ]
+    },
+    {
+      "token": "0x8d1db0131633f0e2097adaebf95f8aaac87e04a2",
+      "oldDailyRate": 15254.34298166396,
+      "newDailyRate": 17038.938280267314,
+      "oldFirst": [
+        1788971439,
+        3869492
+      ],
+      "oldLast": [
+        1789295882,
+        3926774
+      ]
+    },
+    {
+      "token": "0x7b47ac62f79087700be87b3cbc1d5d908a6da54a",
+      "oldDailyRate": 29091.831086510134,
+      "newDailyRate": 26216.879016317693,
+      "oldFirst": [
+        1789025507,
+        1277441
+      ],
+      "oldLast": [
+        1789316733,
+        1375500
+      ]
+    },
+    {
+      "token": "0xc5b66dc0604a440155689015b1a577d7cf23e3d5",
+      "oldDailyRate": 27124.99019223225,
+      "newDailyRate": 61024.323376145534,
+      "oldFirst": [
+        1789047058,
+        9450265
+      ],
+      "oldLast": [
+        1789414114,
+        9565501
+      ]
+    },
+    {
+      "token": "0x70292ecf85074c09a76cbe9b1800a6adb9c25f95",
+      "oldDailyRate": 5190.967417519485,
+      "newDailyRate": 11416.670231973098,
+      "oldFirst": [
+        1789047058,
+        231534
+      ],
+      "oldLast": [
+        1789154447,
+        237986
+      ]
+    },
+    {
+      "token": "0x675e8ce04c33aeb0f9f4954c5e3fba03240284d6",
+      "oldDailyRate": 32821.77587594073,
+      "newDailyRate": 43238.81335192997,
+      "oldFirst": [
+        1789047058,
+        3427103
+      ],
+      "oldLast": [
+        1789327956,
+        3533811
+      ]
+    },
+    {
+      "token": "0xf88f37df527855440424b52cbdda0bce510fa261",
+      "oldDailyRate": 19123.181563575257,
+      "newDailyRate": 28590.407899578153,
+      "oldFirst": [
+        1789047058,
+        9881603
+      ],
+      "oldLast": [
+        1789209519,
+        9917561
+      ]
+    },
+    {
+      "token": "0xdd392ad454bed8abc6ad49469cee37f07f3b5fea",
+      "oldDailyRate": 15796.94773164123,
+      "newDailyRate": 21227.453429967398,
+      "oldFirst": [
+        1789047058,
+        4454049
+      ],
+      "oldLast": [
+        1789392506,
+        4517209
+      ]
+    },
+    {
+      "token": "0x83fbf275a3b79f062a4deb7b876fb17d11b22815",
+      "oldDailyRate": 20598.92614860303,
+      "newDailyRate": 39874.496650038076,
+      "oldFirst": [
+        1789047058,
+        18409905
+      ],
+      "oldLast": [
+        1789295882,
+        18469228
+      ]
+    },
+    {
+      "token": "0x644f2fd0476402359b9233b101663e706493a145",
+      "oldDailyRate": 16664.888191447626,
+      "newDailyRate": 55294.24046137917,
+      "oldFirst": [
+        1789047058,
+        12646822
+      ],
+      "oldLast": [
+        1789414114,
+        12717620
+      ]
+    },
+    {
+      "token": "0x7c823734f32a6ba9ea7a5537aa05fc8147ac0464",
+      "oldDailyRate": 7020.0569003668825,
+      "newDailyRate": 16849.676983237354,
+      "oldFirst": [
+        1789047058,
+        7215408
+      ],
+      "oldLast": [
+        1789360237,
+        7240854
+      ]
+    },
+    {
+      "token": "0xb2d98323ad400b711e49f131086783d3471acad8",
+      "oldDailyRate": 16417.295705521472,
+      "newDailyRate": 27676.137831894375,
+      "oldFirst": [
+        1789068608,
+        12514295
+      ],
+      "oldLast": [
+        1789251983,
+        12549139
+      ]
+    },
+    {
+      "token": "0xab49aa1ffabdd69b812163ac01b8762c1d435342",
+      "oldDailyRate": 8994.034047692585,
+      "newDailyRate": 22135.43943114823,
+      "oldFirst": [
+        1789068608,
+        10255407
+      ],
+      "oldLast": [
+        1789285539,
+        10277989
+      ]
+    },
+    {
+      "token": "0x33be247a75e7d15f6d8597f0accacf0d7735d7a6",
+      "oldDailyRate": 7001.880413758305,
+      "newDailyRate": 24276.457853799617,
+      "oldFirst": [
+        1789111503,
+        483283
+      ],
+      "oldLast": [
+        1789349323,
+        502556
+      ]
+    },
+    {
+      "token": "0x3eaa98b277a8174b5197ffe4f7fd9a76fc12802a",
+      "oldDailyRate": 3073.3356016785756,
+      "newDailyRate": 13920.685907912413,
+      "oldFirst": [
+        1789154447,
+        660929
+      ],
+      "oldLast": [
+        1789392506,
+        669397
+      ]
+    }
+  ]
+}
