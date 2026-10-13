@@ -78,14 +78,20 @@ func (p *TxProcessor) checkTopLevelDeriwBlacklist(gasRemaining *uint64) (multiga
 		}
 	}
 
+	banType := p.state.Blacklist().LegacyBanTypeFree
+	readsPerAddress := uint64(2)
+	if p.state.DeriwOSVersion() >= arbosState.DeriwOSVersion_BlacklistBanTypes {
+		banType = p.state.Blacklist().BanTypeFree
+		readsPerAddress = 3 // two memberships plus the stored ban flag
+	}
 	quarantined := false
 	for _, address := range addresses {
-		quarantined = p.state.Blacklist().IsQuarantinedFree(address) || quarantined
+		banFlag := banType(address)
+		// Other flags are handled separately and must never trigger this rule.
+		quarantined = banFlag == blacklist.BanFlagAll || quarantined
 	}
 
-	// The union rule reads both legacy address sets once for each unique
-	// top-level participant.
-	checkGas := multigas.StorageAccessReadGas(uint64(len(addresses)) * 2 * storage.StorageReadCost)
+	checkGas := multigas.StorageAccessReadGas(uint64(len(addresses)) * readsPerAddress * storage.StorageReadCost)
 	if checkGas.SingleGas() > *gasRemaining {
 		usedGas := multigas.ComputationGas(*gasRemaining)
 		*gasRemaining = 0

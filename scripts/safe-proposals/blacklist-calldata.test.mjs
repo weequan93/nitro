@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Interface } from 'ethers'
@@ -6,8 +8,10 @@ import { buildCalls, buildTransactionBuilder, PRODUCTION, verifyCalls } from './
 
 const address = '0x1111111111111111111111111111111111111111'
 // Decode with the repository's Solidity interface, independently of the generator ABI.
-const source = readFileSync(new URL('../../contracts/src/precompiles/DeriwBlacklist.sol', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../../contracts-local/src/precompiles/DeriwBlacklist.sol', import.meta.url), 'utf8')
 const blacklist = new Interface(source.match(/function [^;]+;/g).map(line => line.slice(0, -1)))
+const publicSource = readFileSync(new URL('../../contracts-local/src/precompiles/DeriwBlacklistPublic.sol', import.meta.url), 'utf8')
+const blacklistPublic = new Interface(publicSource.match(/function [^;]+;/g).map(line => line.slice(0, -1)))
 const executor = new Interface(['function executeCall(address,bytes)', 'function EXECUTOR_ROLE() view returns (bytes32)', 'function hasRole(bytes32,address) view returns (bool)'])
 const safe = new Interface(['function getOwners() view returns (address[])', 'function getThreshold() view returns (uint256)'])
 
@@ -45,7 +49,7 @@ test('directions and invalid inputs', () => {
   }
 })
 
-function mockRpc({ chain = '0xb46', role = true, revert = false, code = '0x1234', target = PRODUCTION.executor } = {}) {
+function mockRpc({ chain = '0xb46', role = true, revert = false, code = '0x1234', target = PRODUCTION.executor, deriwOSVersion = 6n } = {}) {
   const simulations = []
   return {
     simulations,
@@ -66,6 +70,10 @@ function mockRpc({ chain = '0xb46', role = true, revert = false, code = '0x1234'
         simulations.push(tx)
         if (revert) throw new Error('execution reverted')
         return '0x'
+      }
+      if (tx.to === PRODUCTION.blacklistPublic) {
+        assert.equal(blacklistPublic.parseTransaction(tx).name, 'getDeriwOSVersion')
+        return blacklistPublic.encodeFunctionResult('getDeriwOSVersion', [60n, deriwOSVersion])
       }
       const abi = tx.to === PRODUCTION.safe ? safe : executor
       const decoded = abi.parseTransaction(tx)
@@ -104,4 +112,62 @@ test('verification fails closed on wrong chain, missing code, missing role, or r
   ]) {
     await assert.rejects(verifyCalls(buildCalls([address]), mockRpc(options).rpc), message)
   }
+})
+
+
+test('transfer metadata encodes type 2 in both directions and routes', async () => {
+  const manualAbi = new Interface(JSON.parse(readFileSync(new URL('./deriw-blacklist-add.abi.json', import.meta.url))))
+  for (const route of ['executor', 'direct']) {
+    for (const direction of ['from', 'to', 'both']) {
+      const calls = buildCalls([address], direction, route, '2')
+      assert.equal(calls.length, direction === 'both' ? 2 : 1)
+      for (const call of calls) {
+        const inner = route === 'direct' ? call.data : executor.decodeFunctionData('executeCall', call.data)[1]
+        const decoded = blacklist.parseTransaction({ data: inner })
+        assert.equal(decoded.name, call.method)
+        assert.match(decoded.name, /WithFlag$/)
+        assert.equal(decoded.args[0], address)
+        assert.equal(decoded.args[1], 2n)
+        assert.equal(manualAbi.parseTransaction({ data: inner }).signature, decoded.signature)
+      }
+      const batch = buildTransactionBuilder(calls)
+      assert.match(batch.meta.name, /type 2/)
+      assert.match(batch.meta.description, /metadata only; no transfer enforcement/)
+      assert.match(batch.meta.description, /removing any ban-all restriction/)
+      const mock = mockRpc({ target: route === 'direct' ? PRODUCTION.blacklist : PRODUCTION.executor })
+      await verifyCalls(calls, mock.rpc)
+      assert.deepEqual(mock.simulations.map(tx => tx.data), calls.map(call => call.data))
+    }
+  }
+})
+
+test('type 2 requires active DeriwOS 6 before simulating additions', async () => {
+  const calls = buildCalls([address], 'both', 'executor', '2')
+  for (const version of [0n, 1n, 5n]) {
+    const mock = mockRpc({ deriwOSVersion: version })
+    await assert.rejects(verifyCalls(calls, mock.rpc), /requires active DeriwOS 6/)
+    assert.equal(mock.simulations.length, 0)
+  }
+  await verifyCalls(calls, mockRpc({ deriwOSVersion: 7n }).rpc)
+  // Legacy type 1 still works without the new API or activation requirement.
+  await verifyCalls(buildCalls([address], 'both', 'executor', '1'), mockRpc({ deriwOSVersion: 0n }).rpc)
+  await assert.rejects(verifyCalls(calls, mockRpc({ revert: true }).rpc), /simulation failed/)
+})
+
+test('ban type is a single defined value, with legacy encoding as the default', () => {
+  assert.deepEqual(buildCalls([address]), buildCalls([address], 'both', 'executor', '1'))
+  for (const invalid of ['0', '3', '1,2', '0x2', '02', '', '256', '18446744073709551615']) {
+    assert.throws(() => buildCalls([address], 'both', 'executor', invalid), /--ban-flag/)
+  }
+})
+
+test('offline CLI reports transfer metadata and encodes the flag without RPC', () => {
+  const script = fileURLToPath(new URL('./blacklist-calldata.mjs', import.meta.url))
+  const result = spawnSync(process.execPath, [script, '--address', address, '--ban-flag', '2', '--route', 'direct', '--direction', 'from', '--offline', '--rpc-url', 'http://127.0.0.1:1'], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /OFFLINE \/ UNVERIFIED/)
+  assert.match(result.stdout, /Ban type 2: ERC20\/USDT transfer metadata only/)
+  assert.match(result.stdout, /addBlacklistTxFromWithFlag\(0x1111111111111111111111111111111111111111, 2\)/)
+  const data = result.stdout.match(/Data \(hex encoded\): (0x[0-9a-f]+)/)[1]
+  assert.equal(blacklist.parseTransaction({ data }).args[1], 2n)
 })

@@ -1,0 +1,160 @@
+{
+  "status": "Local merge reviewed; deployment artifact checks remain outstanding",
+  "dev_parent": "18c0a97530a90cd22e49269d475072d2a015c904",
+  "feature_parent": "726330ebc19e2f5e5af205a92a15ce3a4777b5a9",
+  "tested_source_tree": "a35391bae6aaec534837641e4ba77d7822f787f7",
+  "supported_deriwos_maximum": 6,
+  "builder_image": "golang@sha256:298734aec230b5f3e8cee450ce6d7eccc39f1797ba548ee90d57e9803030c6c3",
+  "go_version": "1.25.9",
+  "go_build_platform": "Linux arm64 host, GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0",
+  "build_paths": {
+    "source": "/workspace",
+    "goroot": "/usr/local/go",
+    "module_cache": "/root/go/pkg/mod"
+  },
+  "replay_graph": {
+    "packages": 384,
+    "local_inputs": 577,
+    "identical_before_after": true,
+    "execution_gethexec_in_graph": false,
+    "util_s3client_in_graph": false
+  },
+  "replay_wasm": {
+    "before": {
+      "bytes": 27808436,
+      "sha256": "c4915584f1e1503cb910ce4817d95e74296ea02e198ffb1dada587ca5bd575e4"
+    },
+    "after": {
+      "bytes": 27808436,
+      "sha256": "c4915584f1e1503cb910ce4817d95e74296ea02e198ffb1dada587ca5bd575e4"
+    },
+    "input_graphs_identical": true,
+    "wasm_bytes_identical": true,
+    "matches_deployed_dev_replay": true
+  },
+  "local_machine_reproduction": {
+    "before": {
+      "root": "0xbe23815995337d179de9443d865ba455b536597c1dafd2e1e03847bb4395dee8",
+      "machine_sha256": "3e1ac3af4de9abeb955421339c6cf72ec73fcd9237cc3549e38dc321d401bcf5",
+      "libraries": {
+        "forward": "20d0f74829077ed4d6d5ef904cc8f12221eab449e4aabe39799088dd92d4a0da",
+        "soft-float": "9ebc94cc56f765c63d16005eef1aa4e71a59ed8d1ce203338deb9b771424d99f",
+        "wasi_stub": "816c555779b3231902df4546529f22e87a19687d63a7b402de010f6783b52642",
+        "host_io": "c9b562911f06d19b3e1db80b98fd241e543905dae2b8164d8375e0a91fe79a67",
+        "user_host": "c651a2d72e90e430de0a525214310100a365edf19c60dd26430a794210eb8193",
+        "arbcompress": "081c4fe8add434585744ea619213399e5293df8ed0665acc2af5022438c31937",
+        "arbcrypto": "bceaac140d79da5fd1e39545f43cf255fac3b7c300d7556f95430baa56f1ca92",
+        "program_exec": "5d380b41a80e12caa8f472fe3dff59121e84431f96ceaea7da6ac92cd1663d16"
+      }
+    },
+    "after": {
+      "root": "0xbe23815995337d179de9443d865ba455b536597c1dafd2e1e03847bb4395dee8",
+      "machine_sha256": "3e1ac3af4de9abeb955421339c6cf72ec73fcd9237cc3549e38dc321d401bcf5",
+      "libraries": {
+        "forward": "20d0f74829077ed4d6d5ef904cc8f12221eab449e4aabe39799088dd92d4a0da",
+        "soft-float": "9ebc94cc56f765c63d16005eef1aa4e71a59ed8d1ce203338deb9b771424d99f",
+        "wasi_stub": "816c555779b3231902df4546529f22e87a19687d63a7b402de010f6783b52642",
+        "host_io": "c9b562911f06d19b3e1db80b98fd241e543905dae2b8164d8375e0a91fe79a67",
+        "user_host": "c651a2d72e90e430de0a525214310100a365edf19c60dd26430a794210eb8193",
+        "arbcompress": "081c4fe8add434585744ea619213399e5293df8ed0665acc2af5022438c31937",
+        "arbcrypto": "bceaac140d79da5fd1e39545f43cf255fac3b7c300d7556f95430baa56f1ca92",
+        "program_exec": "5d380b41a80e12caa8f472fe3dff59121e84431f96ceaea7da6ac92cd1663d16"
+      }
+    },
+    "roots_identical": true,
+    "machines_byte_identical": true,
+    "matches_dev_onchain_root": false
+  },
+  "local_machine_caveat": "Uses cached native prover and WASM libraries, whose release provenance was not established. Its be238 root matches before/after but differs from live dev 3691. Do not substitute it for a deployed machine.",
+  "live_development": {
+    "parent_chain_id": 421614,
+    "rollup": "0xdDF009b4879EaFFa6a23782F9aA30F86cd2c64e6",
+    "arbos": 60,
+    "deriwos": 6,
+    "wasm_root": "0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d",
+    "published_machine_prover_verified": true,
+    "artifacts": {
+      "expected_onchain_root": "0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d",
+      "artifacts": [
+        {
+          "file": "replay.wasm",
+          "url": "https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d/replay.wasm",
+          "bytes": 27808436,
+          "sha256": "c4915584f1e1503cb910ce4817d95e74296ea02e198ffb1dada587ca5bd575e4"
+        },
+        {
+          "file": "machine.v2.wavm.br",
+          "url": "https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d/machine.v2.wavm.br",
+          "bytes": 9338287,
+          "sha256": "e0c61a7f038103226f256c0d99cdb8e30298fd3d4ebf7c863e1cab82fc73bdde"
+        }
+      ]
+    }
+  },
+  "live_test": {
+    "parent_chain_id": 421614,
+    "rollup": "0xD259Afff7a8731B1B61DaC168a4F31b69683Ae55",
+    "inbox": "0xD10c44b379c9C88871499d6E257D120061BF7698",
+    "verified_shared_bridge": "0x0572018Db4caadA1A71C9df9C88Fd12379c1d152",
+    "arbos": 60,
+    "deriwos": 5,
+    "wasm_root": "0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39",
+    "artifact_download": "HTTP 403; operator bundle verification pending"
+  },
+  "native_tests": {
+    "platform": "Darwin arm64, Go 1.25.9, reused native libraries",
+    "packages": 8,
+    "result": "pass",
+    "warnings": "Cached libstylus objects target macOS 26.2, while linker deployment target is 26.0"
+  },
+  "safe_helper_tests": {
+    "tests": 18,
+    "result": "pass",
+    "dependencies": {
+      "ethers": "6.17.0",
+      "@safe-global/api-kit": "5.0.2",
+      "@safe-global/protocol-kit": "8.0.6"
+    }
+  },
+  "production_branch": "deriw-master-legacy",
+  "deployment_or_branch_promotion_performed": false,
+  "release_tag_created": false,
+  "evidence_files": {
+    "prepare.py": {
+      "path": "/private/tmp/deriw3180-verification-20261013/prepare.py",
+      "sha256": "9e84b89ee29a0d012de2a05544f6357db6cec19d187d7fd7ae34d0386de056ca"
+    },
+    "build_wasm.py": {
+      "path": "/private/tmp/deriw3180-verification-20261013/build_wasm.py",
+      "sha256": "c9b5f8d87ab031d9bcbafcd22487a23a497655d819f45b907a5f68f10f79adf2"
+    },
+    "before-replay-inputs.json": {
+      "path": "/private/tmp/deriw3180-verification-20261013/before-replay-inputs.json",
+      "sha256": "55703879a849d844fb562d7b8db33b04c7343f0d42bddd7b429047adce1777fa"
+    },
+    "after-replay-inputs.json": {
+      "path": "/private/tmp/deriw3180-verification-20261013/after-replay-inputs.json",
+      "sha256": "55703879a849d844fb562d7b8db33b04c7343f0d42bddd7b429047adce1777fa"
+    },
+    "before-generated-bindings.json": {
+      "path": "/private/tmp/deriw3180-verification-20261013/before-generated-bindings.json",
+      "sha256": "4ff26a82d454941b32fa62510a9bc5235f01f21f6ed3b626d4135945b647d85e"
+    },
+    "after-generated-bindings.json": {
+      "path": "/private/tmp/deriw3180-verification-20261013/after-generated-bindings.json",
+      "sha256": "4ff26a82d454941b32fa62510a9bc5235f01f21f6ed3b626d4135945b647d85e"
+    },
+    "merged-native-tests.log": {
+      "path": "/private/tmp/deriw3180-verification-20261013/merged-native-tests.log",
+      "sha256": "52d64c691c9ef3b620f0f9416e2e4956add7d58b3d84a2ab7af3a0e58bbfe3c8"
+    },
+    "safe-helper-tests.log": {
+      "path": "/private/tmp/deriw3180-verification-20261013/safe-helper-tests.log",
+      "sha256": "6cd6f0d8bcd1d161adcbd0c2ca05bc3b8b72ee682d619b9517a37352eac1ceb0"
+    },
+    "machine-comparison.json": {
+      "path": "/private/tmp/deriw3180-verification-20261013/machine-comparison.json",
+      "sha256": "fa9aabe0dd8cbe00bfcb3748653459eb267373e9ee36b14ceab0551a9f256884"
+    }
+  }
+}

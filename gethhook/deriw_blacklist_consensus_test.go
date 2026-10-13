@@ -6,6 +6,7 @@ package gethhook
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -22,6 +23,9 @@ import (
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/blacklist"
+	"github.com/offchainlabs/nitro/arbos/deriwpolicy"
+	"github.com/offchainlabs/nitro/solgen/go/precompilesgen"
+	"github.com/stretchr/testify/require"
 )
 
 var deriwConsensusChainConfig = func() *params.ChainConfig {
@@ -201,8 +205,8 @@ func TestDeriwConsensusBlacklistAllowsExactEmergencyRemoval(t *testing.T) {
 	if receipt.Status != types.ReceiptStatusSuccessful || result.Err != nil {
 		t.Fatalf("emergency removal result = (%v, %v), want success", receipt.Status, result.Err)
 	}
-	if state.Blacklist().IsQuarantinedFree(target) {
-		t.Fatal("emergency removal left target quarantined")
+	if state.Blacklist().BanTypeFree(target) != 0 {
+		t.Fatal("emergency removal left target blacklisted")
 	}
 }
 
@@ -335,5 +339,155 @@ func TestDeriwConsensusBlacklistAllowsRetryableTicketCreation(t *testing.T) {
 	}
 	if retryable == nil {
 		t.Fatal("blacklisted retry destination prevented ticket creation")
+	}
+}
+
+func TestDeriwConsensusBlacklistUsesStoredFlagAcrossTransactions(t *testing.T) {
+	state, stateDB := arbosState.NewArbosMemoryBackedArbOSState()
+	// This fixture's chain needs an explicit route for the earlier v2 upgrade.
+	require.NoError(t, state.ScheduleDeriwRouterConfig(deriwpolicy.RouterOnlySendConfig{
+		Router:                 common.HexToAddress("0x8101"),
+		CanonicalGatewayRouter: common.HexToAddress("0x8102"),
+		ApprovedTokenGateways:  []common.Address{common.HexToAddress("0x8103")},
+	}, 0, arbosState.DeriwRouterConfigUpdateDelay))
+	require.NoError(t, state.ActivateDeriwRouterConfigIfNecessary(arbosState.DeriwRouterConfigUpdateDelay))
+	require.NoError(t, state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_BlacklistBanTypes))
+	ownerKey, owner := fundedDeriwSender(t, stateDB)
+	userKey, user := fundedDeriwSender(t, stateDB)
+	require.NoError(t, state.Blacklist().BlacklistOwner().Add(owner))
+	require.NoError(t, state.Blacklist().TxFromAddrs().Add(user))
+	require.NoError(t, state.Blacklist().TxToAddrs().Add(user))
+	abi, err := precompilesgen.DeriwBlacklistMetaData.GetAbi()
+	require.NoError(t, err)
+	target := common.HexToAddress("0x9001")
+	precompile := types.DeriwBlacklistAddress
+	for index, flag := range []uint64{blacklist.BanFlagERC20Transfer, blacklist.BanFlagAll, blacklist.BanFlagERC20Transfer} {
+		data, err := abi.Pack("addBlacklistTxFromWithFlag", user, flag)
+		require.NoError(t, err)
+		update := makeSignedDeriwTx(t, ownerKey, state.ArbOSVersion(), uint64(index), &precompile, big.NewInt(0), 500_000, data)
+		receipt, result := applyDeriwConsensusTestTx(t, stateDB, state, update)
+		require.Equal(t, uint64(types.ReceiptStatusSuccessful), receipt.Status)
+		require.NoError(t, result.Err)
+		// Membership is identical for every transaction; only its flag changes.
+		require.True(t, state.Blacklist().TxFromAddrs().IsMemberFree(user))
+		require.True(t, state.Blacklist().TxToAddrs().IsMemberFree(user))
+		require.Equal(t, flag, state.Blacklist().BanTypeFree(user))
+		tx := makeSignedDeriwTx(t, userKey, state.ArbOSVersion(), uint64(index), &target, big.NewInt(1), 100_000, nil)
+		receipt, result = applyDeriwConsensusTestTx(t, stateDB, state, tx)
+		if flag == blacklist.BanFlagAll {
+			require.Equal(t, uint64(types.ReceiptStatusFailed), receipt.Status)
+			require.ErrorIs(t, result.Err, vm.ErrDeriwBlacklisted)
+		} else {
+			require.Equal(t, uint64(types.ReceiptStatusSuccessful), receipt.Status)
+			require.NoError(t, result.Err)
+		}
+	}
+	require.Equal(t, uint64(2), stateDB.GetBalance(target).Uint64())
+}
+
+func TestDeriwBlacklistFlagUpdatesRollBackWithEVM(t *testing.T) {
+	state, stateDB := arbosState.NewArbosMemoryBackedArbOSState()
+	require.NoError(t, state.ScheduleDeriwRouterConfig(deriwpolicy.RouterOnlySendConfig{
+		Router: common.HexToAddress("0x8101"), CanonicalGatewayRouter: common.HexToAddress("0x8102"),
+		ApprovedTokenGateways: []common.Address{common.HexToAddress("0x8103")},
+	}, 0, arbosState.DeriwRouterConfigUpdateDelay))
+	require.NoError(t, state.ActivateDeriwRouterConfigIfNecessary(arbosState.DeriwRouterConfigUpdateDelay))
+	require.NoError(t, state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_BlacklistBanTypes))
+	key, _ := fundedDeriwSender(t, stateDB)
+	outer := common.HexToAddress("0x9001")
+	address := common.HexToAddress("0x9002")
+	require.NoError(t, state.Blacklist().BlacklistOwner().Add(outer))
+	require.NoError(t, state.Blacklist().TxToAddrs().Add(address))
+	abi, err := precompilesgen.DeriwBlacklistMetaData.GetAbi()
+	require.NoError(t, err)
+	data, err := abi.Pack("addBlacklistTxFromWithFlag", address, blacklist.BanFlagERC20Transfer)
+	require.NoError(t, err)
+	// Forward calldata to the precompile and return the CALL success bit.
+	code := []byte{
+		byte(vm.CALLDATASIZE), 0x60, 0, 0x60, 0, byte(vm.CALLDATACOPY),
+		0x60, 0, 0x60, 0, byte(vm.CALLDATASIZE), 0x60, 0, 0x60, 0, 0x73,
+	}
+	code = append(code, types.DeriwBlacklistAddress.Bytes()...)
+	code = append(code, byte(vm.GAS), byte(vm.CALL), 0x60, 0, byte(vm.MSTORE), 0x60, 32, 0x60, 0)
+	for _, revertOuter := range []bool{true, false} {
+		ending := byte(vm.RETURN)
+		if revertOuter {
+			ending = byte(vm.REVERT)
+		}
+		stateDB.SetCode(outer, append(append([]byte{}, code...), ending), tracing.CodeChangeUnspecified)
+		tx := makeSignedDeriwTx(t, key, state.ArbOSVersion(), stateDB.GetNonce(crypto.PubkeyToAddress(key.PublicKey)), &outer, big.NewInt(0), 500_000, data)
+		receipt, result := applyDeriwConsensusTestTx(t, stateDB, state, tx)
+		require.Equal(t, common.LeftPadBytes([]byte{1}, 32), result.ReturnData, "inner precompile call must succeed before the outer revert")
+		if revertOuter {
+			require.ErrorIs(t, result.Err, vm.ErrExecutionReverted)
+			require.Equal(t, uint64(types.ReceiptStatusFailed), receipt.Status)
+			require.False(t, state.Blacklist().TxFromAddrs().IsMemberFree(address))
+			require.Equal(t, blacklist.BanFlagAll, state.Blacklist().BanTypeFree(address))
+		} else {
+			require.NoError(t, result.Err)
+			require.True(t, state.Blacklist().TxFromAddrs().IsMemberFree(address))
+			require.Equal(t, blacklist.BanFlagERC20Transfer, state.Blacklist().BanTypeFree(address))
+		}
+		require.True(t, state.Blacklist().TxToAddrs().IsMemberFree(address))
+	}
+}
+
+func TestDeriwBlacklistOutOfGasCannotLeavePartialFlagUpdate(t *testing.T) {
+	for _, method := range []string{"addBlacklistTxFromWithFlag", "addBlacklistTxFrom", "removeBlacklistTxToWithFlag"} {
+		sawFailure, sawSuccess := false, false
+		for _, gas := range []uint64{40_000, 60_000, 80_000, 100_000, 200_000} {
+			t.Run(fmt.Sprintf("%s/gas%d", method, gas), func(t *testing.T) {
+				state, stateDB := arbosState.NewArbosMemoryBackedArbOSState()
+				require.NoError(t, state.ScheduleDeriwRouterConfig(deriwpolicy.RouterOnlySendConfig{
+					Router: common.HexToAddress("0x8101"), CanonicalGatewayRouter: common.HexToAddress("0x8102"),
+					ApprovedTokenGateways: []common.Address{common.HexToAddress("0x8103")},
+				}, 0, arbosState.DeriwRouterConfigUpdateDelay))
+				require.NoError(t, state.ActivateDeriwRouterConfigIfNecessary(arbosState.DeriwRouterConfigUpdateDelay))
+				require.NoError(t, state.UpgradeDeriwOSVersion(arbosState.DeriwOSVersion_BlacklistBanTypes))
+				key, owner := fundedDeriwSender(t, stateDB)
+				require.NoError(t, state.Blacklist().BlacklistOwner().Add(owner))
+				address := common.HexToAddress("0x9002")
+				require.NoError(t, state.Blacklist().TxToAddrs().Add(address))
+				initialFlag := blacklist.BanFlagAll
+				if method == "addBlacklistTxFrom" {
+					initialFlag = blacklist.BanFlagERC20Transfer
+				}
+				require.NoError(t, state.Blacklist().SetBanType(address, initialFlag))
+				abi, err := precompilesgen.DeriwBlacklistMetaData.GetAbi()
+				require.NoError(t, err)
+				args := []interface{}{address}
+				if method == "addBlacklistTxFromWithFlag" {
+					args = append(args, blacklist.BanFlagERC20Transfer)
+				}
+				if method == "removeBlacklistTxToWithFlag" {
+					args = append(args, initialFlag)
+				}
+				data, err := abi.Pack(method, args...)
+				require.NoError(t, err)
+				precompile := types.DeriwBlacklistAddress
+				tx := makeSignedDeriwTx(t, key, state.ArbOSVersion(), 0, &precompile, big.NewInt(0), gas, data)
+				receipt, result := applyDeriwConsensusTestTx(t, stateDB, state, tx)
+				if result.Err != nil {
+					sawFailure = true
+					require.Equal(t, uint64(types.ReceiptStatusFailed), receipt.Status)
+					require.False(t, state.Blacklist().TxFromAddrs().IsMemberFree(address), "failed add leaked membership")
+					require.True(t, state.Blacklist().TxToAddrs().IsMemberFree(address), "failed remove lost membership")
+					require.Equal(t, initialFlag, state.Blacklist().BanTypeFree(address), "failed call changed the shared flag")
+				} else {
+					sawSuccess = true
+					require.Equal(t, uint64(types.ReceiptStatusSuccessful), receipt.Status)
+					if method == "removeBlacklistTxToWithFlag" {
+						require.False(t, state.Blacklist().TxToAddrs().IsMemberFree(address))
+						require.Zero(t, state.Blacklist().BanTypeFree(address))
+					} else {
+						require.True(t, state.Blacklist().TxFromAddrs().IsMemberFree(address))
+						require.True(t, state.Blacklist().TxToAddrs().IsMemberFree(address))
+						require.NotEqual(t, initialFlag, state.Blacklist().BanTypeFree(address))
+					}
+				}
+			})
+		}
+		require.True(t, sawFailure, "%s must exercise failed updates", method)
+		require.True(t, sawSuccess, "%s must also succeed with sufficient gas", method)
 	}
 }

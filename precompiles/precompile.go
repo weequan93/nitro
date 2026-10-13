@@ -78,6 +78,7 @@ type PrecompileMethod struct {
 	handler         reflect.Method
 	arbosVersion    uint64
 	maxArbosVersion uint64
+	deriwOSVersion  uint64
 }
 
 type PrecompileEvent struct {
@@ -593,7 +594,7 @@ func Precompiles() map[addr]ArbosPrecompile {
 
 	insert(MakePrecompile(precompilesgen.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: types.DeriwGaslessPublicAddress}))
 	insert(MakePrecompile(precompilesgen.DeriwSubAccountPublicMetaData, &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}))
-	insert(MakePrecompile(precompilesgen.DeriwBlacklistPublicMetaData, &DeriwBlacklistPublic{Address: types.DeriwBlacklistPublicAddress}))
+	DeriwBlacklistPublic := insert(MakePrecompile(precompilesgen.DeriwBlacklistPublicMetaData, &DeriwBlacklistPublic{Address: types.DeriwBlacklistPublicAddress}))
 
 	ArbRetryableImpl := &ArbRetryableTx{Address: types.ArbRetryableTxAddress}
 	ArbRetryable := insert(MakePrecompile(precompilesgen.ArbRetryableTxMetaData, ArbRetryableImpl))
@@ -668,6 +669,20 @@ func Precompiles() map[addr]ArbosPrecompile {
 		return DeriwBlacklistImpl.OwnerActs(context, evm, method, owner, data)
 	}
 	_, DeriwBlacklist := MakePrecompile(precompilesgen.DeriwBlacklistMetaData, DeriwBlacklistImpl)
+	for _, precompile := range []*Precompile{DeriwBlacklist, DeriwBlacklistPublic} {
+		for _, name := range []string{
+			"GetBlacklistBanFlag", "GetBlacklistTxFromWithFlag", "GetBlacklistTxToWithFlag",
+			"IsBlacklistTxFromWithFlag", "IsBlacklistTxToWithFlag",
+		} {
+			precompile.methodsByName[name].deriwOSVersion = arbosState.DeriwOSVersion_BlacklistBanTypes
+		}
+	}
+	for _, name := range []string{
+		"AddBlacklistTxFromWithFlag", "AddBlacklistTxToWithFlag",
+		"RemoveBlacklistTxFromWithFlag", "RemoveBlacklistTxToWithFlag",
+	} {
+		DeriwBlacklist.methodsByName[name].deriwOSVersion = arbosState.DeriwOSVersion_BlacklistBanTypes
+	}
 	insert(deriwBlacklistOwnerOnly(DeriwBlacklistImpl.Address, DeriwBlacklist, emitDeriwBlacklistActs))
 
 	DeriwSubAccountImpl := &DeriwSubAccount{Address: types.DeriwSubAccountAddress}
@@ -785,6 +800,10 @@ func (p *Precompile) Call(
 	method, ok := p.methods[id]
 	if !ok || arbosVersion < method.arbosVersion || (method.maxArbosVersion > 0 && arbosVersion > method.maxArbosVersion) {
 		// method does not exist or hasn't yet been activated
+		return nil, 0, multigas.ComputationGas(gasSupplied), vm.ErrExecutionReverted
+	}
+	if method.deriwOSVersion != 0 && arbosState.DeriwOSVersion(evm.StateDB) < method.deriwOSVersion {
+		// Match the unknown-selector result, including gas, during historical replay.
 		return nil, 0, multigas.ComputationGas(gasSupplied), vm.ErrExecutionReverted
 	}
 

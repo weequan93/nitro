@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
+	"github.com/offchainlabs/nitro/arbos/blacklist"
 	"github.com/offchainlabs/nitro/arbos/deriwpolicy"
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/programs"
@@ -400,7 +401,7 @@ func (con ArbOwner) SetNetworkFeeAccount(c ctx, evm mech, newNetworkFeeAccount a
 	if err != nil {
 		return err
 	}
-	if enforceProtection && c.State.Blacklist().IsQuarantinedFree(newNetworkFeeAccount) {
+	if enforceProtection && c.State.Blacklist().BanTypeFree(newNetworkFeeAccount) == blacklist.BanFlagAll {
 		return errors.New("cannot set a quarantined network fee account")
 	}
 	return c.State.SetNetworkFeeAccount(newNetworkFeeAccount)
@@ -412,7 +413,7 @@ func (con ArbOwner) SetInfraFeeAccount(c ctx, evm mech, newInfraFeeAccount addr)
 	if err != nil {
 		return err
 	}
-	if enforceProtection && c.State.Blacklist().IsQuarantinedFree(newInfraFeeAccount) {
+	if enforceProtection && c.State.Blacklist().BanTypeFree(newInfraFeeAccount) == blacklist.BanFlagAll {
 		return errors.New("cannot set a quarantined infrastructure fee account")
 	}
 	return c.State.SetInfraFeeAccount(newInfraFeeAccount)

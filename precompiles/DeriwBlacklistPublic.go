@@ -64,3 +64,59 @@ func (con DeriwBlacklistPublic) GetScheduledDeriwOSUpgrade(c ctx, evm mech) (uin
 	}
 	return version, timestamp, arbosVersion, nil
 }
+
+// GetBlacklistTxFromWithFlag lists addresses with exactly the requested flag.
+func (con DeriwBlacklistPublic) GetBlacklistTxFromWithFlag(c ctx, evm mech, flag uint64) ([]common.Address, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return nil, err
+	}
+	addresses, err := c.State.Blacklist().TxFromAddrsWithFlag(flag)
+	if err != nil {
+		return nil, err
+	}
+	return addresses.AllMembers(65536)
+}
+
+// IsBlacklistTxFromWithFlag checks the address for the requested ban type.
+func (con DeriwBlacklistPublic) IsBlacklistTxFromWithFlag(c ctx, evm mech, addr common.Address, flag uint64) (bool, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return false, err
+	}
+	addresses, err := c.State.Blacklist().TxFromAddrsWithFlag(flag)
+	if err != nil {
+		return false, err
+	}
+	return addresses.IsMember(addr)
+}
+
+// GetBlacklistTxToWithFlag lists addresses with exactly the requested flag.
+func (con DeriwBlacklistPublic) GetBlacklistTxToWithFlag(c ctx, evm mech, flag uint64) ([]common.Address, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return nil, err
+	}
+	addresses, err := c.State.Blacklist().TxToAddrsWithFlag(flag)
+	if err != nil {
+		return nil, err
+	}
+	return addresses.AllMembers(65536)
+}
+
+// IsBlacklistTxToWithFlag checks the address for the requested ban type.
+func (con DeriwBlacklistPublic) IsBlacklistTxToWithFlag(c ctx, evm mech, addr common.Address, flag uint64) (bool, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return false, err
+	}
+	addresses, err := c.State.Blacklist().TxToAddrsWithFlag(flag)
+	if err != nil {
+		return false, err
+	}
+	return addresses.IsMember(addr)
+}
+
+// GetBlacklistBanFlag returns 0 (unlisted), 1 (all), or 2 (ERC20/USDT transfer).
+func (con DeriwBlacklistPublic) GetBlacklistBanFlag(c ctx, evm mech, addr common.Address) (uint64, error) {
+	if err := requireBlacklistBanTypes(c); err != nil {
+		return 0, err
+	}
+	return c.State.Blacklist().BanType(addr)
+}

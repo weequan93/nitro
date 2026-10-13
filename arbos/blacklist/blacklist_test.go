@@ -8,6 +8,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/burn"
 	"github.com/offchainlabs/nitro/arbos/storage"
 	"github.com/offchainlabs/nitro/util/testhelpers"
+	"github.com/stretchr/testify/require"
 )
 
 // Copyright 2021-2022, Offchain Labs, Inc.
@@ -129,4 +130,93 @@ func Require(t *testing.T, err error, printables ...interface{}) {
 func Fail(t *testing.T, printables ...interface{}) {
 	t.Helper()
 	testhelpers.FailImpl(t, printables...)
+}
+
+func TestBanTypeStorageReopenAndReplacement(t *testing.T) {
+	blacklist := BlacklistForTest(t)
+	address := common.HexToAddress("0x1234")
+	untouched := common.HexToAddress("0x5678")
+	require.NoError(t, blacklist.TxFromAddrs().Add(address))
+	require.NoError(t, blacklist.TxToAddrs().Add(address))
+	require.NoError(t, blacklist.TxFromAddrs().Add(untouched))
+	require.NoError(t, blacklist.SetBanType(address, BanFlagERC20Transfer))
+	reopened := OpenBlacklist(blacklist.storage)
+	flag, err := reopened.BanType(address)
+	require.NoError(t, err)
+	require.Equal(t, BanFlagERC20Transfer, flag)
+	flag, err = reopened.BanType(untouched)
+	require.NoError(t, err)
+	require.Equal(t, BanFlagAll, flag)
+	require.Equal(t, BanFlagERC20Transfer, reopened.BanTypeFree(address))
+	require.Equal(t, BanFlagAll, reopened.BanTypeFree(untouched))
+	require.False(t, reopened.IsBlacklistAddrCheck(&address))
+	tx := types.NewTx(&types.LegacyTx{To: &address})
+	require.False(t, reopened.IsBlacklistTxCheck(&address, tx))
+	require.NoError(t, reopened.SetBanType(address, BanFlagAll))
+	require.Equal(t, BanFlagAll, reopened.BanTypeFree(address))
+	require.True(t, reopened.IsBlacklistTxCheck(&address, tx))
+	for _, open := range []func(uint64) (*FlaggedAddressSet, error){reopened.TxFromAddrsWithFlag, reopened.TxToAddrsWithFlag} {
+		list, err := open(BanFlagERC20Transfer)
+		require.NoError(t, err)
+		members, err := list.AllMembers(100)
+		require.NoError(t, err)
+		require.Empty(t, members)
+	}
+}
+
+func TestOnlyExactStoredBanFlagAllRejects(t *testing.T) {
+	for _, direction := range []string{"from", "to", "both"} {
+		t.Run(direction, func(t *testing.T) {
+			list := BlacklistForTest(t)
+			address := common.HexToAddress("0x1234")
+			if direction != "to" {
+				require.NoError(t, list.TxFromAddrs().Add(address))
+			}
+			if direction != "from" {
+				require.NoError(t, list.TxToAddrs().Add(address))
+			}
+			key := common.BytesToHash(address.Bytes())
+			tx := types.NewTx(&types.LegacyTx{To: &address})
+			// Seed future values directly to prove they cannot accidentally
+			// become ban-all, including values with bit 1 set.
+			for _, flag := range []uint64{BanFlagAll, BanFlagERC20Transfer, 3, 255, ^uint64(0)} {
+				require.NoError(t, list.banFlags().SetUint64(key, flag))
+				got, err := list.BanType(address)
+				require.NoError(t, err)
+				require.Equal(t, flag, got)
+				require.Equal(t, flag, list.BanTypeFree(address))
+				require.Equal(t, flag == BanFlagAll, list.IsBlacklistAddrCheck(&address))
+				require.Equal(t, flag == BanFlagAll, list.IsBlacklistTxCheck(&address, tx))
+			}
+			require.NoError(t, list.SetBanType(address, BanFlagAll))
+			stored, err := list.banFlags().GetUint64(key)
+			require.NoError(t, err)
+			require.Equal(t, BanFlagAll, stored, "new ban-all entries must store flag 1 explicitly")
+		})
+	}
+}
+
+func TestBanFlagRequiresMembershipAndClearsAfterFinalRemoval(t *testing.T) {
+	list := BlacklistForTest(t)
+	address := common.HexToAddress("0x1234")
+	key := common.BytesToHash(address.Bytes())
+	require.NoError(t, list.SetBanType(address, BanFlagAll))
+	require.Zero(t, list.BanTypeFree(address), "a flag without list membership must not block")
+	from, err := list.TxFromAddrsWithFlag(BanFlagERC20Transfer)
+	require.NoError(t, err)
+	to, err := list.TxToAddrsWithFlag(BanFlagERC20Transfer)
+	require.NoError(t, err)
+	require.NoError(t, from.Add(address))
+	require.NoError(t, to.Add(address))
+	require.NoError(t, from.Remove(address, 60))
+	stored, err := list.banFlags().GetUint64(key)
+	require.NoError(t, err)
+	require.Equal(t, BanFlagERC20Transfer, stored)
+	require.NoError(t, to.Remove(address, 60))
+	stored, err = list.banFlags().GetUint64(key)
+	require.NoError(t, err)
+	require.Zero(t, stored)
+	// A newly added legacy entry must not inherit the removed transfer type.
+	require.NoError(t, list.TxFromAddrs().Add(address))
+	require.Equal(t, BanFlagAll, list.BanTypeFree(address))
 }
