@@ -1,5 +1,5 @@
 {
-  "status": "Local merge reviewed; deployment artifact checks remain outstanding",
+  "status": "Local merge reviewed; runtime configuration, container artifact checks, and activation replay remain outstanding",
   "dev_parent": "18c0a97530a90cd22e49269d475072d2a015c904",
   "feature_parent": "726330ebc19e2f5e5af205a92a15ce3a4777b5a9",
   "tested_source_tree": "a35391bae6aaec534837641e4ba77d7822f787f7",
@@ -92,14 +92,48 @@
     }
   },
   "live_test": {
-    "parent_chain_id": 421614,
-    "rollup": "0xD259Afff7a8731B1B61DaC168a4F31b69683Ae55",
-    "inbox": "0xD10c44b379c9C88871499d6E257D120061BF7698",
-    "verified_shared_bridge": "0x0572018Db4caadA1A71C9df9C88Fd12379c1d152",
-    "arbos": 60,
-    "deriwos": 5,
-    "wasm_root": "0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39",
-    "artifact_download": "HTTP 403; operator bundle verification pending"
+    "public_rpc": {
+      "chain_id": 2885,
+      "arbos": 60,
+      "deriwos": 5
+    },
+    "parent_from_repository_configuration": {
+      "observed_utc": "2026-10-13T09:45:46.722962+00:00",
+      "parent_chain_id": 421614,
+      "parent_block": "318712080",
+      "rollup": "0xb6a39f55E4C4397FE799BeDCc16fFa895950CFF9",
+      "rollup_chain_id": 2885,
+      "wasm_root": "0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676",
+      "inbox": "0xAcb00b245154679E37E478a752188574834fFc29",
+      "bridge": "0x6d8726867A89908918F35D6985D7e628347FB59b",
+      "owner": "0x678815F2c63466f557024D8CCE25BaeeB4A23359"
+    },
+    "runtime_configuration_confirmed": false,
+    "published_machine_prover_verified": true,
+    "public_artifacts": [
+      {
+        "file": "replay.wasm",
+        "url": "https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676/replay.wasm",
+        "status": "downloaded",
+        "bytes": 27743453,
+        "sha256": "54a7b55f05f47742d2a7fa5aabd8c7387eb3f317064207cf5c80b70b6f1055db"
+      },
+      {
+        "file": "machine.v2.wavm.br",
+        "url": "https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676/machine.v2.wavm.br",
+        "status": "downloaded",
+        "bytes": 9328466,
+        "sha256": "00d3c4cc307c05855e894f55687ccbddef190e80309311495fb6035056567767"
+      }
+    ],
+    "published_replay_matches_dev": false,
+    "previously_supplied_rollup": {
+      "rollup": "0xD259Afff7a8731B1B61DaC168a4F31b69683Ae55",
+      "inbox": "0xD10c44b379c9C88871499d6E257D120061BF7698",
+      "rollup_chain_id": 19005971302,
+      "wasm_root": "0x184884e1eb9fefdc158f6c8ac912bb183bf3cf83f0090317e0bc4ac5860baa39",
+      "scope": "Not established as RPC chain 2885 parent; previous association withdrawn"
+    }
   },
   "native_tests": {
     "platform": "Darwin arm64, Go 1.25.9, reused native libraries",
@@ -156,5 +190,17 @@
       "path": "/private/tmp/deriw3180-verification-20261013/machine-comparison.json",
       "sha256": "fa9aabe0dd8cbe00bfcb3748653459eb267373e9ee36b14ceab0551a9f256884"
     }
+  },
+  "identity_correction": "Previously supplied test Rollup reports chain 19005971302. Repository-configured b6a39f55 instead reports chain 2885 and root b27443e2, matching staging latest metadata. Published b274 machine independently computed to its parent root. Container configuration and file hashes remain pending. Dev/source/replay comparison remains valid.",
+  "operator_inventory_followup": {
+    "first_container": "main-nitro-1",
+    "first_image_id": "3e7621b865303ee0a09893b1d8b6a34a492c3813f24742ca4eed25303dbbd954",
+    "first_latest_metadata_root": "0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d",
+    "second_container": "validator-nitro-1",
+    "second_image_id": "8b8bccf173a45140c75968ad65a5b77be94961f6a734b32b5f8c9395974bef63",
+    "second_latest_metadata_root": "0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676",
+    "chain_ids_in_operator_outputs": false,
+    "checksums_or_prover_output_in_operator_outputs": false,
+    "second_latest_matches_repository_configured_rollup": true
   }
 }
