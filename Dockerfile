@@ -222,6 +222,7 @@ RUN ./download-machine.sh consensus-v60-deriw5 0x20255e86fa9da8b3cbafcabfa0b964d
 RUN ./download-machine.sh consensus-v60-deriw6 0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xb27443e2ace920ad81d5ce74afa048be7ba11638e035fcf7bc75faf32e960676
 RUN ./download-machine.sh consensus-v60-deriw7 0x3af92d1be0de846860687211d41aaae7bbc6d5dff5c12137cdb20e2c3711713c https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x3af92d1be0de846860687211d41aaae7bbc6d5dff5c12137cdb20e2c3711713c
 RUN ./download-machine.sh consensus-v60-deriw8 0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d
+RUN ./download-machine.sh consensus-v60-deriw9 0xdd527b6d664d5a2adc21b90795a42600f3960b634146488c65da7bde75329c17 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xdd527b6d664d5a2adc21b90795a42600f3960b634146488c65da7bde75329c17
 
 
 
@@ -391,8 +392,13 @@ RUN set -eu; \
     test "$root" = "$(cat /tmp/deriw-candidate-machine/module-root.txt)"; \
     test -f /home/user/target/machines/0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421/machine.v2.wavm.br; \
     test -f /home/user/target/machines/0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d/machine.v2.wavm.br; \
-    test ! -e "/home/user/target/machines/$root"; \
-    cp -a /tmp/deriw-candidate-machine "/home/user/target/machines/$root"; \
+    if [ -e "/home/user/target/machines/$root" ]; then \
+        for file in module-root.txt replay.wasm machine.v2.wavm.br until-host-io-state.bin; do \
+            cmp "/tmp/deriw-candidate-machine/$file" "/home/user/target/machines/$root/$file"; \
+        done; \
+    else \
+        cp -a /tmp/deriw-candidate-machine "/home/user/target/machines/$root"; \
+    fi; \
     test -L /home/user/target/machines/latest; \
     rm /home/user/target/machines/latest; \
     ln -s "$root" /home/user/target/machines/latest; \
