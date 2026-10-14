@@ -27,6 +27,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos"
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/programs"
+	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/solgen/go/precompilesgen"
 	"github.com/offchainlabs/nitro/util/arbmath"
 )
@@ -79,6 +80,7 @@ type PrecompileMethod struct {
 	arbosVersion    uint64
 	maxArbosVersion uint64
 	deriwOSVersion  uint64
+	deriwBootstrap  bool // production legacy APIs wait for the configured bootstrap boundary
 }
 
 type PrecompileEvent struct {
@@ -568,6 +570,9 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbOwnerPublic.methodsByName["GetScheduledDeriwRouterConfig"].arbosVersion = params.ArbosVersion_60
 	ArbOwnerPublic.methodsByName["GetDeriwOSVersion"].arbosVersion = params.ArbosVersion_60
 	ArbOwnerPublic.methodsByName["GetScheduledDeriwOSUpgrade"].arbosVersion = params.ArbosVersion_60
+	for _, name := range []string{"GetDeriwRouterConfig", "GetScheduledDeriwRouterConfig", "GetDeriwOSVersion", "GetScheduledDeriwOSUpgrade"} {
+		ArbOwnerPublic.methodsByName[name].deriwBootstrap = true
+	}
 
 	ArbWasmImpl := &ArbWasm{Address: types.ArbWasmAddress}
 	ArbWasm := insert(MakePrecompile(precompilesgen.ArbWasmMetaData, ArbWasmImpl))
@@ -595,6 +600,9 @@ func Precompiles() map[addr]ArbosPrecompile {
 	insert(MakePrecompile(precompilesgen.DeriwGaslessPublicMetaData, &DeriwGaslessPublic{Address: types.DeriwGaslessPublicAddress}))
 	insert(MakePrecompile(precompilesgen.DeriwSubAccountPublicMetaData, &DeriwSubAccountPublic{Address: types.DeriwSubAccountPublicAddress}))
 	DeriwBlacklistPublic := insert(MakePrecompile(precompilesgen.DeriwBlacklistPublicMetaData, &DeriwBlacklistPublic{Address: types.DeriwBlacklistPublicAddress}))
+	for _, name := range []string{"GetDeriwOSVersion", "GetScheduledDeriwOSUpgrade"} {
+		DeriwBlacklistPublic.methodsByName[name].deriwBootstrap = true
+	}
 
 	ArbRetryableImpl := &ArbRetryableTx{Address: types.ArbRetryableTxAddress}
 	ArbRetryable := insert(MakePrecompile(precompilesgen.ArbRetryableTxMetaData, ArbRetryableImpl))
@@ -640,6 +648,9 @@ func Precompiles() map[addr]ArbosPrecompile {
 	ArbOwner.methodsByName["CancelScheduledDeriwRouterConfig"].arbosVersion = params.ArbosVersion_60
 	ArbOwner.methodsByName["ScheduleDeriwOSUpgrade"].arbosVersion = params.ArbosVersion_60
 	ArbOwner.methodsByName["CancelScheduledDeriwOSUpgrade"].arbosVersion = params.ArbosVersion_60
+	for _, name := range []string{"ScheduleDeriwRouterConfig", "CancelScheduledDeriwRouterConfig", "ScheduleDeriwOSUpgrade", "CancelScheduledDeriwOSUpgrade"} {
+		ArbOwner.methodsByName[name].deriwBootstrap = true
+	}
 	stylusMethods := []string{
 		"SetInkPrice", "SetWasmMaxStackDepth", "SetWasmFreePages", "SetWasmPageGas",
 		"SetWasmPageLimit", "SetWasmMinInitGas", "SetWasmInitCostScalar",
@@ -669,6 +680,7 @@ func Precompiles() map[addr]ArbosPrecompile {
 		return DeriwBlacklistImpl.OwnerActs(context, evm, method, owner, data)
 	}
 	_, DeriwBlacklist := MakePrecompile(precompilesgen.DeriwBlacklistMetaData, DeriwBlacklistImpl)
+	DeriwBlacklist.methodsByName["ScheduleDeriwOSUpgrade"].deriwBootstrap = true
 	for _, precompile := range []*Precompile{DeriwBlacklist, DeriwBlacklistPublic} {
 		for _, name := range []string{
 			"GetBlacklistBanFlag", "GetBlacklistTxFromWithFlag", "GetBlacklistTxToWithFlag",
@@ -802,6 +814,22 @@ func (p *Precompile) Call(
 		// method does not exist or hasn't yet been activated
 		return nil, 0, multigas.ComputationGas(gasSupplied), vm.ErrExecutionReverted
 	}
+	bootstrapGas := multigas.ZeroGas()
+	if method.deriwBootstrap {
+		probe := &Context{
+			gasSupplied: gasSupplied,
+			gasUsed:     multigas.ZeroGas(),
+			readOnly:    true,
+			tracingInfo: util.NewTracingInfo(evm, caller, p.address, util.TracingDuringEVM),
+		}
+		active, err := arbosState.DeriwBootstrapAPIsActive(evm.StateDB, evm.Context.Time, probe)
+		if err != nil || !active {
+			// Preserve the legacy unknown-selector result before bootstrap,
+			// including calls too small to complete the configuration probe.
+			return nil, 0, multigas.ComputationGas(gasSupplied), vm.ErrExecutionReverted
+		}
+		bootstrapGas = probe.gasUsed
+	}
 	if method.deriwOSVersion != 0 && arbosState.DeriwOSVersion(evm.StateDB) < method.deriwOSVersion {
 		// Match the unknown-selector result, including gas, during historical replay.
 		return nil, 0, multigas.ComputationGas(gasSupplied), vm.ErrExecutionReverted
@@ -822,7 +850,7 @@ func (p *Precompile) Call(
 		return nil, 0, multigas.ComputationGas(gasSupplied), vm.ErrExecutionReverted
 	}
 
-	callerCtx, err := makeContext(p, method, caller, gasSupplied, evm)
+	callerCtx, err := makeContext(p, method, caller, gasSupplied, bootstrapGas, evm)
 	if err != nil {
 		return nil, 0, multigas.ComputationGas(gasSupplied), err
 	}

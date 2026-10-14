@@ -379,6 +379,27 @@ COPY scripts/split-val-entry.sh /usr/local/bin
 ENTRYPOINT [ "/usr/local/bin/split-val-entry.sh" ]
 USER user
 
+# Release candidates with replay-code changes must carry their newly built
+# machine, while keeping the named current/historical bundles and split entry.
+FROM nitro-node-validator AS nitro-node-validator-candidate
+USER root
+COPY --from=prover-export /bin/jit /usr/local/bin/
+COPY --from=module-root-calc /workspace/target/machines/latest/ /tmp/deriw-candidate-machine/
+RUN set -eu; \
+    root="$(/usr/local/bin/prover /tmp/deriw-candidate-machine/machine.v2.wavm.br --print-wasmmoduleroot)"; \
+    printf '%s\n' "$root" | grep -Eq '^0x[0-9a-f]{64}$'; \
+    test "$root" = "$(cat /tmp/deriw-candidate-machine/module-root.txt)"; \
+    test -f /home/user/target/machines/0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421/machine.v2.wavm.br; \
+    test -f /home/user/target/machines/0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d/machine.v2.wavm.br; \
+    test ! -e "/home/user/target/machines/$root"; \
+    cp -a /tmp/deriw-candidate-machine "/home/user/target/machines/$root"; \
+    test -L /home/user/target/machines/latest; \
+    rm /home/user/target/machines/latest; \
+    ln -s "$root" /home/user/target/machines/latest; \
+    chmod -R 555 /home/user/target/machines; \
+    rm -rf /tmp/deriw-candidate-machine
+USER user
+
 FROM nitro-node-validator AS nitro-node-dev
 USER root
 # Copy in latest WASM module root

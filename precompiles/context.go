@@ -135,7 +135,7 @@ func testContextWithVersion(caller addr, evm mech, version uint64) *Context {
 	return testContext(caller, evm)
 }
 
-func makeContext(p *Precompile, method *PrecompileMethod, caller common.Address, gas uint64, evm *vm.EVM) (*Context, error) {
+func makeContext(p *Precompile, method *PrecompileMethod, caller common.Address, gas uint64, initialGas multigas.MultiGas, evm *vm.EVM) (*Context, error) {
 	txProcessor, ok := evm.ProcessingHook.(*arbos.TxProcessor)
 	if !ok {
 		log.Error("processing hook not set")
@@ -147,7 +147,7 @@ func makeContext(p *Precompile, method *PrecompileMethod, caller common.Address,
 	callerCtx := &Context{
 		caller:      caller,
 		gasSupplied: gas,
-		gasUsed:     multigas.ZeroGas(),
+		gasUsed:     initialGas,
 		readOnly:    readOnly,
 		txProcessor: txProcessor,
 		tracingInfo: util.NewTracingInfo(evm, caller, p.address, util.TracingDuringEVM),

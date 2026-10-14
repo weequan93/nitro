@@ -69,6 +69,12 @@ func (state *ArbosState) DeriwConsensusBlacklistActiveOrScheduled() (bool, error
 	if state.deriwOSVersion >= DeriwOSVersion_ConsensusBlacklist {
 		return true, nil
 	}
+	// Production's original DeriwOS-0 owner methods did not read this new
+	// slot. Keep their exact execution-gas boundary while no custom upgrade
+	// is armed. Existing dev/test histories retain their deployed metering.
+	if state.deriwLegacyProductionState() && state.pendingDeriwOSUpgradeVersionFree() == 0 {
+		return false, nil
+	}
 	upgradeTo, err := state.deriwOSUpgradeVersion.Get()
 	if err != nil {
 		return false, err
