@@ -984,7 +984,7 @@ func OpenConsensusDB(stack *node.Node, config *config.NodeConfig) (ethdb.Databas
 }
 
 func openExecutionDB(stack *node.Node, config *config.NodeConfig, cacheConfig *core.BlockChainConfig, persistentConfig *conf.PersistentConfig) (ethdb.Database, ethdb.Database, error) {
-	chainData, err := stack.OpenDatabaseWithOptions("l2chaindata", node.DatabaseOptions{AncientsDirectory: config.Persistent.Ancient, MetricsNamespace: "l2chaindata/", Cache: config.Execution.Caching.DatabaseCache, Handles: config.Persistent.Handles, PebbleExtraOptions: persistentConfig.Pebble.ExtraOptions("l2chaindata")})
+	chainData, err := stack.OpenDatabaseWithOptions("l2chaindata", node.DatabaseOptions{AncientsDirectory: config.Persistent.Ancient, MetricsNamespace: "l2chaindata/", Cache: config.Execution.Caching.DatabaseCache, Handles: config.Persistent.Handles, PebbleExtraOptions: persistentConfig.Pebble.ExtraOptions("l2chaindata"), FreezerMaxBatchBlocks: persistentConfig.FreezerMaxBatchBlocks})
 	if err != nil {
 		return nil, nil, err
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 
@@ -20,23 +21,25 @@ import (
 )
 
 type PersistentConfig struct {
-	GlobalConfig string       `koanf:"global-config"`
-	Chain        string       `koanf:"chain"`
-	LogDir       string       `koanf:"log-dir"`
-	Handles      int          `koanf:"handles"`
-	Ancient      string       `koanf:"ancient"`
-	DBEngine     string       `koanf:"db-engine"`
-	Pebble       PebbleConfig `koanf:"pebble"`
+	GlobalConfig          string       `koanf:"global-config"`
+	Chain                 string       `koanf:"chain"`
+	LogDir                string       `koanf:"log-dir"`
+	Handles               int          `koanf:"handles"`
+	Ancient               string       `koanf:"ancient"`
+	DBEngine              string       `koanf:"db-engine"`
+	Pebble                PebbleConfig `koanf:"pebble"`
+	FreezerMaxBatchBlocks uint64       `koanf:"freezer-max-batch-blocks"`
 }
 
 var PersistentConfigDefault = PersistentConfig{
-	GlobalConfig: ".arbitrum",
-	Chain:        "",
-	LogDir:       "",
-	Handles:      512,
-	Ancient:      "",
-	DBEngine:     "", // auto-detect database type based on the db dir contents
-	Pebble:       PebbleConfigDefault,
+	GlobalConfig:          ".arbitrum",
+	Chain:                 "",
+	LogDir:                "",
+	Handles:               512,
+	Ancient:               "",
+	DBEngine:              "", // auto-detect database type based on the db dir contents
+	Pebble:                PebbleConfigDefault,
+	FreezerMaxBatchBlocks: 0, // retain the rawdb default unless explicitly configured
 }
 
 func PersistentConfigAddOptions(prefix string, f *pflag.FlagSet) {
@@ -46,6 +49,7 @@ func PersistentConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Int(prefix+".handles", PersistentConfigDefault.Handles, "number of file descriptor handles to use for the database")
 	f.String(prefix+".ancient", PersistentConfigDefault.Ancient, "directory of ancient where the chain freezer can be opened")
 	f.String(prefix+".db-engine", PersistentConfigDefault.DBEngine, "backing database implementation to use. If set to empty string the database type will be autodetected and if no pre-existing database is found it will default to creating new pebble database ('leveldb', 'pebble' or '' = auto-detect)")
+	f.Uint64(prefix+".freezer-max-batch-blocks", PersistentConfigDefault.FreezerMaxBatchBlocks, "maximum blocks per chain-freezer batch (0 uses 30000); smaller batches shorten reader exclusion but increase sync overhead; requires restart")
 	PebbleConfigAddOptions(prefix+".pebble", f, &PersistentConfigDefault.Pebble)
 }
 
@@ -100,6 +104,9 @@ func DatabaseInDirectory(path string) bool {
 }
 
 func (c *PersistentConfig) Validate() error {
+	if c.FreezerMaxBatchBlocks > rawdb.DefaultFreezerMaxBatchBlocks {
+		return fmt.Errorf("invalid .freezer-max-batch-blocks value: %d, must be between 0 and %d", c.FreezerMaxBatchBlocks, rawdb.DefaultFreezerMaxBatchBlocks)
+	}
 	if c.DBEngine != "leveldb" && c.DBEngine != "pebble" && c.DBEngine != "" {
 		return fmt.Errorf(`invalid .db-engine choice: %q, allowed "leveldb", "pebble" or ""`, c.DBEngine)
 	}
