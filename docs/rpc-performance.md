@@ -64,6 +64,16 @@ message write, and `block_write` measures the local block database write.
 cached nonce failure is revived.
 With the threshold disabled, these histograms do not receive observations.
 
+For a read-only live view of slow sequenced blocks, run
+`scripts/watch-slow-sequencer-blocks.py` on the node host. It follows the
+container log, records slow `eth_sendRawTransaction` stage lines, and looks up
+the reported block and receipts through JSON-RPC. Each transaction record
+contains its hash, sender, target, nonce, type, value, gas, input byte length,
+four-byte selector, input hash, receipt status, gas used, and log count. Full
+calldata and opcode traces are intentionally omitted. The watcher also records
+visible `pathdb-migrate-pipeline` process I/O counters when a slow block is
+observed.
+
 Compaction pacing shares a token bucket with a 64 KiB burst across chain-database
 compaction output writers. It excludes foreground reads, WAL, manifest operations,
 flushes, read-only opens, and WASM/consensus databases. Write stalls bypass waits;
