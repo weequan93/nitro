@@ -350,6 +350,7 @@ type nonceFailure struct {
 	queueItem txQueueItem
 	nonceErr  error
 	expiry    time.Time
+	failedAt  time.Time
 	revived   bool
 }
 
@@ -374,6 +375,7 @@ func (c nonceFailureCache) Add(err NonceError, queueItem txQueueItem) {
 		queueItem: queueItem,
 		nonceErr:  err,
 		expiry:    expiry,
+		failedAt:  time.Now(),
 		revived:   false,
 	}
 	evicted := c.LruCache.Add(key, val)
@@ -1297,6 +1299,9 @@ func (s *Sequencer) precheckNonces(queueItems []txQueueItem) []txQueueItem {
 				// Re-enqueue the tx whose nonce should now be correct, unless it expired
 				revivingFailure.revived = true
 				s.nonceFailures.Remove(nextKey)
+				if !revivingFailure.failedAt.IsZero() {
+					s.diagnostics.observe(txPublishNonceRetryHistogram, revivingFailure.failedAt)
+				}
 				err := revivingFailure.queueItem.ctx.Err()
 				if err != nil {
 					revivingFailure.queueItem.returnResult(err)
@@ -1461,6 +1466,9 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 				break
 			}
 		}
+		if !queueItem.firstAppearance.IsZero() {
+			s.diagnostics.observe(txPublishQueuePopHistogram, queueItem.firstAppearance)
+		}
 		err := queueItem.ctx.Err()
 		if err != nil {
 			queueItem.returnResult(err)
@@ -1557,11 +1565,13 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 		block *types.Block
 		err   error
 	)
+	sequenceStarted := s.diagnostics.start()
 	if config.EnableProfiling {
 		block, err = s.execEngine.SequenceTransactionsWithProfiling(header, hooks, timeboostedTxs)
 	} else {
 		block, err = s.execEngine.SequenceTransactions(header, hooks, timeboostedTxs)
 	}
+	s.diagnostics.observe(txPublishSequenceHistogram, sequenceStarted)
 	elapsed := time.Since(start)
 	blockCreationTimer.Update(elapsed.Nanoseconds())
 	if elapsed >= time.Second*5 {

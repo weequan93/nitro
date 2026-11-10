@@ -383,6 +383,7 @@ func CreateExecutionNode(
 	}
 
 	execEngine := NewExecutionEngine(l2BlockChain, syncTillBlock, config.ExposeMultiGas, config.TransactionFiltering.DisableDelayedSequencingFilter, addressChecker, filteringReportRPCClient)
+	execEngine.txPublishDiagnostics = newTxPublishDiagnostics(diagnosticsThreshold)
 	if config.EnablePrefetchBlock {
 		execEngine.EnablePrefetchBlock()
 	}

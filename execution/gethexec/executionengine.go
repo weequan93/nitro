@@ -252,6 +252,7 @@ type ExecutionEngine struct {
 	transactionFiltererRPCClient   *TransactionFiltererRPCClient
 	filteringReportRPCClient       *FilteringReportRPCClient
 	disableDelayedSequencingFilter bool
+	txPublishDiagnostics            txPublishDiagnostics
 }
 
 func NewL1PriceData() *L1PriceData {
@@ -719,6 +720,7 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 	delayedMessagesRead := lastBlockHeader.Nonce.Uint64()
 
 	startTime := time.Now()
+	blockExecutionStarted := s.txPublishDiagnostics.start()
 	block, statedb, receipts, err := arbos.ProduceBlockAdvanced(
 		header,
 		delayedMessagesRead,
@@ -730,6 +732,7 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 		core.NewMessageSequencingContext(s.wasmTargets),
 		s.exposeMultiGas,
 	)
+	s.txPublishDiagnostics.observe(txPublishBlockExecutionHistogram, blockExecutionStarted)
 	if err != nil {
 		return nil, err
 	}
@@ -771,14 +774,18 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 	}
 
 	blockMetadata := s.blockMetadataFromBlock(block, timeboostedTxs)
+	consensusWriteStarted := s.txPublishDiagnostics.start()
 	_, err = s.consensus.WriteMessageFromSequencer(msgIdx, msgWithMeta, *msgResult, blockMetadata).Await(s.GetContext())
+	s.txPublishDiagnostics.observe(txPublishConsensusWriteHistogram, consensusWriteStarted)
 	if err != nil {
 		return nil, err
 	}
 
 	// Only write the block after we've written the messages, so if the node dies in the middle of this,
 	// it will naturally recover on startup by regenerating the missing block.
+	blockWriteStarted := s.txPublishDiagnostics.start()
 	err = s.appendBlock(block, statedb, receipts, blockCalcTime)
+	s.txPublishDiagnostics.observe(txPublishBlockWriteHistogram, blockWriteStarted)
 	if err != nil {
 		return nil, err
 	}

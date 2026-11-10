@@ -22,6 +22,12 @@ var (
 	txPublishForwarderTargetHistogram = metrics.NewRegisteredHistogram("arb/txpublish/forwarder_target", nil, metrics.NewBoundedHistogramSample())
 	txPublishQueueEnqueueHistogram   = metrics.NewRegisteredHistogram("arb/txpublish/queue_enqueue", nil, metrics.NewBoundedHistogramSample())
 	txPublishQueueWaitHistogram      = metrics.NewRegisteredHistogram("arb/txpublish/queue_wait", nil, metrics.NewBoundedHistogramSample())
+	txPublishQueuePopHistogram       = metrics.NewRegisteredHistogram("arb/txpublish/queue_pop", nil, metrics.NewBoundedHistogramSample())
+	txPublishNonceRetryHistogram     = metrics.NewRegisteredHistogram("arb/txpublish/nonce_retry_wait", nil, metrics.NewBoundedHistogramSample())
+	txPublishSequenceHistogram       = metrics.NewRegisteredHistogram("arb/txpublish/sequence", nil, metrics.NewBoundedHistogramSample())
+	txPublishBlockExecutionHistogram = metrics.NewRegisteredHistogram("arb/txpublish/block_execution", nil, metrics.NewBoundedHistogramSample())
+	txPublishConsensusWriteHistogram = metrics.NewRegisteredHistogram("arb/txpublish/consensus_write", nil, metrics.NewBoundedHistogramSample())
+	txPublishBlockWriteHistogram     = metrics.NewRegisteredHistogram("arb/txpublish/block_write", nil, metrics.NewBoundedHistogramSample())
 	txPublishInFlightGauge            = metrics.NewRegisteredGauge("arb/txpublish/inflight", nil)
 )
 

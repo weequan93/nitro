@@ -51,9 +51,17 @@ summed into an individual request's causal wait budget.
 When the stage threshold is positive, transaction publishing also records
 microsecond histograms under `arb/txpublish/`: `state_at`, `precheck`, `filter`,
 `publisher`, `forwarder_total`, `forwarder_target`, `queue_enqueue` and
-`queue_wait`, plus the `inflight` gauge. These timings contain no transaction
-payload or address labels. `publisher` is the full underlying publisher call;
-the queue and forwarder values are nested details and must not be added to it.
+`queue_wait`, `queue_pop`, `nonce_retry_wait`, `sequence`, `block_execution`,
+`consensus_write` and `block_write`, plus the `inflight` gauge. These timings
+contain no transaction payload or address labels. `publisher` is the full
+underlying publisher call; the queue, execution and write values are nested
+details and must not be added to it. `queue_pop` measures time from request
+admission until the sequencer takes the item. `sequence` covers the complete
+sequencer block-processing call, including lock acquisition. `block_execution`
+measures transaction execution, `consensus_write` measures the sequencer
+message write, and `block_write` measures the local block database write.
+`nonce_retry_wait` records time spent waiting for a predecessor nonce when a
+cached nonce failure is revived.
 With the threshold disabled, these histograms do not receive observations.
 
 Compaction pacing shares a token bucket with a 64 KiB burst across chain-database
