@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 
@@ -20,23 +21,25 @@ import (
 )
 
 type PersistentConfig struct {
-	GlobalConfig string       `koanf:"global-config"`
-	Chain        string       `koanf:"chain"`
-	LogDir       string       `koanf:"log-dir"`
-	Handles      int          `koanf:"handles"`
-	Ancient      string       `koanf:"ancient"`
-	DBEngine     string       `koanf:"db-engine"`
-	Pebble       PebbleConfig `koanf:"pebble"`
+	GlobalConfig          string       `koanf:"global-config"`
+	Chain                 string       `koanf:"chain"`
+	LogDir                string       `koanf:"log-dir"`
+	Handles               int          `koanf:"handles"`
+	Ancient               string       `koanf:"ancient"`
+	DBEngine              string       `koanf:"db-engine"`
+	Pebble                PebbleConfig `koanf:"pebble"`
+	FreezerMaxBatchBlocks uint64       `koanf:"freezer-max-batch-blocks"`
 }
 
 var PersistentConfigDefault = PersistentConfig{
-	GlobalConfig: ".arbitrum",
-	Chain:        "",
-	LogDir:       "",
-	Handles:      512,
-	Ancient:      "",
-	DBEngine:     "", // auto-detect database type based on the db dir contents
-	Pebble:       PebbleConfigDefault,
+	GlobalConfig:          ".arbitrum",
+	Chain:                 "",
+	LogDir:                "",
+	Handles:               512,
+	Ancient:               "",
+	DBEngine:              "", // auto-detect database type based on the db dir contents
+	Pebble:                PebbleConfigDefault,
+	FreezerMaxBatchBlocks: 0, // retain the rawdb default unless explicitly configured
 }
 
 func PersistentConfigAddOptions(prefix string, f *pflag.FlagSet) {
@@ -46,6 +49,7 @@ func PersistentConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Int(prefix+".handles", PersistentConfigDefault.Handles, "number of file descriptor handles to use for the database")
 	f.String(prefix+".ancient", PersistentConfigDefault.Ancient, "directory of ancient where the chain freezer can be opened")
 	f.String(prefix+".db-engine", PersistentConfigDefault.DBEngine, "backing database implementation to use. If set to empty string the database type will be autodetected and if no pre-existing database is found it will default to creating new pebble database ('leveldb', 'pebble' or '' = auto-detect)")
+	f.Uint64(prefix+".freezer-max-batch-blocks", PersistentConfigDefault.FreezerMaxBatchBlocks, "maximum blocks per chain-freezer batch (0 uses 30000); smaller batches shorten reader exclusion but increase sync overhead; requires restart")
 	PebbleConfigAddOptions(prefix+".pebble", f, &PersistentConfigDefault.Pebble)
 }
 
@@ -100,6 +104,9 @@ func DatabaseInDirectory(path string) bool {
 }
 
 func (c *PersistentConfig) Validate() error {
+	if c.FreezerMaxBatchBlocks > rawdb.DefaultFreezerMaxBatchBlocks {
+		return fmt.Errorf("invalid .freezer-max-batch-blocks value: %d, must be between 0 and %d", c.FreezerMaxBatchBlocks, rawdb.DefaultFreezerMaxBatchBlocks)
+	}
 	if c.DBEngine != "leveldb" && c.DBEngine != "pebble" && c.DBEngine != "" {
 		return fmt.Errorf(`invalid .db-engine choice: %q, allowed "leveldb", "pebble" or ""`, c.DBEngine)
 	}
@@ -114,9 +121,10 @@ func (c *PersistentConfig) Validate() error {
 }
 
 type PebbleConfig struct {
-	SyncMode                 bool                     `koanf:"sync-mode"`
-	MaxConcurrentCompactions int                      `koanf:"max-concurrent-compactions"`
-	Experimental             PebbleExperimentalConfig `koanf:"experimental"`
+	SyncMode                       bool                     `koanf:"sync-mode"`
+	MaxConcurrentCompactions       int                      `koanf:"max-concurrent-compactions"`
+	CompactionOutputBytesPerSecond int64                    `koanf:"compaction-output-bytes-per-second"`
+	Experimental                   PebbleExperimentalConfig `koanf:"experimental"`
 }
 
 var PebbleConfigDefault = PebbleConfig{
@@ -135,10 +143,14 @@ var PebbleConfigDefault = PebbleConfig{
 func PebbleConfigAddOptions(prefix string, f *pflag.FlagSet, defaultConfig *PebbleConfig) {
 	f.Bool(prefix+".sync-mode", defaultConfig.SyncMode, "if true sync mode is used (data needs to be written to WAL before the write is marked as completed)")
 	f.Int(prefix+".max-concurrent-compactions", defaultConfig.MaxConcurrentCompactions, "maximum number of concurrent compactions")
+	f.Int64(prefix+".compaction-output-bytes-per-second", defaultConfig.CompactionOutputBytesPerSecond, "pace L2 chain database compaction SST output writes in bytes per second (0 disables); excludes WASM/consensus databases, WAL and flushes; bypassed during write stalls; not a total disk I/O limit")
 	PebbleExperimentalConfigAddOptions(prefix+".experimental", f, &defaultConfig.Experimental)
 }
 
 func (c *PebbleConfig) Validate() error {
+	if c.CompactionOutputBytesPerSecond < 0 {
+		return fmt.Errorf("invalid .compaction-output-bytes-per-second value: %d, must be non-negative", c.CompactionOutputBytesPerSecond)
+	}
 	if c.MaxConcurrentCompactions < 1 {
 		return fmt.Errorf("invalid .max-concurrent-compactions value: %d, has to be greater then 0", c.MaxConcurrentCompactions)
 	}
@@ -257,6 +269,12 @@ func (c *PebbleExperimentalConfig) Validate() error {
 }
 
 func (c *PebbleConfig) ExtraOptions(namespace string) *pebble.ExtraOptions {
+	// The performance trial is confined to chain data. In particular, it must
+	// not change scheduling of the WASM code store or consensus database.
+	var compactionOutputBytesPerSecond int64
+	if namespace == "l2chaindata" {
+		compactionOutputBytesPerSecond = c.CompactionOutputBytesPerSecond
+	}
 	var maxConcurrentCompactions func() int
 	if c.MaxConcurrentCompactions > 0 {
 		maxConcurrentCompactions = func() int { return c.MaxConcurrentCompactions }
@@ -284,19 +302,20 @@ func (c *PebbleConfig) ExtraOptions(namespace string) *pebble.ExtraOptions {
 		walDir = path.Join(walDir, namespace)
 	}
 	return &pebble.ExtraOptions{
-		SyncMode:                    c.SyncMode,
-		BytesPerSync:                c.Experimental.BytesPerSync,
-		L0CompactionFileThreshold:   c.Experimental.L0CompactionFileThreshold,
-		L0CompactionThreshold:       c.Experimental.L0CompactionThreshold,
-		L0StopWritesThreshold:       c.Experimental.L0StopWritesThreshold,
-		LBaseMaxBytes:               c.Experimental.LBaseMaxBytes,
-		MemTableStopWritesThreshold: c.Experimental.MemTableStopWritesThreshold,
-		MaxConcurrentCompactions:    maxConcurrentCompactions,
-		DisableAutomaticCompactions: c.Experimental.DisableAutomaticCompactions,
-		WALBytesPerSync:             c.Experimental.WALBytesPerSync,
-		WALDir:                      walDir,
-		WALMinSyncInterval:          walMinSyncInterval,
-		TargetByteDeletionRate:      c.Experimental.TargetByteDeletionRate,
+		SyncMode:                       c.SyncMode,
+		BytesPerSync:                   c.Experimental.BytesPerSync,
+		L0CompactionFileThreshold:      c.Experimental.L0CompactionFileThreshold,
+		L0CompactionThreshold:          c.Experimental.L0CompactionThreshold,
+		L0StopWritesThreshold:          c.Experimental.L0StopWritesThreshold,
+		LBaseMaxBytes:                  c.Experimental.LBaseMaxBytes,
+		MemTableStopWritesThreshold:    c.Experimental.MemTableStopWritesThreshold,
+		MaxConcurrentCompactions:       maxConcurrentCompactions,
+		CompactionOutputBytesPerSecond: compactionOutputBytesPerSecond,
+		DisableAutomaticCompactions:    c.Experimental.DisableAutomaticCompactions,
+		WALBytesPerSync:                c.Experimental.WALBytesPerSync,
+		WALDir:                         walDir,
+		WALMinSyncInterval:             walMinSyncInterval,
+		TargetByteDeletionRate:         c.Experimental.TargetByteDeletionRate,
 		Experimental: pebble.ExtraOptionsExperimental{
 			L0CompactionConcurrency:   c.Experimental.L0CompactionConcurrency,
 			CompactionDebtConcurrency: c.Experimental.CompactionDebtConcurrency,

@@ -109,8 +109,11 @@ func FileLoggingConfigAddOptions(prefix string, f *pflag.FlagSet) {
 }
 
 type RpcConfig struct {
-	MaxBatchResponseSize int `koanf:"max-batch-response-size"`
-	BatchRequestLimit    int `koanf:"batch-request-limit"`
+	MaxBatchResponseSize      int           `koanf:"max-batch-response-size"`
+	BatchRequestLimit         int           `koanf:"batch-request-limit"`
+	SlowCallThreshold         time.Duration `koanf:"slow-call-threshold"`
+	StageDiagnosticsThreshold time.Duration `koanf:"stage-diagnostics-threshold"`
+	MapWriteDiagnostics       bool          `koanf:"map-write-diagnostics"`
 }
 
 var DefaultRpcConfig = RpcConfig{
@@ -121,9 +124,15 @@ var DefaultRpcConfig = RpcConfig{
 func (c *RpcConfig) Apply(stackConf *node.Config) {
 	stackConf.BatchResponseMaxSize = c.MaxBatchResponseSize
 	stackConf.BatchRequestLimit = c.BatchRequestLimit
+	stackConf.RPCSlowCallThreshold = c.SlowCallThreshold
+	stackConf.RPCStageDiagnosticsThreshold = c.StageDiagnosticsThreshold
+	stackConf.RPCMapWriteDiagnostics = c.MapWriteDiagnostics
 }
 
 func RpcConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Int(prefix+".max-batch-response-size", DefaultRpcConfig.MaxBatchResponseSize, "the maximum response size for a JSON-RPC request measured in bytes (0 means no limit)")
 	f.Int(prefix+".batch-request-limit", DefaultRpcConfig.BatchRequestLimit, "the maximum number of requests in a batch (0 means no limit)")
+	f.Duration(prefix+".slow-call-threshold", DefaultRpcConfig.SlowCallThreshold, "log successful slow HTTP/WS RPC timings without params/results (non-positive disables); at most 1 record/s per server with burst 10")
+	f.Bool(prefix+".map-write-diagnostics", DefaultRpcConfig.MapWriteDiagnostics, "enable detailed log-index write timings and counters (requires --metrics; default off)")
+	f.Duration(prefix+".stage-diagnostics-threshold", DefaultRpcConfig.StageDiagnosticsThreshold, "enable getLogs stage and sendRaw outer timings plus completion/1s/3s/5s counters; non-positive disables, slow details use a bounded async queue and 1/s burst10 logging")
 }

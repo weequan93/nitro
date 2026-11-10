@@ -323,7 +323,19 @@ func (c *TxPreChecker) SetExpressLaneTracker(tracker *timeboost.ExpressLaneTrack
 }
 
 func (c *TxPreChecker) checkFilteredAddresses(ctx context.Context, tx *types.Transaction, header *types.Header) error {
-	if c.backend == nil || c.backend.TxFilter() == nil || c.config().Strictness < TxPreCheckerStrictnessAlwaysCompatible {
+	if c.backend == nil {
+		return nil
+	}
+	filterer := c.backend.TxFilter()
+	if filterer == nil || c.config().Strictness < TxPreCheckerStrictnessAlwaysCompatible {
+		return nil
+	}
+	// The API wrapper exists even when address filtering is disabled. Without
+	// an address checker its address/event checks cannot reject a transaction,
+	// so avoid executing the contract just to obtain an empty filter result.
+	// Resolve the checker on each request to preserve later checker injection.
+	// Unknown filter implementations retain their existing simulation path.
+	if f, ok := filterer.(*txFilterer); ok && f != nil && f.execEngine != nil && f.execEngine.addressChecker == nil {
 		return nil
 	}
 	statedb, err := c.bc.StateAt(header.Root)
