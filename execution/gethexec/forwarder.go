@@ -92,9 +92,10 @@ type TxForwarder struct {
 	ethClients            []*ethclient.Client
 	tryNewForwarderErrors *regexp.Regexp
 	priorityNode          bool
+	diagnostics           txPublishDiagnostics
 }
 
-func NewForwarder(targets []string, config *ForwarderConfig) *TxForwarder {
+func NewForwarder(targets []string, config *ForwarderConfig, diagnosticsThreshold time.Duration) *TxForwarder {
 	dialer := net.Dialer{
 		Timeout:   5 * time.Second,
 		KeepAlive: 2 * time.Second,
@@ -119,6 +120,7 @@ func NewForwarder(targets []string, config *ForwarderConfig) *TxForwarder {
 		transport:             transport,
 		tryNewForwarderErrors: regexp.MustCompile(`(?i)(^http:|^json:|^i/0|timeout exceeded|no such host)`),
 		priorityNode:          config.PriorityNode,
+		diagnostics:           newTxPublishDiagnostics(diagnosticsThreshold),
 	}
 }
 
@@ -136,6 +138,7 @@ func (f *TxForwarder) PublishTransaction(inctx context.Context, tx *types.Transa
 	ctx, cancelFunc := f.ctxWithTimeout()
 	defer cancelFunc()
 	for pos, rpcClient := range f.rpcClients {
+		started := f.diagnostics.start()
 		var err error
 		if options == nil {
 			if f.priorityNode == true {
@@ -146,6 +149,7 @@ func (f *TxForwarder) PublishTransaction(inctx context.Context, tx *types.Transa
 		} else {
 			err = arbitrum.SendConditionalTransactionRPC(ctx, rpcClient, tx, options)
 		}
+		f.diagnostics.observe(txPublishForwarderTargetHistogram, started)
 		if err != nil {
 			log.Warn("error forwarding transaction to a backup target", "target", f.targets[pos], "err", err)
 		}
@@ -361,6 +365,7 @@ type RedisTxForwarder struct {
 
 	config         *ForwarderConfig
 	fallbackTarget string
+	diagnosticsThreshold time.Duration
 
 	errors           int
 	currentTarget    string
@@ -370,10 +375,11 @@ type RedisTxForwarder struct {
 	forwarder *TxForwarder
 }
 
-func NewRedisTxForwarder(fallbackTarget string, config *ForwarderConfig) *RedisTxForwarder {
+func NewRedisTxForwarder(fallbackTarget string, config *ForwarderConfig, diagnosticsThreshold time.Duration) *RedisTxForwarder {
 	return &RedisTxForwarder{
 		config:         config,
 		fallbackTarget: fallbackTarget,
+		diagnosticsThreshold: diagnosticsThreshold,
 	}
 }
 
@@ -499,7 +505,7 @@ func (f *RedisTxForwarder) update(ctx context.Context) time.Duration {
 	}
 	var newForwarder *TxForwarder
 	for {
-		newForwarder = NewForwarder([]string{newSequencerUrl}, f.config)
+		newForwarder = NewForwarder([]string{newSequencerUrl}, f.config, f.diagnosticsThreshold)
 		err := newForwarder.Initialize(ctx)
 		if err == nil {
 			break

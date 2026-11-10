@@ -357,6 +357,7 @@ func CreateExecutionNode(
 	seqParentChain *parent.ParentChain,
 ) (*ExecutionNode, error) {
 	config := configFetcher.Get()
+	diagnosticsThreshold := stack.Config().RPCStageDiagnosticsThreshold
 
 	var err error
 
@@ -413,25 +414,25 @@ func CreateExecutionNode(
 			execEngine.SetTransactionFiltererRPCClient(NewTransactionFiltererRPCClient(filtererConfigFetcher))
 		}
 		sequencer, err = NewSequencer(
-			execEngine, parentChainReader, seqConfigFetcher, seqParentChain, eventFilter, addressFilterService)
+			execEngine, parentChainReader, seqConfigFetcher, seqParentChain, eventFilter, addressFilterService, diagnosticsThreshold)
 		if err != nil {
 			return nil, err
 		}
 		txPublisher = sequencer
 	} else {
 		if config.Forwarder.RedisUrl != "" {
-			txPublisher = NewRedisTxForwarder(config.forwardingTarget, &config.Forwarder)
+			txPublisher = NewRedisTxForwarder(config.forwardingTarget, &config.Forwarder, diagnosticsThreshold)
 		} else if config.forwardingTarget == "" {
 			txPublisher = NewTxDropper()
 		} else {
 			targets := append([]string{config.forwardingTarget}, config.SecondaryForwardingTarget...)
-			txPublisher = NewForwarder(targets, &config.Forwarder)
+			txPublisher = NewForwarder(targets, &config.Forwarder, diagnosticsThreshold)
 		}
 	}
 
 	txprecheckConfigFetcher := func() *TxPreCheckerConfig { return &configFetcher.Get().TxPreChecker }
 
-	txPreChecker := NewTxPreChecker(txPublisher, l2BlockChain, txprecheckConfigFetcher)
+	txPreChecker := NewTxPreChecker(txPublisher, l2BlockChain, txprecheckConfigFetcher, diagnosticsThreshold)
 	txPublisher = txPreChecker
 	arbInterface, err := NewArbInterface(l2BlockChain, txPublisher)
 	if err != nil {

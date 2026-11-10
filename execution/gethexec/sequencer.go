@@ -433,6 +433,7 @@ type Sequencer struct {
 	activeMutex sync.Mutex
 	pauseChan   chan struct{}
 	forwarder   *TxForwarder
+	diagnostics txPublishDiagnostics
 
 	expectedSurplusMutex              sync.RWMutex
 	expectedSurplus                   int64
@@ -452,6 +453,7 @@ func NewSequencer(
 	parentChain *parent.ParentChain,
 	eventFilter *eventfilter.EventFilter,
 	addressFilterService *addressfilter.FilterService,
+	diagnosticsThreshold time.Duration,
 ) (*Sequencer, error) {
 	config := configFetcher()
 	if err := config.Validate(); err != nil {
@@ -489,6 +491,7 @@ func NewSequencer(
 		addressFilterService:              addressFilterService,
 		txPriorityQueue:                   make(chan txQueueItem, config.QueueSize),
 		prioritySenderWhitelist:           prioritySenderWhitelist,
+		diagnostics:                       newTxPublishDiagnostics(diagnosticsThreshold),
 	}
 	s.nonceFailures = &nonceFailureCache{
 		containers.NewLruCacheWithOnEvict(config.NonceCacheSize, s.onNonceFailureEvict),
@@ -538,7 +541,9 @@ func (s *Sequencer) onNonceFailureEvict(_ addressAndNonce, failure *nonceFailure
 func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
 	_, forwarder := s.GetPauseAndForwarder()
 	if forwarder != nil {
+		forwarderStarted := s.diagnostics.start()
 		err := forwarder.PublishTransaction(parentCtx, tx, options)
+		s.diagnostics.observe(txPublishForwarderTotalHistogram, forwarderStarted)
 		if !errors.Is(err, ErrNoSequencer) {
 			return err
 		}
@@ -550,20 +555,25 @@ func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Tran
 	defer cancelFunc()
 
 	resultChan := make(chan error, 1)
+	enqueueStarted := s.diagnostics.start()
 	err := s.publishTransactionToQueue(queueCtx, tx, options, resultChan, false /* delay tx if express lane is active */)
+	s.diagnostics.observe(txPublishQueueEnqueueHistogram, enqueueStarted)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now()
+	queueWaitStarted := s.diagnostics.start()
 	// Just to be safe, make sure we don't run over twice the queue timeout
 	abortCtx, cancel := ctxhelper.WithTimeoutOrCancel(parentCtx, queueTimeout*2)
 	defer cancel()
 
 	select {
 	case res := <-resultChan:
+		s.diagnostics.observe(txPublishQueueWaitHistogram, queueWaitStarted)
 		return res
 	case <-abortCtx.Done():
+		s.diagnostics.observe(txPublishQueueWaitHistogram, queueWaitStarted)
 		// We use abortCtx here and not queueCtx, because the QueueTimeout only applies to the background queue.
 		// We want to give the background queue as much time as possible to make a response.
 		err := abortCtx.Err()
@@ -924,7 +934,7 @@ func (s *Sequencer) ForwardTo(url string) error {
 		}
 		s.forwarder.Disable()
 	}
-	s.forwarder = NewForwarder([]string{url}, &s.config().Forwarder)
+	s.forwarder = NewForwarder([]string{url}, &s.config().Forwarder, s.diagnostics.threshold)
 	err := s.forwarder.Initialize(s.GetContext())
 	if err != nil {
 		log.Error("failed to set forward agent", "err", err)

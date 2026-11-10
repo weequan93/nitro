@@ -70,16 +70,19 @@ type TxPreChecker struct {
 	config             TxPreCheckerConfigFetcher
 	expressLaneTracker *timeboost.ExpressLaneTracker
 	backend            core.NodeInterfaceBackendAPI
+	diagnostics        txPublishDiagnostics
 }
 
 func NewTxPreChecker(
 	publisher TransactionPublisher,
 	bc *core.BlockChain,
-	config TxPreCheckerConfigFetcher) *TxPreChecker {
+	config TxPreCheckerConfigFetcher,
+	diagnosticsThreshold time.Duration) *TxPreChecker {
 	return &TxPreChecker{
 		TransactionPublisher: publisher,
 		bc:                   bc,
 		config:               config,
+		diagnostics:          newTxPublishDiagnostics(diagnosticsThreshold),
 	}
 }
 
@@ -230,23 +233,43 @@ func PreCheckTx(bc *core.BlockChain, chainConfig *params.ChainConfig, header *ty
 }
 
 func (c *TxPreChecker) PublishTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
+	diagnostics := c.diagnostics
+	if diagnostics.enabled {
+		txPublishInFlightGauge.Inc(1)
+		defer txPublishInFlightGauge.Dec(1)
+	}
+
 	block := c.bc.CurrentBlock()
+	stateStarted := diagnostics.start()
 	statedb, err := c.bc.StateAt(block.Root)
+	diagnostics.observe(txPublishStateAtHistogram, stateStarted)
 	if err != nil {
 		return err
 	}
+
+	precheckStarted := diagnostics.start()
 	arbos, err := arbosState.OpenSystemArbosState(statedb, nil, true)
 	if err != nil {
+		diagnostics.observe(txPublishPrecheckHistogram, precheckStarted)
 		return err
 	}
 	err = PreCheckTx(c.bc, c.bc.Config(), block, statedb, arbos, tx, options, c.config())
+	diagnostics.observe(txPublishPrecheckHistogram, precheckStarted)
 	if err != nil {
 		return err
 	}
-	if err := c.checkFilteredAddresses(ctx, tx, block); err != nil {
+
+	filterStarted := diagnostics.start()
+	err = c.checkFilteredAddresses(ctx, tx, block)
+	diagnostics.observe(txPublishFilterHistogram, filterStarted)
+	if err != nil {
 		return err
 	}
-	return c.TransactionPublisher.PublishTransaction(ctx, tx, options)
+
+	publisherStarted := diagnostics.start()
+	err = c.TransactionPublisher.PublishTransaction(ctx, tx, options)
+	diagnostics.observe(txPublishPublisherHistogram, publisherStarted)
+	return err
 }
 
 func (c *TxPreChecker) PublishPriorityTransaction(ctx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {

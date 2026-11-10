@@ -48,6 +48,14 @@ or write history. Stage threshold counters count completed calls independently
 of detail drops. Process-global and overlapping stage measurements must not be
 summed into an individual request's causal wait budget.
 
+When the stage threshold is positive, transaction publishing also records
+microsecond histograms under `arb/txpublish/`: `state_at`, `precheck`, `filter`,
+`publisher`, `forwarder_total`, `forwarder_target`, `queue_enqueue` and
+`queue_wait`, plus the `inflight` gauge. These timings contain no transaction
+payload or address labels. `publisher` is the full underlying publisher call;
+the queue and forwarder values are nested details and must not be added to it.
+With the threshold disabled, these histograms do not receive observations.
+
 Compaction pacing shares a token bucket with a 64 KiB burst across chain-database
 compaction output writers. It excludes foreground reads, WAL, manifest operations,
 flushes, read-only opens, and WASM/consensus databases. Write stalls bypass waits;
