@@ -106,6 +106,27 @@ timeouts. Existing output files are refused to prevent mixing runs. Resource
 samples continue independently of slow metrics or RPC responses. Validate the
 collector offline with `python3 -B scripts/test_capture_sequencer_context.py`.
 
+After capture, join the saved files without new node requests:
+
+```bash
+python3 -B /data/scripts/report-sequencer-context.py \
+  --capture-dir /data/sequencer-context-UNIQUE \
+  --events-file /data/slow-sequencer-watch-UNIQUE/events.jsonl
+```
+
+The report selects slow sequencing intervals from their logged finish time and
+elapsed duration, compares overlapping resource samples with samples outside a
+15-second guard, and keeps device and process identities separate. The outside
+group is not proven fast; the watcher only retains blocks above its warning
+threshold. Sample statistics, PSI averages and rolling quantile snapshots do
+not establish causality. Input files are bounded snapshots; malformed/partial
+lines and missing counters are reported, not counted as zero. The coverage
+record includes observed duration, largest resource gap, lookup errors and the
+presence of the collector's final record (which alone does not prove the full
+requested duration elapsed). `--json` includes resource details for the three
+slowest logged blocks; the default emits compact JSON lines. Tests run with
+`python3 -B scripts/test_report_sequencer_context.py`.
+
 Compaction pacing shares a token bucket with a 64 KiB burst across chain-database
 compaction output writers. It excludes foreground reads, WAL, manifest operations,
 flushes, read-only opens, and WASM/consensus databases. Write stalls bypass waits;
