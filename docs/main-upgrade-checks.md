@@ -15,6 +15,13 @@ compaction cycles. Retain the current setting provisionally; verify naturally
 occurring large batches and debt across further cycles before attributing the
 whole latency change to pacing or changing cache/concurrency settings.
 
+The subsequent two-hour paced window also recorded no >5-second sequencing
+warning, one retained slow submission at 1.088 seconds, zero write-stall and
+bypass increments, and recurring debt lows near 92–94 GiB. Its periodic samples
+did not cover the original large-block workload. See the
+[11 November observation record](main-rpc-pacing-20261111.md) for evidence,
+configuration identity and remaining validation.
+
 ## Save a baseline before upgrading
 
 Install both `scripts/check-main-runtime.py` and
