@@ -99,6 +99,20 @@ and rolling metrics. Metrics retain their original units (txpublish histograms
 are microseconds); their counts are cumulative and quantiles are a rolling
 one-minute window, not request-ID joins or additive per-request wait budgets.
 
+The same metrics read also retains `state_snapshot_generation_*` counters to
+separate snapshot generation activity from compaction activity. Duration
+counters retain **nanoseconds**, while generated/recovered counters count
+processed entries. Differences require a stable node process and non-reset
+counters; elapsed stage time is neither CPU time nor physical I/O volume.
+Snapshot log `slots` and `storage` include recovered existing entries, so they
+do not establish newly created chain state or physical database size. The
+snapshot ETA uses the account-hash cursor and can grow while one large account's
+storage cursor advances. It is not a reliable completion deadline in that case.
+Snapshot generation, bloom-bit cleanup and compaction can overlap; these counters
+alone do not attribute disk I/O to a particular background task or prove its
+effect on a transaction. The existing report preserves its summary scope;
+snapshot counters are retained in `context.jsonl` for a separate delta analysis.
+
 The collector performs no replay, trace, profile, `eth_call`, transaction send
 or service changes, and exits automatically after the requested duration
 (maximum six hours). HTTP reads have response caps and three-second socket
