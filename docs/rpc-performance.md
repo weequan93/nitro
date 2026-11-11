@@ -110,8 +110,8 @@ snapshot ETA uses the account-hash cursor and can grow while one large account's
 storage cursor advances. It is not a reliable completion deadline in that case.
 Snapshot generation, bloom-bit cleanup and compaction can overlap; these counters
 alone do not attribute disk I/O to a particular background task or prove its
-effect on a transaction. The existing report preserves its summary scope;
-snapshot counters are retained in `context.jsonl` for a separate delta analysis.
+effect on a transaction. The report below analyzes adjacent counter deltas from
+the saved `context.jsonl` without querying the node again.
 
 The collector performs no replay, trace, profile, `eth_call`, transaction send
 or service changes, and exits automatically after the requested duration
@@ -140,6 +140,25 @@ presence of the collector's final record (which alone does not prove the full
 requested duration elapsed). `--json` includes resource details for the three
 slowest logged blocks; the default emits compact JSON lines. Tests run with
 `python3 -B scripts/test_report_sequencer_context.py`.
+
+`BACKGROUND` adds snapshot stage durations in seconds, generated/recovered
+entry deltas, logical compaction input/output rates, debt and activity-interval
+counts. Counter deltas require the same native main PID/start-time identity
+throughout the surrounding resource samples, resource gaps no greater than
+2.5 seconds, adjacent context starts at most 30 seconds apart and successful
+metrics reads. Missing/reset counters are reported separately; valid totals sum
+only accepted intervals and their covered seconds, excluding startup cumulative
+counts. A resource-boundary interval may be unavailable. Debt is reported as a
+gauge; it must not be treated as a monotonic counter.
+
+`SLOW_BLOCK_BACKGROUND` and `SLOW_RPC_BACKGROUND` show full context intervals
+overlapping the three slowest logged blocks and five slowest retained sendRaw
+records. The RPC details also summarize overlapping resource samples. These are
+temporal context, not request-ID joins or per-request background-time budgets.
+Context start times approximate metric-read times. No snapshot storage-counter
+advance or compaction evidence does not establish that a background task
+finished; compare the available interval combinations and workload before drawing
+conclusions. The snapshot counters cannot establish bloom-bit cleanup status.
 
 Compaction pacing shares a token bucket with a 64 KiB burst across chain-database
 compaction output writers. It excludes foreground reads, WAL, manifest operations,

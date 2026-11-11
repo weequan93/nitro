@@ -33,7 +33,89 @@ def slow_event(second=13):
             "transactions": [{"to": "oracle", "selector": "0x71044186", "receipt_gas_used": 50}]}
 
 
+def background_context(second, recovered, elapsed_ns, compact_MiB=0, generated=0):
+    return {"started_utc": timestamp(second), "metrics": {
+        "state_snapshot_generation_storage_generated": generated,
+        "state_snapshot_generation_storage_recovered": recovered,
+        "state_snapshot_generation_duration_storage_trieread": elapsed_ns,
+        "l2chaindata_compact_input": compact_MiB * 1024**2,
+        "l2chaindata_compact_output": compact_MiB * 1024**2,
+        "l2chaindata_compact_inprogress": 0,
+        "l2chaindata_compact_debt": (100 - compact_MiB) * 1024**3,
+        "l2chaindata_compact_writedelay_counter": 0}}
+
+
 class ReportTests(unittest.TestCase):
+    def background(self, contexts, resources=None, events=None):
+        return reporter.build_report(resources or [resource(s) for s in range(10, 41)],
+                                     contexts, events or [slow_event(23)])["background_activity"]
+
+    def test_background_deltas_keep_nanoseconds_separate_from_microseconds(self):
+        report = self.background([background_context(10, 1000, 9e9),
+                                  background_context(25, 1300, 39e9, compact_MiB=30)])
+        counter = report["counters"]["state_snapshot_generation_storage_recovered"]
+        self.assertEqual(counter["delta_total"], 300)  # Excludes the startup cumulative count.
+        self.assertEqual(counter["mean_rate_per_s"], 20)
+        duration = report["counters"]["state_snapshot_generation_duration_storage_trieread"]
+        self.assertEqual(duration["delta_total"], 30)
+        self.assertEqual(duration["mean_rate_per_s"], 2)  # Not CPU cores or CPU percent.
+        self.assertEqual(duration["unit"], "elapsed_stage_seconds")
+        self.assertEqual(report["counters"]["l2chaindata_compact_output"]["mean_rate_per_s"], 2)
+        self.assertEqual(report["debt_GiB"]["first"], 100)
+        self.assertEqual(report["debt_GiB"]["last"], 70)
+        interval = report["slow_block_context"][0]["intervals"][0]
+        self.assertEqual(interval["seconds"], 15)  # Whole metric interval, not two-second slow block.
+        self.assertEqual(interval["storage_trie_read_s"], 30)
+        self.assertTrue(interval["snapshot_storage_progress"])
+        self.assertTrue(interval["compaction_evidence"])
+
+    def test_missing_counters_and_resets_are_not_zero_activity(self):
+        first = background_context(10, 100, 5e9)
+        second = background_context(25, 50, 2e9)
+        third = background_context(40, 80, 3e9)
+        del second["metrics"]["state_snapshot_generation_storage_generated"]
+        report = self.background([first, second, third])
+        counter = report["counters"]["state_snapshot_generation_storage_recovered"]
+        self.assertEqual(counter["reset_intervals"], 1)
+        self.assertEqual(counter["delta_total"], 30)
+        self.assertEqual(counter["covered_seconds"], 15)
+        self.assertIsNone(report["counters"]["state_snapshot_generation_storage_generated"]["delta_total"])
+        combinations = report["activity_combinations"]
+        self.assertTrue(any(r["snapshot_storage_progress"] is None for r in combinations))
+
+    def test_restart_with_increasing_counters_is_rejected(self):
+        resources = [resource(s) for s in range(10, 41)]
+        for row in resources[10:]:
+            row["processes"][0]["start_ticks"] = 99  # Same PID reused; counter happened to increase.
+        report = self.background([background_context(10, 10, 0), background_context(25, 100, 1e9)], resources)
+        self.assertEqual(report["usable_intervals"], 0)
+        self.assertEqual(report["skipped_intervals"]["main_identity_missing_or_changed"], 1)
+
+    def test_context_resource_gaps_and_read_errors_are_excluded(self):
+        contexts = [background_context(10, 10, 0), background_context(25, 100, 1e9)]
+        gapped_resources = [resource(s) for s in range(10, 41) if s not in (15, 16, 17)]
+        report = self.background(contexts, gapped_resources)
+        self.assertEqual(report["skipped_intervals"]["resource_gap_over_2_5s"], 1)
+        contexts[-1]["metrics_error"] = "TimeoutError"
+        report = self.background(contexts)
+        self.assertEqual(report["skipped_intervals"]["metrics_read_error"], 1)
+        contexts[-1].pop("metrics_error")
+        contexts[-1]["started_utc"] = timestamp(41)
+        report = self.background(contexts, resources=[resource(s) for s in range(10, 42)])
+        self.assertEqual(report["skipped_intervals"]["nonpositive_or_over_30s_gap"], 1)
+
+    def test_no_progress_observation_and_rpc_resource_alignment(self):
+        contexts = [background_context(10, 10, 0), background_context(25, 10, 0)]
+        event = {"kind": "rpc_slow", "method": "eth_sendRawTransaction", "total_ms": 1000,
+                 "log_time_utc": timestamp(13), "outcome": "success"}
+        report = self.background(contexts, events=[event])
+        self.assertEqual(report["activity_combinations"], [{"snapshot_storage_progress": False,
+                          "compaction_evidence": False, "intervals": 1, "seconds": 15}])
+        rpc = report["slow_rpc_context"][0]
+        self.assertEqual(rpc["resources"]["samples"], 1)
+        self.assertEqual(rpc["resources"]["values"]["device.vdb.read_await_ms"]["mean"], 2)
+        self.assertEqual(rpc["intervals"][0]["seconds"], 15)
+
     def test_exact_sequence_intervals_guard_and_dedup(self):
         resources = [resource(s) for s in range(10, 16)]
         event = slow_event()

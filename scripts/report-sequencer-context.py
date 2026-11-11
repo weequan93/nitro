@@ -6,7 +6,7 @@ outside logged slow intervals are a comparison group, not proven fast work.
 """
 
 import argparse
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 import json
@@ -164,6 +164,148 @@ def slow_block_info(event, matching_samples):
     }
 
 
+def background_activity(contexts, resources, events, rpc_events, resource_intervals):
+    """Adjacent snapshot deltas with stable native-process/resource coverage.
+
+    Metric read times are approximated by context start times. Stage durations
+    are elapsed nanoseconds, not CPU time or a per-request causal budget.
+    """
+    points = sorted(resources, key=lambda r: stamp(r["time_utc"]))
+    times = [stamp(r["time_utc"]) for r in points]
+    contexts = sorted(contexts, key=lambda r: stamp(r["started_utc"]))
+    prefix = "state_snapshot_generation_"
+    keys = {k for r in contexts for k in (r.get("metrics") or {}) if k.startswith(prefix)}
+    keys.update(("l2chaindata_compact_input", "l2chaindata_compact_output", "l2chaindata_compact_writedelay_counter"))
+    totals = {k: {"valid_intervals": 0, "missing_intervals": 0, "reset_intervals": 0,
+                  "delta_total": 0, "covered_seconds": 0} for k in keys}
+    skipped = Counter()
+    intervals = []
+    for previous, current in zip(contexts, contexts[1:]):
+        begin, end = stamp(previous["started_utc"]), stamp(current["started_utc"])
+        seconds = end - begin
+        if not 0 < seconds <= 30:
+            skipped["nonpositive_or_over_30s_gap"] += 1
+            continue
+        lo, hi = bisect_right(times, begin) - 1, bisect_left(times, end)
+        if lo < 0 or hi >= len(points):
+            skipped["resource_boundary_unavailable"] += 1
+            continue
+        surrounding = points[lo:hi + 1]
+        identities = []
+        for row in surrounding:
+            main = [p for p in row.get("processes") or [] if p.get("role") == "nitro" and p.get("available")]
+            identities.append((main[0].get("pid"), main[0].get("start_ticks")) if len(main) == 1 else None)
+        if any(identity is None or None in identity for identity in identities) or len(set(identities)) != 1:
+            skipped["main_identity_missing_or_changed"] += 1
+            continue
+        if any(b - a > 2.5 for a, b in zip(times[lo:hi], times[lo + 1:hi + 1])):
+            skipped["resource_gap_over_2_5s"] += 1
+            continue
+        old, new = previous.get("metrics") or {}, current.get("metrics") or {}
+        if previous.get("metrics_error") or current.get("metrics_error"):
+            skipped["metrics_read_error"] += 1
+            continue
+        delta = {}
+        for key in keys:
+            a, b = old.get(key), new.get(key)
+            if not number(a) or not number(b):
+                totals[key]["missing_intervals"] += 1
+            elif b < a:
+                totals[key]["reset_intervals"] += 1
+            else:
+                delta[key] = b - a
+                totals[key]["valid_intervals"] += 1
+                totals[key]["delta_total"] += b - a
+                totals[key]["covered_seconds"] += seconds
+        def change(key, divisor=1):
+            value = delta.get(key)
+            return value / divisor if value is not None else None
+        def finite_value(key, divisor=1):
+            value = new.get(key)
+            return value / divisor if number(value) else None
+        generated = change(prefix + "storage_generated")
+        recovered = change(prefix + "storage_recovered")
+        progress = (True if any(v is not None and v > 0 for v in (generated, recovered)) else
+                    False if generated is not None and recovered is not None else None)
+        compact_deltas = [change("l2chaindata_compact_" + kind) for kind in ("input", "output")]
+        compact_gauges = [m.get("l2chaindata_compact_inprogress") for m in (old, new)]
+        compact = (True if any(number(v) and v > 0 for v in compact_deltas + compact_gauges) else
+                   False if all(number(v) and v == 0 for v in compact_deltas + compact_gauges) else None)
+        intervals.append({
+            "begin": begin, "end": end, "seconds": seconds,
+            "snapshot_storage_progress": progress, "compaction_evidence": compact,
+            "storage_generated_delta": generated, "storage_recovered_delta": recovered,
+            "storage_prove_s": change(prefix + "duration_storage_prove", 1e9),
+            "storage_trie_read_s": change(prefix + "duration_storage_trieread", 1e9),
+            "storage_snapshot_read_s": change(prefix + "duration_storage_snapread", 1e9),
+            "storage_write_s": change(prefix + "duration_storage_write", 1e9),
+            "compaction_input_MiB_s": change("l2chaindata_compact_input", seconds * 1024**2),
+            "compaction_output_MiB_s": change("l2chaindata_compact_output", seconds * 1024**2),
+            "compactions_at_end": finite_value("l2chaindata_compact_inprogress"),
+            "debt_GiB_at_end": finite_value("l2chaindata_compact_debt", 1024**3),
+            "write_stalls_delta": change("l2chaindata_compact_writedelay_counter"),
+        })
+    for key, result in totals.items():
+        divisor = 1e9 if key.startswith(prefix + "duration_") else 1024**2 if key in (
+            "l2chaindata_compact_input", "l2chaindata_compact_output") else 1
+        result["unit"] = "elapsed_stage_seconds" if divisor == 1e9 else "MiB" if divisor == 1024**2 else "count"
+        if result["valid_intervals"]:
+            result["delta_total"] = round(result["delta_total"] / divisor, 6)
+            result["mean_rate_per_s"] = round(result["delta_total"] / result["covered_seconds"], 6)
+        else:
+            result["delta_total"] = result["mean_rate_per_s"] = None
+        result["covered_seconds"] = round(result["covered_seconds"], 3)
+    def interval_view(row):
+        return {"start_sgt": sgt(row["begin"]), "end_sgt": sgt(row["end"]),
+                **{k: round(v, 6) if type(v) is float else v for k, v in row.items() if k not in ("begin", "end")}}
+    def nearby(begin, end):
+        return [interval_view(r) for r in intervals if r["begin"] < end and r["end"] > begin]
+    def rpc_resources(event):
+        end = stamp(event["log_time_utc"])
+        begin = end - event["total_ms"] / 1000
+        rows = [r for r in resource_intervals if r["begin"] < end and r["end"] > begin]
+        values = summarize(rows)
+        return {"samples": len(rows), "window_clipped": begin < times[0] or end > times[-1],
+                "values": {k: v for k, v in values.items() if
+                           k.startswith("host.") or
+                           k.startswith("device.") and not k.endswith("busy_percent") or
+                           k.startswith("process.nitro.") and k.endswith((
+                               "cpu_cores", "read_MiB_s", "write_MiB_s", "throttled_ms_s"))}}
+    def gauge(key, divisor=1):
+        values = [r["metrics"][key] / divisor for r in contexts if number((r.get("metrics") or {}).get(key))]
+        return {"first": values[0] if values else None, "last": values[-1] if values else None, **stats(values)}
+    combinations = []
+    for progress in (True, False, None):
+        for compact in (True, False, None):
+            rows = [r for r in intervals if r["snapshot_storage_progress"] is progress and r["compaction_evidence"] is compact]
+            if rows:
+                combinations.append({"snapshot_storage_progress": progress, "compaction_evidence": compact,
+                                     "intervals": len(rows), "seconds": round(sum(r["seconds"] for r in rows), 3)})
+    return {
+        "adjacent_context_pairs": max(0, len(contexts) - 1), "usable_intervals": len(intervals),
+        "snapshot_metric_names": sum(k.startswith(prefix) for k in keys),
+        "skipped_intervals": dict(skipped), "activity_combinations": combinations,
+        "counters": dict(sorted(totals.items())),
+        "debt_GiB": gauge("l2chaindata_compact_debt", 1024**3),
+        "compactions": gauge("l2chaindata_compact_inprogress"),
+        "slow_block_context": [{"block": e.get("block_number"), "sequence_ms": e["sequence_elapsed_ms"],
+                                "intervals": nearby(e["begin"], e["end"])}
+                               for e in sorted(events, key=lambda e: e["sequence_elapsed_ms"], reverse=True)[:3]],
+        "slow_rpc_context": [{"end_sgt": sgt(stamp(e["log_time_utc"])), "outcome": e.get("outcome"),
+                              "total_ms": e["total_ms"], "resources": rpc_resources(e), "intervals": nearby(
+                                  stamp(e["log_time_utc"]) - e["total_ms"] / 1000, stamp(e["log_time_utc"]))}
+                             for e in sorted((e for e in rpc_events if number(e.get("total_ms"))),
+                                             key=lambda e: e["total_ms"], reverse=True)[:5]],
+        "limits": [
+            "Adjacent counter intervals use approximate metric-read times and require continuous stable main PID/start-time coverage.",
+            "Full context intervals overlap slow requests/blocks; their deltas are not apportioned to those requests or proof of causality.",
+            "No storage-counter advance or compaction evidence does not prove a background task stopped or completed.",
+            "Stage durations can overlap; they are not CPU time, disk time, physical bytes, or additive wait budgets.",
+            "Compaction MiB counts are logical accounting; debt is a gauge, not a monotonic counter.",
+        ],
+    }
+
+
 def build_report(resource_rows, context_rows, event_rows, guard=15, top=3):
     resources = sorted((row for row in resource_rows if row.get("kind") == "resources"
                         and stamp(row.get("time_utc")) is not None), key=lambda r: stamp(r["time_utc"]))
@@ -234,6 +376,7 @@ def build_report(resource_rows, context_rows, event_rows, guard=15, top=3):
         },
         "resource_comparison": {key: {group: summary.get(key, stats([])) for group, summary in summaries.items()} for key in keys},
         "metric_snapshots": snapshots,
+        "background_activity": background_activity(contexts, resources, events, rpc_events, flat),
         "workload_controls": {"sampled_blocks_unclassified": len(controls),
                               "also_in_logged_slow_blocks": len(set(controls) & slow_keys),
                               "block_gas_used": stats([block.get("block_gas_used") for block in controls.values()]),
@@ -272,6 +415,13 @@ def main():
     print("INPUTS", json.dumps(report["input_snapshots"], separators=(",", ":")))
     print("METRIC_SNAPSHOTS", json.dumps(report["metric_snapshots"], separators=(",", ":")))
     print("WORKLOAD_CONTROLS", json.dumps(report["workload_controls"], separators=(",", ":")))
+    background = report["background_activity"]
+    print("BACKGROUND", json.dumps({k: v for k, v in background.items()
+                                    if k not in ("slow_block_context", "slow_rpc_context")}, separators=(",", ":")))
+    for block in background["slow_block_context"]:
+        print("SLOW_BLOCK_BACKGROUND", json.dumps(block, separators=(",", ":")))
+    for rpc in background["slow_rpc_context"]:
+        print("SLOW_RPC_BACKGROUND", json.dumps(rpc, separators=(",", ":")))
     for key, groups in report["resource_comparison"].items():
         print("RESOURCE", json.dumps({"metric": key, **groups}, separators=(",", ":")))
     for block in report["slowest_blocks"]:
