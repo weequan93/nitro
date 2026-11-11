@@ -134,6 +134,48 @@ close releases limiter waits before normal database shutdown. This limits SST
 output writes, not device IOPS or total read/write traffic. A low rate can grow
 compaction debt; enable it only with workload-specific observation.
 
+For a single-setting main trial using the existing image, install
+`scripts/trial-compaction-pacing.py` on the Linux node host and prepare a plan:
+
+```bash
+python3 -B /data/scripts/trial-compaction-pacing.py
+```
+
+Preparation reads the current main/nitro container, verifies its original
+Compose inputs and service hash, and maps its single `--conf.file` to a host
+bind mount. It saves exact JSON backup bytes, a candidate and a plan in a private
+directory under `/data/deploy-backups`. Only the candidate's compaction-output
+rate changes from absent/zero to 67,108,864 bytes/s (64 MiB/s); existing
+concurrency, caches and image stay as configured. This starting rate is an
+experiment, not a measured optimum. Additional config loaders and ambiguous
+JSON layouts require separate review. Preparation does not edit the live JSON
+or stop the node. Backups contain the original private configuration; do not
+paste their contents into a support conversation.
+
+The helper prints separate `--apply /absolute/plan.json` and
+`--rollback /absolute/plan.json` commands. Apply verifies that the prepared
+inputs, image, container and runtime still match, stops only main/nitro with a
+120-second grace period, atomically updates the bound JSON, then recreates the
+same service with its full original Compose file list, without a build or pull.
+This briefly interrupts sequencing. Editing the host JSON persists the setting
+across later starts using the original Compose files. Rollback restores the
+exact original JSON and recreates that same service. Subsequent unrelated
+configuration/runtime changes are refused rather than overwritten.
+
+A service operation error leaves its output in a private log next to the plan;
+there is no automatic rollback. The saved rollback also handles failure after
+Compose removes the old container. `started_health_pending` confirms container
+creation only. Check startup logs, RPC/head progress, restart/OOM status and
+`l2chaindata_compact_pacing_*` counters, allow startup/cache warming to settle,
+then capture a fresh hour with the context collector and existing slow-block
+watcher. Compare similar transaction sizes/gas along with execution time,
+main-device read/write latency and queue depth. Check debt across compaction
+cycles, L0 and cumulative write-stall changes; sustained debt growth or worse
+head/submission progress warrants rollback. Lower latency during a lighter
+workload or just after restart does not establish a pacing improvement. Run
+`python3 -B scripts/test_trial_compaction_pacing.py` for offline deployment
+checks; these use mocked Docker responses and perform no live rollout.
+
 ## Validation
 
 The earlier performance layers passed native server Linux/amd64 regression,
