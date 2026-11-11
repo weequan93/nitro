@@ -146,11 +146,14 @@ def native_argv():
     return read_bytes("/proc/" + pids[0] + "/cmdline").decode().rstrip("\0").split("\0")
 
 
-def local_config(info, argv):
+def local_config(info, argv, allow_cli_pacing=False):
     files = [path for value in option(argv, "conf.file") for path in next(csv.reader([value]))]
     if len(files) != 1 or not files[0].startswith("/"):
         raise ValueError("Require exactly one absolute --conf.file")
-    if any(option(argv, name) for name in (KEY, "conf.string", "conf.env-prefix", "conf.s3.secret-key")):
+    blocked = ("conf.string", "conf.env-prefix", "conf.s3.secret-key")
+    if not allow_cli_pacing:
+        blocked += (KEY,)
+    if any(option(argv, name) for name in blocked):
         raise ValueError("CLI pacing or other configuration loader requires separate review")
     target = Path(files[0])
     matches = []

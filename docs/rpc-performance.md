@@ -209,6 +209,11 @@ workload or just after restart does not establish a pacing improvement. Run
 `python3 -B scripts/test_trial_compaction_pacing.py` for offline deployment
 checks; these use mocked Docker responses and perform no live rollout.
 
+Before an image upgrade, save and later compare the current deployment with
+`scripts/check-main-runtime.py`. Follow [the main upgrade checks](main-upgrade-checks.md)
+to retain every Compose input and the bound JSON, distinguish image IDs from
+registry digests, and detect lost tuning or other deployment differences.
+
 ## Validation
 
 The earlier performance layers passed native server Linux/amd64 regression,
