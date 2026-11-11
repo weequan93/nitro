@@ -120,6 +120,48 @@ timeouts. Existing output files are refused to prevent mixing runs. Resource
 samples continue independently of slow metrics or RPC responses. Validate the
 collector offline with `python3 -B scripts/test_capture_sequencer_context.py`.
 
+For a longer window, use the companion `scripts/capture-sequencer-longrun.py`
+with the collector installed beside it:
+
+```bash
+nohup python3 -B -u /data/scripts/capture-sequencer-longrun.py \
+  --hours 24 --segment-minutes 60 \
+  --events-file /data/sequencer-context-paced-20261111-155957/slow-blocks/events.jsonl \
+  --out-dir "$OUT" >"$OUT/stdout.log" 2>&1 &
+```
+
+Create a fresh `$OUT` directory first. This bounded Linux host job runs the
+same collector in `segment-0001`, `segment-0002`, etc., keeping resource files
+small enough for the report's per-file size limit. Defaults retain one-second
+resource and 15-second context intervals. At the observed data rate, 24 hours
+requires roughly 0.6 GB; actual size depends on sampled blocks and process
+metadata. The wrapper copies and hashes the collector code before starting,
+and writes `run.json`, `segments.jsonl` and atomic `status.json` updates.
+Progress is also printed to the root `stdout.log` once per minute.
+
+The wrapper defaults to 24 hours, accepts up to 168 hours, and starts children
+of at most six hours each. It holds a host lock, checks for an existing resource
+collector and refuses a reused output directory. It checks its output size and
+free disk space once per minute, stopping the owned collector if output reaches
+the default 2 GiB budget or free space falls below 2 GiB. Budget checks are
+periodic, so these are stop thresholds, not exact byte caps. Existing data is
+retained; no files are automatically deleted. These budgets cover the new run
+directory, not a separate existing watcher directory.
+
+SIGTERM/SIGINT to the recorded parent PID stops its current collector child
+and prevents further segments. A failed/early child, timeout, cancellation or
+budget stop produces a `stopped` status with its reason. Normal expiry produces
+`complete`; every segment's timing and exit status are recorded separately.
+Hourly rollover can leave short sampling gaps, so inspect actual coverage and
+analyze each segment using the existing report with the watcher events path in
+`run.json`. Node restart/counter gaps retain the report's existing exclusions.
+The existing watcher remains a separate process: its file path is recorded but
+its process is not stopped or restarted, and the wrapper does not establish
+continuous watcher coverage. Keep tuning fixed during a comparison window.
+The wrapper makes no node configuration, image, database or service changes.
+Run `python3 -B scripts/test_capture_sequencer_longrun.py` for offline orchestration
+checks using fake collectors.
+
 After capture, join the saved files without new node requests:
 
 ```bash
