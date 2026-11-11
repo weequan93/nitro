@@ -74,6 +74,38 @@ calldata and opcode traces are intentionally omitted. The watcher also records
 visible `pathdb-migrate-pipeline` process I/O counters when a slow block is
 observed.
 
+To collect resource context and workload controls alongside that watcher, run:
+
+```bash
+python3 -u /data/scripts/capture-sequencer-context.py \
+  --out-dir /data/sequencer-context-UNIQUE --minutes 60
+```
+
+This Linux host script requires only Python's standard library and Docker read
+access. It writes independent device I/O rates, node and migration process CPU,
+physical I/O counters, major faults, host memory/PSI and cgroup v2 CPU/memory
+limits and counters to `resources.jsonl`, normally once per second. Device
+rates do not imply shared disks and must not be summed across storage layers.
+Process rates use PID/start-time identity; missing or reset counters are null.
+The process CPU unit is cores, where 1.0 means one fully used core.
+
+An independent worker writes `context.jsonl` roughly every 15 seconds, retaining
+selected metrics and one latest block with transaction targets, selectors,
+input lengths, block gas used and decoded price counts for the known
+PriceOracle `batchSetPrices` method. Sampled blocks are unclassified workload
+controls, not proven fast blocks; their individual execution time is unknown.
+Join their block hashes/numbers and UTC timestamps with the slow-block watcher
+and rolling metrics. Metrics retain their original units (txpublish histograms
+are microseconds); their counts are cumulative and quantiles are a rolling
+one-minute window, not request-ID joins or additive per-request wait budgets.
+
+The collector performs no replay, trace, profile, `eth_call`, transaction send
+or service changes, and exits automatically after the requested duration
+(maximum six hours). HTTP reads have response caps and three-second socket
+timeouts. Existing output files are refused to prevent mixing runs. Resource
+samples continue independently of slow metrics or RPC responses. Validate the
+collector offline with `python3 -B scripts/test_capture_sequencer_context.py`.
+
 Compaction pacing shares a token bucket with a 64 KiB burst across chain-database
 compaction output writers. It excludes foreground reads, WAL, manifest operations,
 flushes, read-only opens, and WASM/consensus databases. Write stalls bypass waits;
