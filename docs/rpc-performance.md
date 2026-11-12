@@ -312,6 +312,21 @@ load from latency comparisons, and review the candidate separately before a
 deployment. The image must be enabled and the counter collector updated in a
 new output directory before subsecond bucket data becomes available.
 
+After the verified candidate `deriw-rpc-subsecond:b7df6d1a1-EsEK2e` was
+reported as image ID
+`sha256:0ea40d56b156757fc121c864ba30775f7bdd8924a45dec5d59b8b6228cd50215`,
+`scripts/prepare-rpc-subsecond-switch.py` can save a switch plan. Install it
+beside `check-main-runtime.py` and `trial-compaction-pacing.py`. Preparation
+rechecks the build evidence/current runtime, compares undeclared cache
+defaults using both images' help output, and renders the original Compose
+inputs plus a main-image override. Only an otherwise identical model is
+accepted. It backs up the bound JSON and Compose files into a private
+`main-rpc-subsecond-*` directory, then writes `plan.json` with image identities,
+input/model hashes and the reviewed SIGTERM/normal-exit requirement. Its
+`prepared_no_service_change` result is preparation only; it performs no node
+restart or monitoring takeover. Activation and a fresh capture phase remain
+separate steps after reviewing that on-server plan.
+
 After capture, join the saved files without new node requests:
 
 ```bash
