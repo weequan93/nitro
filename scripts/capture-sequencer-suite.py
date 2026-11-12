@@ -30,8 +30,9 @@ SOURCES = (
     "capture-sequencer-context.py", "capture-main-cache-io.py",
     "watch-slow-sequencer-blocks.py", "report-sequencer-context.py",
     "check-main-runtime.py", "trial-compaction-pacing.py",
+    "capture-rpc-diagnostics.py",
 )
-MONITORS = set(SOURCES[:5]) | {"capture-txpublish-diagnostics.py"}
+MONITORS = set(SOURCES[:5]) | {"capture-txpublish-diagnostics.py", "capture-rpc-diagnostics.py"}
 CONTAINER = "main-nitro-1"
 GIB = 1024**3
 
@@ -96,6 +97,9 @@ def monitor(row):
     if name not in MONITORS or argument(argv, "--container", CONTAINER) != CONTAINER:
         return None
     out = argument(argv, "--out-dir")
+    if not out and name == "capture-rpc-diagnostics.py":
+        owner_dir = argument(argv, "--suite-dir")
+        out = str(Path(owner_dir) / "rpc-counters") if owner_dir else None
     if not out or not Path(out).is_absolute():
         raise ValueError("Recognized monitor has no absolute output directory")
     return {"pid": row["pid"], "start_ticks": row["start_ticks"], "name": name, "out_dir": out}
@@ -176,6 +180,8 @@ def fetch(url, body=None):
 def ready(args):
     deadline = time.monotonic() + args.ready_timeout
     heads = []
+    rpc_counters = (module("suite_rpc_readiness", DIRECTORY / "capture-rpc-diagnostics.py")
+                    if getattr(args, "rpc_counters", False) else None)
     while True:
         try:
             payload = json.loads(fetch(args.rpc_url, json.dumps(
@@ -188,6 +194,10 @@ def ready(args):
             metrics = fetch(args.metrics_url).decode()
             if not any(line.startswith("l2chaindata_compact_debt ") for line in metrics.splitlines()):
                 raise ValueError("Database metrics unavailable")
+            if rpc_counters:
+                values = rpc_counters.parse(metrics)
+                if any(k not in values for k in rpc_counters.TRACKED_KEYS):
+                    raise ValueError("Subsecond RPC counters unavailable")
             heads.append(head)
             if len(heads) >= 2:
                 if heads[-1] < heads[-2]:
@@ -233,7 +243,7 @@ def shutdown(children, root, natural=False):
     if natural:
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline and any(
-                children.get(k) is not None and children[k].poll() is None for k in ("resources", "cache")):
+                children.get(k) is not None and children[k].poll() is None for k in ("resources", "cache", "rpc")):
             time.sleep(0.2)
     for name, child in children.items():
         if child is None:
@@ -348,13 +358,19 @@ def run(args):
                     "--events-file", str(root / "slow-blocks" / "events.jsonl"),
                     "--max-output-gib", str(args.max_output_gib), "--min-free-gib", str(args.min_free_gib)],
                     root / "resources.stdout.log")
+                if getattr(args, "rpc_counters", False):
+                    (root / "rpc-counters").mkdir()
+                    children["rpc"] = spawn(python + [str(tools / "capture-rpc-diagnostics.py"),
+                        "--suite-dir", str(root), "--out-dir", str(root / "rpc-counters"),
+                        "--metrics-url", args.metrics_url, "--min-free-gib", str(args.min_free_gib)],
+                        root / "rpc-counters" / "stdout.log")
                 heartbeat = 0
                 while not stop.is_set() and time.monotonic() < deadline:
                     current = time.monotonic()
-                    for name in ("watcher", "resources"):
+                    for name in ("watcher", "resources") + (("rpc",) if "rpc" in children else ()):
                         if children[name].poll() is not None:
-                            if name == "resources" and children[name].returncode == 0 and deadline - current <= 2:
-                                break
+                            if name in ("resources", "rpc") and children[name].returncode == 0 and deadline - current <= 2:
+                                continue
                             raise RuntimeError(name + " collector exited; inspect its stdout.log")
                     cache = children.get("cache")
                     if cache is None or cache.poll() is not None:
@@ -390,7 +406,7 @@ def run(args):
             terminated = shutdown(children, root, natural=reason == "duration_elapsed")
             if reason == "duration_elapsed":
                 if any(children.get(k) and (children[k].returncode != 0 or k in terminated)
-                       for k in ("resources", "cache")):
+                       for k in ("resources", "cache", "rpc")):
                     reason, code = "collector_failed_or_late_on_shutdown", 1
                 elif "watcher" in children and (
                         "watcher" not in terminated or children["watcher"].returncode not in (0, -signal.SIGTERM)):
@@ -417,6 +433,8 @@ def main():
     parser.add_argument("--metrics-url", default="http://127.0.0.1:6070/debug/metrics/prometheus")
     parser.add_argument("--ready-timeout", type=float, default=300)
     parser.add_argument("--replace-existing", action="store_true")
+    parser.add_argument("--rpc-counters", action="store_true",
+                        help="Require subsecond metrics and supervise an RPC counter collector until this suite ends")
     parser.add_argument("--lock-file", type=Path, default=Path("/run/lock/nitro-sequencer-suite.lock"))
     parser.add_argument("--max-output-gib", type=float, default=3)
     parser.add_argument("--min-free-gib", type=float, default=2)

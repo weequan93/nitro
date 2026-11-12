@@ -4,6 +4,7 @@ import argparse
 from contextlib import ExitStack, redirect_stdout
 import importlib.util
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -28,6 +29,7 @@ if __name__ == "__main__":
     p.add_argument("--out-dir", type=Path)
     p.add_argument("--hours", type=float, default=1)
     p.add_argument("--minutes", type=float, default=60)
+    p.add_argument("--suite-dir", type=Path)
     a, _ = p.parse_known_args()
     a.out_dir.mkdir(parents=True, exist_ok=True)
     name = Path(__file__).name
@@ -40,6 +42,10 @@ if __name__ == "__main__":
     (a.out_dir / "source-marker").write_text("pinned-original")
     duration = (a.minutes * 60 if "cache-io" in name else
                 a.hours * 3600 if "longrun" in name else 3600)
+    if "rpc-diagnostics" in name:
+        from datetime import datetime
+        metadata = json.loads((a.suite_dir / "run.json").read_text())
+        duration = max(0, datetime.fromisoformat(metadata["started_utc"]).timestamp() + metadata["hours"] * 3600 - time.time())
     if "cache-io" in name:
         CACHE_FAILURE
     end = time.monotonic() + duration
@@ -120,6 +126,23 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("Cache collector failed", self.status()["reason"])
         for folder in ("resources", "slow-blocks"):
             self.assertEqual((self.args.out_dir / folder / "ended.txt").read_text(), "signal")
+
+    def test_optional_rpc_collector_is_owned_pinned_and_finishes_at_suite_deadline(self):
+        self.args.rpc_counters = True
+        self.assertEqual(suite.run(self.args), 0, self.status())
+        self.assertEqual(self.status()["kind"], "complete")
+        self.assertEqual(self.status()["children"]["rpc"]["returncode"], 0)
+        self.assertEqual((self.args.out_dir / "rpc-counters/ended.txt").read_text(), "duration")
+        self.assertTrue((self.args.out_dir / "tools/capture-rpc-diagnostics.py").exists())
+
+    def test_optional_rpc_failure_stops_other_owned_collectors(self):
+        self.args.rpc_counters = True
+        (self.source / "capture-rpc-diagnostics.py").write_text(FAKE.replace(
+            'if "rpc-diagnostics" in name:', 'if "rpc-diagnostics" in name:\n        raise SystemExit(7)'))
+        self.assertEqual(suite.run(self.args), 1)
+        self.assertIn("rpc collector exited", self.status()["reason"])
+        self.assertEqual(self.status()["children"]["rpc"]["returncode"], 7)
+        self.assertTrue(all(c["returncode"] is not None for c in self.status()["children"].values()))
 
     def test_signal_stops_all_owned_collectors(self):
         self.args.hours = 1
@@ -238,6 +261,23 @@ class ProcessTests(unittest.TestCase):
                 suite.validate_device("vdb", root)
             with self.assertRaises(ValueError):
                 suite.validate_device("missing", root)
+
+    def test_rpc_readiness_requires_subsecond_counters(self):
+        rpc = suite.module("test_rpc_metric_keys", suite.DIRECTORY / "capture-rpc-diagnostics.py")
+        args = argparse.Namespace(ready_timeout=5, rpc_url="rpc", metrics_url="metrics", rpc_counters=True)
+        for keys, accepted in ((rpc.ALL_KEYS, False), (rpc.TRACKED_KEYS, True)):
+            with self.subTest(accepted=accepted):
+                metrics = "l2chaindata_compact_debt 1\n" + "\n".join(k + " 0" for k in keys)
+                def fetch(url, body=None):
+                    return b'{"result":"0x64"}' if body else metrics.encode()
+                with patch.object(suite, "fetch", side_effect=fetch), \
+                     patch.object(suite.time, "monotonic", side_effect=itertools.count()), \
+                     patch.object(suite.time, "sleep"):
+                    if accepted:
+                        self.assertEqual(suite.ready(args)["heads"], [100, 100])
+                    else:
+                        with self.assertRaises(ValueError):
+                            suite.ready(args)
 
 
 if __name__ == "__main__":

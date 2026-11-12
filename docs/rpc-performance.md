@@ -327,6 +327,29 @@ input/model hashes and the reviewed SIGTERM/normal-exit requirement. Its
 restart or monitoring takeover. Activation and a fresh capture phase remain
 separate steps after reviewing that on-server plan.
 
+`scripts/switch-rpc-subsecond-image.py --apply PLAN` applies the prepared plan;
+`--rollback PLAN` restores its original Compose image. Both acquire the image
+operation lock and existing pacing lock, verify inputs/references/runtime
+layout, then request Docker SIGTERM with an unlimited stop timeout. A 300-second
+observer limit does not force-kill Nitro: the stop client keeps waiting and
+holds the inherited locks. Recreation requires exit code zero, the signal and
+`Blockchain stopped` markers, and no detected close/flush/fatal error. Shutdown
+logs and stopped-container evidence are saved privately. A failed `up` can be
+retried or rolled back when its matching verified normal-exit evidence exists,
+including if Compose already removed the old container. Original JSON and
+Compose files are never rewritten; apply adds the prepared image override,
+rollback uses the saved original Compose input list. Only main/nitro is
+recreated. Success is `started_health_pending`, requiring RPC/head/metrics
+checks before interpreting the new phase as healthy.
+
+The suite's `--rpc-counters` option now requires all subsecond counters before
+startup and supervises the RPC sampler beside resources, cache/IO and the slow
+watcher. Its counters use the suite's original deadline and pinned source;
+sampler failure stops the other owned collectors. Use a new output directory
+after the image change, stop the previous suite by its verified process
+identity, and launch the fresh suite with `--replace-existing --rpc-counters`.
+Retain the original capture as the concurrency-1 phase before the image change.
+
 After capture, join the saved files without new node requests:
 
 ```bash
