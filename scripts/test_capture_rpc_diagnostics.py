@@ -34,6 +34,22 @@ def sample(offset=0):
     return {"identity": {"pid": 100, "start_ticks": 42}, "counters": counters(offset), "errors": []}
 
 
+def latency_deltas(durations_ms):
+    values = {key: 0 for key in capture.TRACKED_KEYS}
+    prefix = "rpc_diagnostics_eth_sendRawTransaction_success_"
+    values[prefix + "completed"] = len(durations_ms)
+    for suffix, bound in zip(capture.LATENCY_SUFFIXES[1:], capture.LATENCY_BOUNDS_MS[1:-1]):
+        values[prefix + suffix] = sum(ms >= bound for ms in durations_ms)
+    return values
+
+
+def latency_row(values, when="2026-11-12T06:00:15Z", seconds=15):
+    return {"time_utc": when, "interval_s": seconds, "errors": [], "delta_unavailable": None,
+            "deltas": {key: values[key] for key in capture.ALL_KEYS},
+            "subsecond_deltas": {key: values[key] for key in capture.SUBSECOND_KEYS},
+            "subsecond_delta_unavailable": None}
+
+
 class CounterTests(unittest.TestCase):
     def test_parse_keeps_exact_counters_and_missing_is_not_zero(self):
         text = "\n".join("%s %s" % item for item in counters(1).items())
@@ -42,6 +58,54 @@ class CounterTests(unittest.TestCase):
         self.assertNotIn(key, capture.parse(key + " NaN"))
         self.assertNotIn(key, capture.parse(key + " -1"))
         self.assertEqual(capture.parse("unrelated 10"), {})
+
+    def test_optional_subsecond_counters_are_parsed_without_becoming_required(self):
+        values = latency_deltas([5, 25, 500, 1000])
+        self.assertEqual(capture.parse("\n".join("%s %s" % item for item in values.items())), values)
+        old, new = sample(10), sample(15)
+        self.assertIsNone(capture.deltas(new, old, 15)[1])
+        self.assertEqual(capture.deltas(new, old, 15, keys=capture.SUBSECOND_KEYS)[1], "missing_counters")
+        old["counters"].update({key: 20 for key in capture.SUBSECOND_KEYS})
+        new["counters"].update({key: 25 for key in capture.SUBSECOND_KEYS})
+        self.assertEqual(capture.deltas(new, old, 15, keys=capture.SUBSECOND_KEYS)[0],
+                         {key: 5 for key in capture.SUBSECOND_KEYS})
+        new["counters"][capture.SUBSECOND_KEYS[0]] = 19
+        self.assertEqual(capture.deltas(new, old, 15, keys=capture.SUBSECOND_KEYS)[1], "counter_reset")
+        self.assertIsNone(capture.deltas(new, old, 15)[1])
+
+    def test_latency_buckets_include_lower_boundary_and_exclude_upper(self):
+        durations = [0, 9.999, 10, 24.999, 25, 49.999, 50, 99.999, 100, 249.999,
+                     250, 499.999, 500, 999.999, 1000, 2999.999, 3000, 4999.999, 5000, 12000]
+        row = latency_row(latency_deltas(durations))
+        result = capture.latency_report([row])["eth_sendRawTransaction"]
+        self.assertEqual(result["success"]["completed"], 20)
+        self.assertEqual([b["count"] for b in result["success"]["ranges_ms"]], [2] * 10)
+        self.assertEqual([b["percent"] for b in result["success"]["ranges_ms"]], [10] * 10)
+        self.assertTrue(result["failure"]["available"])
+        self.assertEqual(result["failure"]["completed"], 0)
+        self.assertTrue(all(b["percent"] is None for b in result["failure"]["ranges_ms"]))
+
+    def test_old_capture_and_missing_optional_metrics_are_unavailable_not_zero(self):
+        for reason in ("missing_counters", "counter_reset", None):
+            row = latency_row(latency_deltas([5]))
+            row["subsecond_delta_unavailable"] = reason
+            if reason is None:
+                row.pop("subsecond_deltas")
+            result = capture.latency_report([row])["eth_sendRawTransaction"]["success"]
+            self.assertFalse(result["available"])
+            self.assertIsNone(result["completed"])
+            self.assertTrue(all(b["count"] is None for b in result["ranges_ms"]))
+            self.assertEqual(result["unavailable_intervals"], {reason or "not_recorded": 1})
+
+    def test_inconsistent_scrape_is_excluded_only_from_affected_bucket_group(self):
+        row = latency_row(latency_deltas([5]))
+        row["subsecond_deltas"]["rpc_diagnostics_eth_sendRawTransaction_success_ge25ms"] = 1
+        result = capture.latency_report([row])
+        bad = result["eth_sendRawTransaction"]["success"]
+        self.assertFalse(bad["available"])
+        self.assertEqual(bad["unavailable_intervals"], {"missing_or_inconsistent_threshold_deltas": 1})
+        self.assertTrue(result["eth_sendRawTransaction"]["failure"]["available"])
+        self.assertTrue(result["eth_getLogs"]["success"]["available"])
 
     def test_deltas_reject_restart_error_gap_missing_and_reset(self):
         old, new = sample(10), sample(15)
@@ -79,9 +143,37 @@ class CounterTests(unittest.TestCase):
             self.assertEqual(result["method_deltas"]["eth_sendRawTransaction"]["success"]["completed"], 7)
             self.assertEqual(result["details_dropped_delta"], 7)
             self.assertEqual(result["input_status"]["malformed_or_partial"], 1)
+            self.assertFalse(result["latency_buckets"]["eth_sendRawTransaction"]["success"]["available"])
             (root / "counters.jsonl").write_text(json.dumps(a) + "\n")
             with patch.object(capture, "module", return_value=reader):
                 self.assertIsNone(capture.report(root)["method_deltas"]["eth_sendRawTransaction"]["success"]["completed"])
+
+    def test_recent_report_uses_complete_intervals_and_separate_outcome_denominators(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "run.json").write_text(json.dumps({"suite_dir": str(root)}))
+            rows = []
+            values = latency_deltas([5, 25, 500, 1000])
+            values["rpc_diagnostics_eth_sendRawTransaction_failure_completed"] = 1
+            start = datetime.fromisoformat("2026-11-12T06:00:00+00:00").timestamp()
+            for i in range(30):
+                when = datetime.fromtimestamp(start + 15 * i, timezone.utc).isoformat()
+                rows.append(latency_row(values, when))
+            (root / "counters.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+            with patch.object(capture, "module", return_value=reader):
+                result = capture.report(root, last_minutes=5)
+            self.assertEqual(result["valid_intervals"], 20)
+            self.assertEqual(result["valid_interval_seconds"], 300)
+            self.assertEqual(result["last_sample_sgt"], "2026-11-12T14:07:15+08:00")
+            groups = result["latency_buckets"]["eth_sendRawTransaction"]
+            self.assertEqual(groups["success"]["completed"], 80)
+            self.assertEqual(groups["failure"]["completed"], 20)
+            self.assertEqual(groups["failure"]["ranges_ms"][0]["percent"], 100)
+            self.assertEqual(groups["success"]["ranges_ms"][0]["percent"], 25)
+            for invalid in (0, -1, float("nan"), float("inf"), 10081):
+                with patch.object(capture, "module", return_value=reader):
+                    with self.assertRaises(ValueError):
+                        capture.report(root, last_minutes=invalid)
 
     def test_retained_logs_are_split_at_capture_start(self):
         lines = [
@@ -203,12 +295,28 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(capture.run(self.args), 0)
         self.assertEqual(self.status()["reason"], "suite_parent_exited_or_reused")
         self.assertEqual(self.status()["samples"], 3)
+        self.assertEqual(self.status()["error_samples"], 0)
         self.kill.assert_not_called()
         result = capture.report(self.root / "rpc-counters")
         self.assertEqual(result["method_deltas"]["eth_sendRawTransaction"]["success"]["completed"], 2)
         self.assertEqual(result["valid_intervals"], 2)
         self.assertEqual((self.root / "run.json").read_bytes(), original_metadata)
         self.assertEqual((self.root / "tools/capture-main-cache-io.py").read_bytes(), original_helper)
+
+    def test_new_image_subsecond_counters_survive_capture_and_report(self):
+        traffic = latency_deltas([5, 50, 800])
+        def fetch(*args, **kwargs):
+            self.samples += 1
+            return "\n".join("%s %s" % (key, 1000 + count * self.samples)
+                             for key, count in traffic.items()).encode()
+        self.helper.base.fetch = fetch
+        self.assertEqual(capture.run(self.args), 0)
+        self.assertEqual(self.status()["error_samples"], 0)
+        result = capture.report(self.root / "rpc-counters")
+        group = result["latency_buckets"]["eth_sendRawTransaction"]["success"]
+        self.assertEqual(group["completed"], 6)
+        self.assertEqual(group["valid_intervals"], 2)
+        self.assertEqual([b["count"] for b in group["ranges_ms"]], [2, 0, 0, 2, 0, 0, 2, 0, 0, 0])
 
     def test_parent_pid_reuse_stops_capture(self):
         self.reused = True

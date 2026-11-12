@@ -28,10 +28,16 @@ import time
 METHODS = ("eth_sendRawTransaction", "eth_getLogs")
 OUTCOMES = ("success", "failure")
 SUFFIXES = ("completed", "ge1s", "ge3s", "ge5s")
+SUBSECOND_SUFFIXES = ("ge10ms", "ge25ms", "ge50ms", "ge100ms", "ge250ms", "ge500ms")
 KEYS = tuple("rpc_diagnostics_%s_%s_%s" % (method, outcome, suffix)
              for method in METHODS for outcome in OUTCOMES for suffix in SUFFIXES)
+SUBSECOND_KEYS = tuple("rpc_diagnostics_%s_%s_%s" % (method, outcome, suffix)
+                       for method in METHODS for outcome in OUTCOMES for suffix in SUBSECOND_SUFFIXES)
 DROP = "rpc_diagnostics_details_dropped"
 ALL_KEYS = KEYS + (DROP,)
+TRACKED_KEYS = ALL_KEYS + SUBSECOND_KEYS
+LATENCY_SUFFIXES = ("completed",) + SUBSECOND_SUFFIXES + ("ge1s", "ge3s", "ge5s")
+LATENCY_BOUNDS_MS = (0, 10, 25, 50, 100, 250, 500, 1000, 3000, 5000, None)
 
 
 def utc():
@@ -55,12 +61,12 @@ def parse(text):
     values = {}
     for line in text.splitlines():
         parts = line.split()
-        if len(parts) == 2 and parts[0] in ALL_KEYS and re.fullmatch(r"[0-9]+", parts[1]):
+        if len(parts) == 2 and parts[0] in TRACKED_KEYS and re.fullmatch(r"[0-9]+", parts[1]):
             values[parts[0]] = int(parts[1])
     return values
 
 
-def deltas(current, previous, seconds, interval=15):
+def deltas(current, previous, seconds, interval=15, keys=ALL_KEYS):
     if previous is None:
         return {}, "first_sample"
     if not current.get("identity") or current["identity"] != previous.get("identity"):
@@ -70,11 +76,11 @@ def deltas(current, previous, seconds, interval=15):
     if not 0 < seconds <= max(40, interval * 2 + 10):
         return {}, "sample_gap"
     before, after = previous["counters"], current["counters"]
-    if any(key not in before or key not in after for key in ALL_KEYS):
+    if any(key not in before or key not in after for key in keys):
         return {}, "missing_counters"
-    if any(after[key] < before[key] for key in ALL_KEYS):
+    if any(after[key] < before[key] for key in keys):
         return {}, "counter_reset"
-    return {key: after[key] - before[key] for key in ALL_KEYS}, None
+    return {key: after[key] - before[key] for key in keys}, None
 
 
 def observe(helper, url):
@@ -154,6 +160,7 @@ def run(args):
             "planned_end_utc": datetime.fromtimestamp(until, timezone.utc).isoformat(),
             "interval_s": args.interval, "collector_sha256": hashlib.sha256(source).hexdigest(),
             "identity_helper_sha256": hashlib.sha256(helper_path.read_bytes()).hexdigest(),
+            "latency_bounds_ms": LATENCY_BOUNDS_MS,
             "note": "The first sample contains uptime counters. Only valid adjacent differences describe this new observation window.",
         })
         stop = threading.Event()
@@ -176,6 +183,8 @@ def run(args):
                         seconds = tick - previous_tick if previous_tick is not None else 0
                         row["interval_s"] = seconds if previous_tick is not None else None
                         row["deltas"], row["delta_unavailable"] = deltas(row, previous, seconds, args.interval)
+                        row["subsecond_deltas"], row["subsecond_delta_unavailable"] = deltas(
+                            row, previous, seconds, args.interval, keys=SUBSECOND_KEYS)
                         stream.write(json.dumps(row, separators=(",", ":"), allow_nan=False) + "\n")
                         stream.flush()
                         previous, previous_tick = row, tick
@@ -187,7 +196,8 @@ def run(args):
                                 "samples": samples, "error_samples": error_samples,
                                 "remaining_s": max(0, int(deadline - time.monotonic())),
                                 "last_errors": row["errors"], "last_sample_utc": row["time_utc"],
-                                "last_counters": row["counters"]}
+                                "last_counters": row["counters"],
+                                "subsecond_counters_available": all(k in row["counters"] for k in SUBSECOND_KEYS)}
                             save(out / "status.json", status)
                             print(json.dumps(status), flush=True)
                             next_status = tick + 60
@@ -212,15 +222,70 @@ def run(args):
         return code
 
 
-def report(root):
+def latency_bucket_counts(values, method, outcome):
+    prefix = "rpc_diagnostics_%s_%s_" % (method, outcome)
+    counts = [values.get(prefix + suffix) for suffix in LATENCY_SUFFIXES]
+    if (not all(type(n) is int and n >= 0 for n in counts)
+            or any(a < b for a, b in zip(counts, counts[1:]))):
+        return None
+    return [a - b for a, b in zip(counts, counts[1:] + [0])]
+
+
+def latency_report(valid):
+    result = {}
+    for method in METHODS:
+        result[method] = {}
+        for outcome in OUTCOMES:
+            accepted, unavailable = [], Counter()
+            for row in valid:
+                reason = row.get("subsecond_delta_unavailable")
+                if reason or "subsecond_deltas" not in row:
+                    unavailable[reason or "not_recorded"] += 1
+                    continue
+                values = dict(row["deltas"], **row["subsecond_deltas"])
+                counts = latency_bucket_counts(values, method, outcome)
+                if counts is None:
+                    unavailable["missing_or_inconsistent_threshold_deltas"] += 1
+                    continue
+                accepted.append((row, counts))
+            total = sum(sum(counts) for _, counts in accepted) if accepted else None
+            result[method][outcome] = {
+                "available": bool(accepted), "valid_intervals": len(accepted),
+                "valid_interval_seconds": round(sum(r["interval_s"] for r, _ in accepted), 3),
+                "completed": total,
+                "unavailable_intervals": dict(unavailable),
+                "ranges_ms": [
+                    {"from_inclusive": low, "to_exclusive": high,
+                     "count": sum(counts[i] for _, counts in accepted) if accepted else None,
+                     "percent": round(100 * sum(counts[i] for _, counts in accepted) / total, 3)
+                     if total else None}
+                    for i, (low, high) in enumerate(zip(LATENCY_BOUNDS_MS, LATENCY_BOUNDS_MS[1:]))
+                ],
+            }
+    return result
+
+
+def report(root, last_minutes=None):
     metadata = json.loads((root / "run.json").read_text())
     suite_dir = Path(metadata["suite_dir"])
     reader = module("rpc_report_reader", suite_dir / "tools/report-sequencer-context.py")
     rows, input_status = reader.snapshot(root / "counters.jsonl")
+    latest = reader.stamp(rows[-1].get("time_utc")) if rows else None
+    cutoff = None
+    if last_minutes is not None:
+        if not math.isfinite(last_minutes) or not 0 < last_minutes <= 10080:
+            raise ValueError("Require last-minutes > 0 and <= 10080")
+        if latest is None:
+            raise ValueError("No valid latest sample time")
+        cutoff = latest - last_minutes * 60
+        rows = [r for r in rows if (t := reader.stamp(r.get("time_utc"))) is not None
+                and cutoff <= t <= latest]
     valid = [r for r in rows if not r.get("delta_unavailable") and not r.get("errors")
              and type(r.get("interval_s")) in (int, float) and math.isfinite(r["interval_s"])
              and r["interval_s"] > 0 and all(
                  type((r.get("deltas") or {}).get(k)) is int and r["deltas"][k] >= 0 for k in ALL_KEYS)]
+    if cutoff is not None:
+        valid = [r for r in valid if reader.stamp(r["time_utc"]) - r["interval_s"] >= cutoff]
     total = {key: sum(r["deltas"][key] for r in valid) if valid else None for key in ALL_KEYS}
     methods = {}
     for method in METHODS:
@@ -230,17 +295,24 @@ def report(root):
     return {
         "first_sample_utc": rows[0].get("time_utc") if rows else None,
         "last_sample_utc": rows[-1].get("time_utc") if rows else None,
+        "last_sample_sgt": reader.sgt(latest),
+        "sample_age_seconds": round(time.time() - latest, 3) if latest is not None else None,
+        "requested_last_minutes": last_minutes,
         "samples": len(rows), "error_samples": sum(bool(r.get("errors")) for r in rows),
         "valid_intervals": len(valid),
         "valid_interval_seconds": round(sum(r["interval_s"] for r in valid), 3),
         "unavailable_intervals": dict(Counter(r.get("delta_unavailable") for r in rows if r.get("delta_unavailable"))),
         "method_deltas": methods, "details_dropped_delta": total[DROP], "input_status": input_status,
+        "latency_buckets": latency_report(valid),
         "limits": [
             "Only valid adjacent differences are summed; missing/reset/error gaps are excluded, not counted as zero.",
             "These deltas start at this collector's first sample, not at the original suite start.",
             "Threshold counts are nested; do not add ge1s, ge3s and ge5s.",
             "Details dropped is shared by getLogs/sendRaw and does not count dropped transactions.",
             "RPC success is a submission result, not a successful transaction receipt.",
+            "Subsecond buckets need a node image with ge10ms/ge25ms/ge50ms/ge100ms/ge250ms/ge500ms counters and a collector that records them; old data cannot be reconstructed.",
+            "Buckets measure server request handling, not client network/receipt latency. Success and failure have separate denominators.",
+            "Bucket counts use only complete intervals with nonincreasing threshold deltas; inconsistent scrapes are excluded from bucket coverage.",
         ],
     }
 
@@ -337,12 +409,17 @@ def main():
     mode.add_argument("--report", type=Path)
     parser.add_argument("--inspect-logs", action="store_true",
                         help="Read retained logs since node startup and split them at the suite start")
+    parser.add_argument("--last-minutes", type=float,
+                        help="Report complete intervals in the last N minutes ending at the latest sample")
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--interval", type=float, default=15)
     parser.add_argument("--metrics-url", default="http://127.0.0.1:6070/debug/metrics/prometheus")
     parser.add_argument("--lock-file", type=Path, default=Path("/run/lock/nitro-rpc-diagnostics-capture.lock"))
     parser.add_argument("--min-free-gib", type=float, default=1)
     args = parser.parse_args()
+    if args.last_minutes is not None and (args.report is None or not math.isfinite(args.last_minutes)
+                                         or not 0 < args.last_minutes <= 10080):
+        parser.error("--last-minutes requires --report and a value > 0 and <= 10080")
     if args.inspect_logs:
         if args.suite_dir is None:
             parser.error("--inspect-logs requires --suite-dir")
@@ -350,7 +427,7 @@ def main():
         print(json.dumps(result, indent=2, allow_nan=False))
         return 1 if result["query_timed_out"] or result["docker_logs_returncode"] else 0
     if args.report:
-        print(json.dumps(report(args.report.resolve()), indent=2, allow_nan=False))
+        print(json.dumps(report(args.report.resolve(), args.last_minutes), indent=2, allow_nan=False))
         return 0
     if not math.isfinite(args.interval) or not 10 <= args.interval <= 60 or not (
             math.isfinite(args.min_free_gib) and args.min_free_gib >= 0):

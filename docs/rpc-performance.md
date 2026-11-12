@@ -25,7 +25,7 @@ repeated initialization.
 | Nitro option | Default | Effect when enabled |
 | --- | --- | --- |
 | `--rpc.slow-call-threshold` | `0` (off) | Successful slow HTTP/WS calls produce bounded timing warnings. |
-| `--rpc.stage-diagnostics-threshold` | `0` (off) | Request-local getLogs stages, sendRaw outer timings, and completion/1s/3s/5s counters. |
+| `--rpc.stage-diagnostics-threshold` | `0` (off) | Request-local getLogs stages, sendRaw outer timings, completion counts and 10/25/50/100/250/500ms/1/3/5s threshold counters. |
 | `--rpc.map-write-diagnostics` | `false` (off) | Detailed index-write timings and counters; also requires `--metrics`. |
 | `--persistent.pebble.compaction-output-bytes-per-second` | `0` (off) | Paces compaction SST output for `l2chaindata`; negative rates are rejected. |
 
@@ -230,6 +230,48 @@ it preserves pinned sources and makes no node/service changes. Its `--report`
 mode sums accepted adjacent counter differences, and `--inspect-logs` splits
 retained Docker records at the suite start. Missing earlier counter baselines
 and rotated/dropped logs cannot be reconstructed.
+
+Subsecond latency counts require a node image containing the new
+`rpc_diagnostics_<method>_<outcome>_ge10ms`, `ge25ms`, `ge50ms`, `ge100ms`,
+`ge250ms` and `ge500ms` counters. Updating the Python script alone cannot add
+these metrics to an already running binary. Diagnostics must already be
+enabled with a positive stage threshold; the threshold continues to control
+detail logging only. Counters cover completed instrumented calls before any
+log threshold, rate limit or output-queue check, with independent success and
+failure denominators. No extra per-request details are logged.
+
+The updated supplemental collector records these counters when available,
+without treating their absence on older images as a base-sampling failure.
+Its `status.json` includes `subsecond_counters_available`. The report marks
+missing historical bucket data unavailable (`count: null`), not zero. It
+subtracts adjacent cumulative threshold deltas into disjoint ranges:
+`[0,10)`, `[10,25)`, `[25,50)`, `[50,100)`, `[100,250)`, `[250,500)`,
+`[500,1000)`, `[1000,3000)`, `[3000,5000)` and `[5000,+inf)` milliseconds.
+Each outcome includes its own valid-interval coverage, counts and percentages.
+Counter scrapes are not atomic; if threshold deltas are inconsistent, that
+interval is excluded from the affected outcome's bucket totals. Base RPC
+counts retain their separate coverage. Restarts, counter resets, missing
+samples and gaps are never counted as zero requests.
+
+To inspect the latest five minutes of an existing capture with the updated
+reporter, without changing its running collector:
+
+```bash
+python3 -B /data/scripts/capture-rpc-diagnostics.py \
+  --report "$OUT/rpc-counters" --last-minutes 5 |
+jq '{last_sample_sgt, sample_age_seconds, valid_interval_seconds,
+     sendraw: .method_deltas.eth_sendRawTransaction,
+     latency: .latency_buckets.eth_sendRawTransaction}'
+```
+
+This window ends at the latest saved sample and includes only complete
+adjacent intervals within it. Check sample age before interpreting it as
+current traffic. Durations measure server RPC handling, not client network
+latency or transaction receipt time. Older five-minute captures can establish
+the total under one second, but cannot reconstruct finer bins. The node image
+and a collector that records the additional counters must both be updated to
+collect new bucket data; retain existing captures as their own experiment
+phase when changing the image.
 
 After capture, join the saved files without new node requests:
 
