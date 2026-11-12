@@ -273,6 +273,29 @@ and a collector that records the additional counters must both be updated to
 collect new bucket data; retain existing captures as their own experiment
 phase when changing the image.
 
+`scripts/build-rpc-subsecond-image.sh` builds a candidate for the recorded
+`e27ef7...` main image without activating it. Run as root on the Linux host,
+passing the existing repository and a fresh `/data/rpc-subsecond-build.*`
+directory. It pins Nitro `b7df6d1a17d33f304bee1ac553e00e3e35a27b93` and geth
+`bf399f01dffc34785f6f1653a3ddaeed30d9d5fb` in a separate clone, builds the
+native binary through the repository Dockerfile, and gates export on the RPC
+diagnostic race tests, including subsecond boundaries. A dedicated BuildKit
+worker uses two CPUs and 10 GiB memory, with its large cache bound under the
+build directory on `/data`; preflight requires 12 GiB available memory and
+50 GiB free there. It stops its build worker when done and retains its cache,
+logs, source, native payload, runtime baseline and candidate image for review.
+
+Assembly inherits the exact running image's layers and replaces its main
+native binary. It checks the candidate's version, inherited runtime
+configuration and layer prefix, then rechecks main's deployment baseline.
+Only `assembled_and_verified_not_deployed` indicates build and verification
+completed. `status.json` records stage timestamps; `image-tag.txt` and
+`image-id.txt` identify the candidate. There is no Compose edit, service
+activation, database mount, node restart or monitoring change. Exclude build
+load from latency comparisons, and review the candidate separately before a
+deployment. The image must be enabled and the counter collector updated in a
+new output directory before subsecond bucket data becomes available.
+
 After capture, join the saved files without new node requests:
 
 ```bash
