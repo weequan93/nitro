@@ -220,6 +220,17 @@ at a cache boundary or disk budget stop produces `stopped` and shuts down the
 other owned monitors. See [the concurrency-1 procedure](main-compaction-one-20261112.md)
 for pending-JSON restart verification, output paths and startup checks.
 
+The context sampler also retains `rpc_diagnostics_*` completion and latency
+threshold counters. Slow-event log counts alone are incomplete: detail logging
+is rate-limited, and `details_dropped` is shared by getLogs/sendRaw. For an
+already running suite pinned before these counters were retained, install
+`capture-rpc-diagnostics.py` and run it with `--suite-dir OUT`. It supplements
+the existing capture until that suite exits or its original deadline passes;
+it preserves pinned sources and makes no node/service changes. Its `--report`
+mode sums accepted adjacent counter differences, and `--inspect-logs` splits
+retained Docker records at the suite start. Missing earlier counter baselines
+and rotated/dropped logs cannot be reconstructed.
+
 After capture, join the saved files without new node requests:
 
 ```bash

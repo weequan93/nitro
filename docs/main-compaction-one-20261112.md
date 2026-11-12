@@ -135,9 +135,67 @@ python3 -B "$OUT/tools/report-sequencer-context.py" \
   --events-file "$OUT/slow-blocks/events.jsonl"
 ```
 
+## RPC counter coverage and an empty watcher file
+
+The original `78df45a72` capture keeps compaction and publisher metrics but
+omits the independent `rpc_diagnostics_*` counters. Its watcher files contain
+only retained slow details, and an empty file does not prove zero slow calls.
+Detail logging is rate-limited; `details_dropped` is shared across getLogs and
+sendRaw and counts missing detail records, not lost transactions. The
+completion/1s/3s/5s counters are incremented before that limit.
+
+On the 12 November check, uptime counters showed 45,354 successful submission
+RPCs and 74 failures, with 111 calls at least one second and 43 at least five
+seconds. They start at the 12:54 SGT node restart, before this suite's 13:21 SGT
+start. Those values alone cannot locate slow calls inside this capture window.
+Read retained Docker logs, split at the suite start, with:
+
+```bash
+python3 -B /data/scripts/capture-rpc-diagnostics.py \
+  --suite-dir "$OUT" --inspect-logs
+```
+
+This mode queries only the current container's retained logs from its startup,
+with a fixed end timestamp and a 45-second client timeout. It reports time
+coverage, parse failures, before/during counts and examples. Rotated or dropped
+records remain unavailable. Stage details and Served errors are separate views
+of calls and must not be added as distinct transactions.
+
+To supplement the running pinned suite without changing its files:
+
+```bash
+mkdir -p "$OUT/rpc-counters"
+nohup python3 -B -u /data/scripts/capture-rpc-diagnostics.py \
+  --suite-dir "$OUT" --out-dir "$OUT/rpc-counters" \
+  >"$OUT/rpc-counters/stdout.log" 2>&1 &
+echo "RPC_COUNTER_PID=$!"
+```
+
+The extra collector reads metrics and stable native identity every 15 seconds.
+It writes raw uptime counters and adjacent deltas to `counters.jsonl`, with
+missing/error/reset/gap intervals marked unavailable. Its PID/start-time owner
+check stops it if this suite exits or its PID is reused. Its deadline is the
+existing suite's deadline, not another 24 hours from installation. It sends no
+signals, performs no service/configuration operations, and preserves both the
+suite's pinned sources and prior data. Output is bounded to 64 MiB with a 1 GiB
+free-space floor checked once per minute.
+
+```bash
+cat "$OUT/rpc-counters/status.json"
+python3 -B /data/scripts/capture-rpc-diagnostics.py \
+  --report "$OUT/rpc-counters"
+```
+
+Only accepted adjacent differences are summed in the report. The new first
+sample cannot reconstruct earlier per-window totals. RPC outcome is the
+submission result, not transaction receipt status. New context collectors
+also retain `rpc_diagnostics_*` in their metrics; existing pinned collectors
+retain their original code and need the supplement for ongoing counter history.
+
 Offline validation uses fake collectors and mocked service operations:
 
 ```bash
 python3 -B -m unittest discover -s scripts -p 'test_trial_compaction_pacing.py'
 python3 -B -m unittest discover -s scripts -p 'test_capture_sequencer_suite.py'
+python3 -B -m unittest discover -s scripts -p 'test_capture_rpc_diagnostics.py'
 ```
