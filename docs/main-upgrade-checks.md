@@ -40,6 +40,11 @@ hashes of the full JSON, native argv, container layout and rendered Compose
 model. Full arguments, environment and config secrets are not stored. Existing
 baseline files are refused. Save the printed baseline path with the release.
 
+An intentional concurrency-1 experiment must pass `--compactions 1` when saving
+and checking its new baseline. Preserve the concurrency-2 baseline separately;
+do not overwrite it or use its hashes as the expected state after a tuning
+change. See [the concurrency-1 capture procedure](main-compaction-one-20261112.md).
+
 Undeclared cache settings remain `image_default_unresolved`; the tool cannot
 prove their effective values or that a new image keeps the same defaults.
 Review new-image defaults for those settings, or pin reviewed explicit values

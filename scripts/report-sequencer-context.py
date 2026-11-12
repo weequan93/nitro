@@ -301,7 +301,8 @@ def background_activity(contexts, resources, events, rpc_events, resource_interv
             "Full context intervals overlap slow requests/blocks; their deltas are not apportioned to those requests or proof of causality.",
             "No storage-counter advance or compaction evidence does not prove a background task stopped or completed.",
             "Stage durations can overlap; they are not CPU time, disk time, physical bytes, or additive wait budgets.",
-            "Compaction MiB counts are logical accounting; debt is a gauge, not a monotonic counter.",
+            "Compaction input/output totals are booked at job completion; short-interval deltas are not instantaneous throughput. Pacing/output counts output writes as they occur.",
+            "Compaction debt is a gauge, not a monotonic counter.",
         ],
     }
 

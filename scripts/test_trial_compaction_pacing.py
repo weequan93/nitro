@@ -5,6 +5,7 @@ from copy import deepcopy
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import stat
 import subprocess
@@ -235,6 +236,180 @@ class ConfigTests(unittest.TestCase):
                     trial.service_run(["docker", "compose", "stop"], log, 10)
                 self.assertEqual(call.call_args.kwargs["stderr"], subprocess.STDOUT)
                 self.assertEqual(call.call_args.kwargs["stdin"], subprocess.DEVNULL)
+
+
+class ConcurrencyTests(TrialTests):
+    def setUp(self):
+        super().setUp()
+        self.config["persistent"]["pebble"]["compaction-output-bytes-per-second"] = RATE
+        self.original = (json.dumps(self.config) + "\n").encode()
+        self.source.write_bytes(self.original)
+        os.utime(self.source, (1, 1))
+
+    def prepare(self):
+        return trial.prepare(self.root / "backups", 1, trial.CONCURRENCY_KEY)
+
+    def test_prepare_backs_up_exact_bytes_without_touching_service(self):
+        path = self.prepare()
+        self.assertEqual(self.operations, [])
+        changed = json.loads((path.parent / "candidate.json").read_bytes())
+        self.assertEqual(changed["persistent"]["pebble"]["compaction-output-bytes-per-second"], RATE)
+        changed["persistent"]["pebble"]["max-concurrent-compactions"] = 2
+        self.assertEqual(changed, self.config)
+
+    def test_apply_then_rollback_preserve_runtime_and_restore_exact_json(self):
+        path = self.prepare()
+        trial.activate(path)
+        applied = json.loads(self.source.read_bytes())
+        self.assertEqual(trial.lookup(applied, trial.CONCURRENCY_KEY), 1)
+        self.assertEqual(trial.lookup(applied, trial.KEY), RATE)
+        trial.activate(path, rollback=True)
+        self.assertEqual(self.source.read_bytes(), self.original)
+        self.assertEqual(trial.runtime_fingerprint(self.info), trial.runtime_fingerprint(self.base))
+        self.assertEqual(len(self.operations), 4)
+
+    def test_all_preflight_drift_rejected_before_stop(self):
+        # Exercise concurrency plans with every existing drift/recovery test.
+        for kind in ("json", "candidate", "native"):
+            os.utime(self.source, (1, 1))
+            path = self.prepare()
+            if kind == "json":
+                self.source.write_bytes(self.original + b" ")
+            elif kind == "candidate":
+                replacement = json.loads((path.parent / "candidate.json").read_bytes())
+                replacement["persistent"]["pebble"]["compaction-output-bytes-per-second"] = 1
+                data = json.dumps(replacement).encode()
+                (path.parent / "candidate.json").write_bytes(data)
+                plan = json.loads(path.read_bytes())
+                plan["candidate_sha"] = trial.digest(data)
+                trial.save(path, plan)
+            with (patch.object(trial, "native_argv", return_value=["changed"])
+                  if kind == "native" else ExitStack()):
+                with self.assertRaises(ValueError):
+                    trial.activate(path)
+            self.assertEqual(self.operations, [])
+            self.source.write_bytes(self.original)
+
+    def test_failure_after_removal_has_working_explicit_rollback(self):
+        path = self.prepare()
+        self.fail_up = True
+        with self.assertRaises(RuntimeError):
+            trial.activate(path)
+        self.fail_up = False
+        trial.activate(path, rollback=True)
+        self.assertEqual(self.source.read_bytes(), self.original)
+
+    def baseline(self):
+        layout = deepcopy(self.base)
+        layout["Image"] = "image_checked_separately"
+        model = deepcopy(self.model)
+        model["services"]["nitro"].pop("image")
+        before = self.root / "loaded.json"
+        before.write_bytes(self.original)
+        baseline = self.root / "baseline.json"
+        trial.save(baseline, {
+            "schema": 1, "container_id": self.base["Id"], "started_at": self.base["State"]["StartedAt"],
+            "image": self.base["Image"], "hashes": {
+                "bound_json": trial.digest(self.original),
+                "native_arguments": trial.digest(json.dumps(self.base["Config"]["Cmd"]).encode()),
+                "container_layout_without_image": trial.runtime_fingerprint(layout),
+                "compose_model_without_main_image": trial.digest(json.dumps(model, sort_keys=True).encode()),
+            }})
+        return baseline, before
+
+    def pending(self):
+        baseline, before = self.baseline()
+        proposed = trial.candidate(self.config, 1, trial.CONCURRENCY_KEY)
+        self.source.write_text(json.dumps(proposed))
+        return baseline, before
+
+    def test_pending_edit_is_verified_against_loaded_baseline_and_applied(self):
+        baseline, before = self.pending()
+        pending_bytes = self.source.read_bytes()
+        path = trial.prepare(self.root / "backups", 1, trial.CONCURRENCY_KEY, baseline, before)
+        self.assertEqual(self.operations, [])
+        self.assertEqual(self.source.read_bytes(), pending_bytes)
+        trial.activate(path)
+        self.assertEqual(self.source.read_bytes(), pending_bytes)
+        self.assertEqual(self.operations[0][1], pending_bytes)
+        trial.activate(path, rollback=True)
+        self.assertEqual(self.source.read_bytes(), self.original)
+
+    def test_pending_apply_failure_has_working_rollback(self):
+        baseline, before = self.pending()
+        path = trial.prepare(self.root / "backups", 1, trial.CONCURRENCY_KEY, baseline, before)
+        self.fail_up = True
+        with self.assertRaises(RuntimeError):
+            trial.activate(path)
+        self.assertIsNone(self.info)
+        self.fail_up = False
+        trial.activate(path, rollback=True)
+        self.assertEqual(self.source.read_bytes(), self.original)
+
+    def test_rollback_remains_available_with_stopped_or_unready_native_process(self):
+        baseline, before = self.pending()
+        path = trial.prepare(self.root / "backups", 1, trial.CONCURRENCY_KEY, baseline, before)
+        trial.activate(path)
+        self.info["State"]["Running"] = False
+        with patch.object(trial, "native_argv", side_effect=RuntimeError("native process unavailable")):
+            trial.activate(path, rollback=True)
+        self.assertEqual(self.source.read_bytes(), self.original)
+        self.assertTrue(self.info["State"]["Running"])
+
+    def test_pending_plan_refuses_later_edits_before_stopping(self):
+        baseline, before = self.pending()
+        path = trial.prepare(self.root / "backups", 1, trial.CONCURRENCY_KEY, baseline, before)
+        self.source.write_bytes(self.source.read_bytes() + b" ")
+        with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
+            trial.activate(path)
+        self.assertEqual(self.operations, [])
+
+    def test_prepare_and_apply_cli_handles_pending_edit(self):
+        baseline, before = self.pending()
+        with patch.object(trial.sys, "argv", [str(SCRIPT), "--compactions", "1", "--prepare-and-apply",
+                "--pending-baseline", str(baseline), "--loaded-config", str(before),
+                "--root", str(self.root / "backups")]):
+            trial.main()
+        self.assertEqual(trial.lookup(json.loads(self.source.read_bytes()), trial.CONCURRENCY_KEY), 1)
+        self.assertEqual(len(self.operations), 2)
+
+    def test_pending_edit_rejects_unproven_or_additional_changes(self):
+        for drift in ("backup", "other_setting", "restarted", "baseline_hash"):
+            with self.subTest(drift=drift):
+                self.info = deepcopy(self.base)
+                baseline, before = self.pending()
+                if drift == "backup":
+                    before.write_bytes(before.read_bytes() + b" ")
+                elif drift == "other_setting":
+                    data = json.loads(self.source.read_bytes())
+                    data["execution"]["caching"]["database-cache"] = 4096
+                    self.source.write_text(json.dumps(data))
+                elif drift == "restarted":
+                    self.info["State"]["StartedAt"] = "2026-11-12T03:00:00Z"
+                else:
+                    saved = json.loads(baseline.read_bytes())
+                    saved["hashes"]["native_arguments"] = "wrong"
+                    trial.save(baseline, saved)
+                with self.assertRaises(ValueError):
+                    trial.prepare(self.root / "backups", 1, trial.CONCURRENCY_KEY, baseline, before)
+                self.assertEqual(self.operations, [])
+
+    def test_edited_json_without_loaded_baseline_is_refused(self):
+        self.pending()
+        with self.assertRaisesRegex(ValueError, "loaded settings"):
+            self.prepare()
+        self.assertEqual(self.operations, [])
+
+    def test_concurrency_requires_existing_pacing_and_cli_cannot_shadow_it(self):
+        for pacing in (0, 32 * 1024**2, None, True):
+            data = deepcopy(self.config)
+            data["persistent"]["pebble"]["compaction-output-bytes-per-second"] = pacing
+            with self.assertRaises(ValueError):
+                trial.candidate(data, 1, trial.CONCURRENCY_KEY)
+        with patch.object(trial, "native_argv", return_value=self.base["Config"]["Cmd"] +
+                          ["--" + trial.CONCURRENCY_KEY, "2"]):
+            with self.assertRaisesRegex(ValueError, "CLI concurrency"):
+                self.prepare()
 
 
 if __name__ == "__main__":

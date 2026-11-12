@@ -316,6 +316,8 @@ def report(root):
             "io_delta_unavailable_samples": sum(r.get("rates") is None for r in ios[1:]),
             "cache_intervals": pairs, "device_sample_stats": device_stats,
             "limits": ["Hit percentages use interval counts, not averaged percentages or process-lifetime totals.",
+                       "Hashdb clean misses count successful DB reads/cache refills; its hit ratio is not an exhaustive clean-cache lookup probability.",
+                       "Snapshot dirty-layer misses can be served by the clean memory cache.",
                        "Cache hits/misses are lookups, not physical I/O operations; page cache and read amplification also matter.",
                        "Device sample means are unweighted; IOPS are completed device operations, not database calls.",
                        "Metrics/device intervals are temporal context and are not joined to an individual RPC trace."]}

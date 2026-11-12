@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare, apply, or roll back a single-setting main compaction pacing trial.
+"""Prepare, apply, or roll back a single-setting main compaction trial.
 
 Preparation is the default and does not change the running service or its
 configuration. Apply/rollback briefly restart only the Compose nitro service.
@@ -25,6 +25,7 @@ import tempfile
 
 CONTAINER = "main-nitro-1"
 KEY = "persistent.pebble.compaction-output-bytes-per-second"
+CONCURRENCY_KEY = "persistent.pebble.max-concurrent-compactions"
 
 
 def now():
@@ -79,12 +80,19 @@ def lookup(config, key):
     return value
 
 
-def candidate(config, rate):
+def candidate(config, rate, key=KEY):
     if not isinstance(config, dict) or type(rate) is not int or not 0 < rate < 2**63:
-        raise ValueError("Require a JSON object and positive integer output rate")
+        raise ValueError("Require a JSON object and positive integer setting")
+    if key not in (KEY, CONCURRENCY_KEY):
+        raise ValueError("Unsupported trial setting")
+    if key == CONCURRENCY_KEY:
+        if rate != 1 or type(lookup(config, key)) is not int or lookup(config, key) != 2:
+            raise ValueError("Concurrency trial requires an explicit JSON change from 2 to 1")
+        if type(lookup(config, KEY)) is not int or lookup(config, KEY) != 64 * 1024**2:
+            raise ValueError("Concurrency trial requires existing 64 MiB/s pacing")
     # Refuse partial dotted parents rather than guessing how koanf merges them.
     node = config
-    parts = KEY.split(".")
+    parts = key.split(".")
     for depth, part in enumerate(parts[:-1]):
         if not isinstance(node, dict):
             raise ValueError("Ambiguous nested configuration")
@@ -93,22 +101,22 @@ def candidate(config, rate):
         if depth and ".".join(parts[depth:]) in node:
             raise ValueError("Partial dotted pacing key requires separate review")
         node = node.get(part, {})
-    if isinstance(lookup(config, KEY), bool):
+    if isinstance(lookup(config, key), bool):
         raise ValueError("Pacing value cannot be a boolean")
-    if lookup(config, KEY) not in (None, 0):
+    if key == KEY and lookup(config, key) not in (None, 0):
         raise ValueError("Preparation requires pacing absent or zero")
     changed = deepcopy(config)
-    if KEY in config:
+    if key in config:
         if "persistent" in config:
             raise ValueError("Ambiguous flat/nested pacing configuration")
-        changed[KEY] = rate
+        changed[key] = rate
     else:
         node = changed
-        for part in KEY.split(".")[:-1]:
+        for part in key.split(".")[:-1]:
             node = node.setdefault(part, {})
             if not isinstance(node, dict):
                 raise ValueError("Ambiguous nested configuration")
-        node[KEY.split(".")[-1]] = rate
+        node[key.split(".")[-1]] = rate
     return changed
 
 
@@ -223,7 +231,32 @@ def show(plan_path):
     print("ROLLBACK:", shlex.join(["python3", "-B", script, "--rollback", str(plan_path)]))
 
 
-def prepare(root, rate):
+def pending_original(info, argv, prefix, current, baseline_path, config_path):
+    """Prove which JSON the unchanged original container had loaded."""
+    baseline = json.loads(read_bytes(baseline_path))
+    original = read_bytes(config_path)
+    if (baseline.get("schema") != 1 or baseline.get("container_id") != info["Id"] or
+            baseline.get("started_at") != info["State"]["StartedAt"] or
+            baseline.get("image") != info["Image"]):
+        raise ValueError("Pending edit requires the unchanged container from the saved runtime baseline")
+    model = json.loads(run(prefix + ["config", "--format", "json"]))
+    model["services"]["nitro"].pop("image", None)
+    layout = deepcopy(info)
+    layout["Image"] = "image_checked_separately"
+    expected = {
+        "bound_json": digest(original),
+        "native_arguments": digest(json.dumps(argv).encode()),
+        "container_layout_without_image": runtime_fingerprint(layout),
+        "compose_model_without_main_image": digest(json.dumps(model, sort_keys=True).encode()),
+    }
+    if baseline.get("hashes") != expected:
+        raise ValueError("Saved loaded JSON or deployment inputs do not match the runtime baseline")
+    if candidate(json.loads(original), 1, CONCURRENCY_KEY) != current:
+        raise ValueError("Pending JSON changes more than concurrency 2 to 1")
+    return original
+
+
+def prepare(root, rate, setting=KEY, pending_baseline=None, loaded_config=None):
     info = inspect("container", CONTAINER)
     if not info["State"].get("Running"):
         raise ValueError("Main is not running")
@@ -243,13 +276,31 @@ def prepare(root, rate):
     compose_resources(prefix, info)
     if inspect("image", info["Config"]["Image"])["Id"] != info["Image"]:
         raise ValueError("Running image tag has changed")
-    path, config = local_config(info, native_argv())
-    replacement = (json.dumps(candidate(config, rate), indent=2) + "\n").encode()
-    original = read_bytes(path)
-    if json.loads(original) != config:
+    argv = native_argv()
+    path, config = local_config(info, argv)
+    source = read_bytes(path)
+    if json.loads(source) != config:
+        raise ValueError("Node configuration changed during preparation")
+    pending = pending_baseline is not None or loaded_config is not None
+    if pending and (setting != CONCURRENCY_KEY or pending_baseline is None or loaded_config is None):
+        raise ValueError("Pending concurrency requires both runtime baseline and original loaded JSON")
+    if setting == CONCURRENCY_KEY:
+        if option(argv, CONCURRENCY_KEY):
+            raise ValueError("CLI concurrency would override the JSON trial")
+        started = datetime.fromisoformat(info["State"]["StartedAt"].replace("Z", "+00:00")).timestamp()
+        if path.stat().st_mtime > started and not pending:
+            raise ValueError("JSON was edited after container start; loaded settings are unverified")
+    if pending:
+        original = pending_original(info, argv, prefix, config, pending_baseline, loaded_config)
+        replacement = source
+        config = json.loads(original)
+    else:
+        original = source
+        replacement = (json.dumps(candidate(config, rate, setting), indent=2) + "\n").encode()
+    if read_bytes(path) != source:
         raise ValueError("Node configuration changed during preparation")
     root.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="main-pacing-", dir=root))
+    work = Path(tempfile.mkdtemp(prefix="main-pacing-" if setting == KEY else "main-compactions-", dir=root))
     work.chmod(0o700)
     (work / "before.json").write_bytes(original)
     (work / "candidate.json").write_bytes(replacement)
@@ -257,22 +308,28 @@ def prepare(root, rate):
     (work / "candidate.json").chmod(0o600)
     attrs = path.stat()
     plan = {
-        "prepared_utc": now(), "source": str(path), "rate": rate,
+        "prepared_utc": now(), "source": str(path), "setting": setting, "value": rate,
+        "pending_edit": pending,
         "before_sha": digest(original), "candidate_sha": digest(replacement),
         "uid": attrs.st_uid, "gid": attrs.st_gid, "mode": stat.S_IMODE(attrs.st_mode),
         "container_id": info["Id"], "started_at": info["State"]["StartedAt"],
         "runtime_fingerprint": runtime_fingerprint(info), "image": info["Image"],
+        "native_arguments_sha": digest(json.dumps(argv).encode()),
         "labels": {key: labels[key] for key in (
             "com.docker.compose.project", "com.docker.compose.service", "com.docker.compose.config-hash",
             "com.docker.compose.project.config_files", "com.docker.compose.project.working_dir")},
         "image_ref": info["Config"]["Image"], "compose": prefix, "compose_hash": expected_hash,
         "inputs": {filename: digest(read_bytes(filename)) for filename in files},
     }
+    if setting == KEY:
+        plan["rate"] = rate  # Retain compatibility with existing pacing plans.
     plan_path = work / "plan.json"
     save(plan_path, plan)
     print(json.dumps({"state": "prepared_no_service_change", "plan": str(plan_path),
                       "image": info["Image"], "max_concurrent_compactions": lookup(config, "persistent.pebble.max-concurrent-compactions"),
-                      "before_output_bytes_s": lookup(config, KEY) or 0, "after_output_bytes_s": rate}))
+                      "setting": setting, "before_value": lookup(config, setting), "after_value": rate,
+                      "before_output_bytes_s": lookup(config, KEY) or 0,
+                      "after_output_bytes_s": rate if setting == KEY else lookup(config, KEY)}))
     show(plan_path)
     return plan_path
 
@@ -299,6 +356,8 @@ def replace_config(path, data, plan):
 
 def activate(plan_path, rollback=False):
     plan = json.loads(read_bytes(plan_path))
+    setting = plan.get("setting", KEY)
+    value = plan.get("value", plan.get("rate"))
     path = Path(plan["source"])
     with (path.parent / ".nitro-compaction-pacing.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -306,8 +365,8 @@ def activate(plan_path, rollback=False):
         proposed = read_bytes(plan_path.parent / "candidate.json")
         if digest(before) != plan["before_sha"] or digest(proposed) != plan["candidate_sha"]:
             raise ValueError("Prepared backup/candidate changed")
-        if json.loads(proposed) != candidate(json.loads(before), plan["rate"]):
-            raise ValueError("Candidate changes more than the single pacing setting")
+        if json.loads(proposed) != candidate(json.loads(before), value, setting):
+            raise ValueError("Candidate changes more than the single trial setting")
         for filename, expected in plan["inputs"].items():
             if digest(read_bytes(filename)) != expected:
                 raise ValueError("Compose input changed")
@@ -327,6 +386,9 @@ def activate(plan_path, rollback=False):
         if info:
             compose_resources(plan["compose"], info)
             check_labels(info, plan)
+            if (not rollback and plan.get("native_arguments_sha") and
+                    digest(json.dumps(native_argv()).encode()) != plan["native_arguments_sha"]):
+                raise ValueError("Native Nitro arguments changed")
         current = digest(read_bytes(path))
         attrs = path.stat()
         if (attrs.st_uid, attrs.st_gid, stat.S_IMODE(attrs.st_mode)) != (plan["uid"], plan["gid"], plan["mode"]):
@@ -334,7 +396,8 @@ def activate(plan_path, rollback=False):
         if not rollback and (info["Id"] != plan["container_id"] or
                              info["State"]["StartedAt"] != plan["started_at"]):
             raise ValueError("Main restarted since preparation")
-        expected = (plan["before_sha"], plan["candidate_sha"]) if rollback else (plan["before_sha"],)
+        expected = ((plan["before_sha"], plan["candidate_sha"]) if rollback else
+                    (plan["candidate_sha"],) if plan.get("pending_edit") else (plan["before_sha"],))
         if current not in expected:
             raise ValueError("Live JSON changed; refusing to overwrite other edits")
         original_instance = info and info["Id"] == plan["container_id"] and info["State"]["StartedAt"] == plan["started_at"]
@@ -343,7 +406,7 @@ def activate(plan_path, rollback=False):
             return
         operation = "rollback" if rollback else "apply"
         save(plan_path.parent / (operation + ".json"), {"state": "restart_requested", "time_utc": now()})
-        print("Briefly stopping main/nitro; only pacing will change.", flush=True)
+        print("Briefly stopping main/nitro; only " + setting + " will change.", flush=True)
         log_path = plan_path.parent / (operation + ".compose.private.log")
         if info:
             service_run(plan["compose"] + ["stop", "-t", "120", "nitro"], log_path, 150)
@@ -355,8 +418,11 @@ def activate(plan_path, rollback=False):
         if (not observed["State"].get("Running") or observed["State"].get("OOMKilled") or
                 runtime_fingerprint(observed) != plan["runtime_fingerprint"]):
             raise ValueError("Post-start runtime mismatch; use saved rollback")
+        active = json.loads(before if rollback else proposed)
         record = {"state": "started_health_pending", "operation": operation, "time_utc": now(),
-                  "output_bytes_s": 0 if rollback else plan["rate"], "image": observed["Image"],
+                  "setting": setting, "value": lookup(active, setting),
+                  "output_bytes_s": lookup(active, KEY) or 0,
+                  "max_concurrent_compactions": lookup(active, CONCURRENCY_KEY), "image": observed["Image"],
                   "started_at": observed["State"]["StartedAt"]}
         save(plan_path.parent / (operation + ".json"), record)
         print(json.dumps(record))
@@ -370,15 +436,32 @@ def main():
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--apply", type=Path)
     group.add_argument("--rollback", type=Path)
+    group.add_argument("--prepare-and-apply", action="store_true",
+                       help="Save and print the verified plan, then apply it")
     parser.add_argument("--root", type=Path, default=Path("/data/deploy-backups"))
     parser.add_argument("--rate", type=int, default=64 * 1024**2)
+    parser.add_argument("--compactions", type=int, choices=(1,),
+                        help="Prepare a 2-to-1 concurrency trial while retaining 64 MiB/s pacing")
+    parser.add_argument("--pending-baseline", type=Path,
+                        help="Saved runtime baseline proving the original container, for an un-restarted JSON edit")
+    parser.add_argument("--loaded-config", type=Path,
+                        help="Exact original loaded JSON backup whose hash matches --pending-baseline")
     args = parser.parse_args()
     if not 0 < args.rate < 2**63:
         parser.error("rate must be a positive signed 64-bit integer")
+    if (args.pending_baseline or args.loaded_config) and (
+            args.compactions is None or args.apply or args.rollback):
+        parser.error("Pending-edit inputs are only for preparing --compactions 1")
+    if args.compactions is not None and args.rate != 64 * 1024**2:
+        parser.error("Concurrency trial retains 64 MiB/s; do not supply another --rate")
     if args.apply or args.rollback:
         activate((args.apply or args.rollback).resolve(), rollback=bool(args.rollback))
     else:
-        prepare(args.root.resolve(), args.rate)
+        plan = prepare(args.root.resolve(), args.compactions if args.compactions is not None else args.rate,
+                       CONCURRENCY_KEY if args.compactions is not None else KEY,
+                       args.pending_baseline, args.loaded_config)
+        if args.prepare_and_apply:
+            activate(plan)
 
 
 if __name__ == "__main__":

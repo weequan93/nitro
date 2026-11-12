@@ -203,6 +203,23 @@ logical lookups, not physical IOPS. Device statistics include every user of
 that device and do not establish the cloud volume's configured limits. Run
 `python3 -B scripts/test_capture_main_cache_io.py` for offline checks.
 
+The hashdb clean-cache miss meter counts successful database reads followed by
+cache refills, rather than every failed clean-cache lookup. Its displayed
+hit/(hit+miss) ratio is not an exhaustive clean-cache lookup probability.
+Snapshot dirty-layer misses may immediately hit the clean memory cache.
+Neither meter establishes physical reads.
+
+For a fresh comparison phase with all three monitors, use
+`capture-sequencer-suite.py`. It verifies the loaded tuning and RPC/metrics,
+then, with `--replace-existing`, replaces recognized main monitoring processes
+while retaining their files. It runs the resource collector, hourly cache/IO
+segments and one slow-event watcher under a common 24-hour deadline, recording
+the runtime baseline and pinning all source files. Normal expiry or a signal
+stops its owned collectors and watcher. A failed collector, runtime mismatch
+at a cache boundary or disk budget stop produces `stopped` and shuts down the
+other owned monitors. See [the concurrency-1 procedure](main-compaction-one-20261112.md)
+for pending-JSON restart verification, output paths and startup checks.
+
 After capture, join the saved files without new node requests:
 
 ```bash
@@ -233,6 +250,11 @@ metrics reads. Missing/reset counters are reported separately; valid totals sum
 only accepted intervals and their covered seconds, excluding startup cumulative
 counts. A resource-boundary interval may be unavailable. Debt is reported as a
 gauge; it must not be treated as a monotonic counter.
+Pebble books compaction input/output totals when jobs finish. A short interval
+can therefore include a large job's completed byte count from work performed
+earlier; those apparent rates do not measure instantaneous disk throughput or
+prove a pacing violation. Use `compact/pacing/output` for output-write
+accounting and kernel device metrics for physical I/O.
 
 `SLOW_BLOCK_BACKGROUND` and `SLOW_RPC_BACKGROUND` show full context intervals
 overlapping the three slowest logged blocks and five slowest retained sendRaw
