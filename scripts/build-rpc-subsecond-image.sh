@@ -5,18 +5,25 @@ umask 077
 
 if [[ "${1:-}" == --help ]]; then
   echo "Usage: bash build-rpc-subsecond-image.sh /data/nitro /data/rpc-subsecond-build.XXXXXX"
+  echo "Resume verification: bash build-rpc-subsecond-image.sh --verify-only /data/rpc-subsecond-build.XXXXXX"
   exit 0
 fi
 [[ $# == 2 && $(uname -s) == Linux && $EUID == 0 ]] || {
   echo "Run as root on the Linux build host, with repository and fresh build-directory arguments." >&2
   exit 1
 }
-REPO=$(realpath "$1")
+VERIFY_ONLY=0
+REPO=
+if [[ "$1" == --verify-only ]]; then VERIFY_ONLY=1; else REPO=$(realpath "$1"); fi
 BUILD=$(realpath "$2")
-[[ "$BUILD" == /data/rpc-subsecond-build.* && -d "$BUILD" && ! -e "$BUILD/source" ]] || {
+[[ "$BUILD" == /data/rpc-subsecond-build.* && -d "$BUILD" ]] || {
   echo "Use a fresh /data/rpc-subsecond-build.* directory." >&2
   exit 1
 }
+if [[ $VERIFY_ONLY == 0 && -e "$BUILD/source" ]]; then
+  echo "Build source already exists; use --verify-only for an assembled candidate." >&2
+  exit 1
+fi
 exec 9>/run/lock/nitro-rpc-subsecond-build.lock
 flock -n 9 || { echo "An RPC subsecond build is already running." >&2; exit 1; }
 
@@ -48,6 +55,47 @@ temp.write_text(json.dumps(data, indent=2) + "\n")
 temp.replace(path)
 PY
 }
+verify_image() {
+  STAGE=image_verification
+  status running
+  local candidate_id native_hash image_hash
+  candidate_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+  grep -qxF 'RPC stage diagnostics including subsecond boundaries: PASS' "$BUILD/payload/checks.txt"
+  timeout 30s docker run --rm --network none --cpus 1 --memory 1g \
+    --entrypoint /usr/local/bin/nitro "$candidate_id" --version > "$BUILD/version.txt" 2>&1
+  grep -F 'rpc-subsecond-b7df6d1a1' "$BUILD/version.txt"
+  timeout 30s docker run --rm --network none --cpus 1 --memory 1g \
+    --entrypoint /usr/local/bin/nitro "$candidate_id" --help > "$BUILD/help.txt" 2>&1
+  for flag in persistent.pebble.compaction-output-bytes-per-second persistent.pebble.max-concurrent-compactions rpc.stage-diagnostics-threshold; do
+    grep -qF -- "--$flag" "$BUILD/help.txt"
+  done
+  python3 -B - "$BASE" "$candidate_id" <<'PY'
+import json, subprocess, sys
+base, candidate = json.loads(subprocess.check_output(["docker", "image", "inspect", *sys.argv[1:]], text=True))
+for key in ("Entrypoint", "Cmd", "Env", "User", "WorkingDir", "ExposedPorts", "Volumes", "StopSignal", "Healthcheck", "Shell"):
+    if base["Config"].get(key) != candidate["Config"].get(key):
+        raise SystemExit("Runtime image configuration differs: " + key)
+old, new = base["RootFS"]["Layers"], candidate["RootFS"]["Layers"]
+if new[:len(old)] != old or len(new) != len(old) + 1:
+    raise SystemExit("Expected the original runtime layers plus one native-binary layer")
+print("PASS: inherited runtime configuration and base layers")
+PY
+  native_hash=$(sha256sum "$BUILD/payload/nitro" | awk '{print $1}')
+  image_hash=$(timeout 30s docker run --rm --network none --cpus 1 --memory 1g \
+    --entrypoint /usr/bin/sha256sum "$candidate_id" /usr/local/bin/nitro | awk '{print $1}')
+  [[ "$native_hash" == "$image_hash" ]] || { echo "Candidate binary differs from tested payload." >&2; return 1; }
+  python3 -B "$SOURCE/scripts/check-main-runtime.py" --compactions 1 --baseline "$BUILD/runtime-before.json"
+  [[ $(docker image inspect --format '{{.Id}}' "$IMAGE") == "$candidate_id" ]] || {
+    echo "Candidate tag changed during verification." >&2; return 1;
+  }
+  sha256sum "$BUILD/payload/nitro" > "$BUILD/native.sha256"
+  printf 'IMAGE_ID=%s\n' "$candidate_id" | tee "$BUILD/image-id.txt"
+  printf '%s\n' "$IMAGE" > "$BUILD/image-tag.txt"
+  status assembled_and_verified_not_deployed
+  echo "IMAGE=$IMAGE"
+  echo "BUILD=$BUILD"
+  echo "STATE=assembled_and_verified_not_deployed"
+}
 cleanup() {
   result=$?
   trap - EXIT
@@ -60,6 +108,31 @@ cleanup() {
   fi
   exit "$result"
 }
+if [[ $VERIFY_ONLY == 1 ]]; then
+  # Preserve the first attempt's status and log before retrying only verification.
+  python3 -B - "$BUILD" "$IMAGE" "$SOURCE_REV" "$GETH_REV" "$EXPECTED_BASE" <<'PY'
+from pathlib import Path
+import json, shutil, sys, time
+root, image, nitro, geth, base = sys.argv[1:]
+root = Path(root)
+record = json.loads((root / "status.json").read_text())
+if (record.get("stage") != "image_verification"
+        or record.get("state") not in ("failed", "assembled_and_verified_not_deployed")
+        or any(record.get(k) != v for k, v in
+               (("image", image), ("source_revision", nitro), ("geth_revision", geth), ("base_image", base)))):
+    raise SystemExit("Saved verification identity/stage differs; retain this directory for review.")
+for name in ("runtime-before.json", "payload/nitro", "payload/checks.txt", "source/scripts/check-main-runtime.py"):
+    if not (root / name).is_file():
+        raise SystemExit("Missing verification input: " + name)
+backup = root / ("status.before-verify-" + str(time.time_ns()) + ".json")
+shutil.copyfile(root / "status.json", backup)
+print("Previous status retained:", backup)
+PY
+  BASE=$EXPECTED_BASE
+  trap cleanup EXIT
+  verify_image
+  exit 0
+fi
 trap cleanup EXIT
 status running
 
@@ -145,32 +218,4 @@ printf '*\n!Dockerfile\n!nitro\n' > "$BUILD/payload/.dockerignore"
 docker buildx build --builder default --load --provenance=false --pull=false --network=none --build-arg "RUNTIME_BASE=$BASE_TAG" \
   -t "$IMAGE" "$BUILD/payload"
 
-STAGE=image_verification
-status running
-timeout 30s docker run --rm --network none --cpus 1 --memory 1g \
-  --entrypoint /usr/local/bin/nitro "$IMAGE" --version > "$BUILD/version.txt"
-grep -F 'rpc-subsecond-b7df6d1a1' "$BUILD/version.txt"
-timeout 30s docker run --rm --network none --cpus 1 --memory 1g \
-  --entrypoint /usr/local/bin/nitro "$IMAGE" --help > "$BUILD/help.txt"
-for flag in persistent.pebble.compaction-output-bytes-per-second persistent.pebble.max-concurrent-compactions rpc.stage-diagnostics-threshold; do
-  grep -qF -- "--$flag" "$BUILD/help.txt"
-done
-python3 -B - "$BASE" "$IMAGE" <<'PY'
-import json, subprocess, sys
-base, candidate = json.loads(subprocess.check_output(["docker", "image", "inspect", *sys.argv[1:]], text=True))
-for key in ("Entrypoint", "Cmd", "Env", "User", "WorkingDir", "ExposedPorts", "Volumes", "StopSignal", "Healthcheck", "Shell"):
-    if base["Config"].get(key) != candidate["Config"].get(key):
-        raise SystemExit("Runtime image configuration differs: " + key)
-old, new = base["RootFS"]["Layers"], candidate["RootFS"]["Layers"]
-if new[:len(old)] != old or len(new) != len(old) + 1:
-    raise SystemExit("Expected the original runtime layers plus one native-binary layer")
-print("PASS: inherited runtime configuration and base layers")
-PY
-python3 -B "$SOURCE/scripts/check-main-runtime.py" --compactions 1 --baseline "$BUILD/runtime-before.json"
-sha256sum "$BUILD/payload/nitro" > "$BUILD/native.sha256"
-docker image inspect --format 'IMAGE_ID={{.Id}}' "$IMAGE" | tee "$BUILD/image-id.txt"
-printf '%s\n' "$IMAGE" > "$BUILD/image-tag.txt"
-status assembled_and_verified_not_deployed
-echo "IMAGE=$IMAGE"
-echo "BUILD=$BUILD"
-echo "STATE=assembled_and_verified_not_deployed"
+verify_image

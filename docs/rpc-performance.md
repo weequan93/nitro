@@ -285,6 +285,22 @@ build directory on `/data`; preflight requires 12 GiB available memory and
 50 GiB free there. It stops its build worker when done and retains its cache,
 logs, source, native payload, runtime baseline and candidate image for review.
 
+If the original build reached image assembly but failed at help verification,
+the updated helper can resume just verification:
+
+```bash
+bash /path/to/updated-build-rpc-subsecond-image.sh --verify-only "$BUILD"
+```
+
+The original helper captured only stdout for `--help`; Nitro prints its option
+listing on stderr. The updated helper captures both streams and requires the
+probe to exit successfully. Resume checks the saved phase/source/base/image
+identity, archives the previous status, and leaves the original build log
+intact. It reuses the candidate by resolved image ID and also compares its
+native binary checksum with the tested exported payload. Run the verification
+under a separate log filename; no source checkout, compilation, image assembly
+or worker startup is performed by this mode.
+
 Assembly inherits the exact running image's layers and replaces its main
 native binary. It checks the candidate's version, inherited runtime
 configuration and layer prefix, then rechecks main's deployment baseline.
