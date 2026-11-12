@@ -162,6 +162,47 @@ The wrapper makes no node configuration, image, database or service changes.
 Run `python3 -B scripts/test_capture_sequencer_longrun.py` for offline orchestration
 checks using fake collectors.
 
+To add cache and IOPS evidence while an existing capture continues, install
+`scripts/capture-main-cache-io.py` beside `capture-sequencer-context.py` and run
+it for a bounded window:
+
+```bash
+python3 -B -u /data/scripts/capture-main-cache-io.py \
+  --minutes 60 --device vdb --out-dir /data/main-cache-io-UNIQUE
+```
+
+This independent Linux-host sampler writes completed device operations/s,
+average request KiB, byte rates, read/write awaits and queue depth to
+`io.jsonl` every second. `cache.jsonl` retains the existing diagnostic metrics
+plus Pebble block/table, hashdb clean/dirty trie and snapshot clean/dirty
+account/storage cache counters every 15 seconds. Each metrics sample checks
+the same running native Nitro container/PID/start-time before and after the
+HTTP read. Cache deltas require a stable identity, successful adjacent samples,
+a bounded gap and nondecreasing counters. Missing/unused counters and zero
+lookups produce null hit rates. Cache counters can also include background
+work and other RPCs; a hit rate cannot be assigned to one transaction.
+
+The sampler only adds metrics GETs and reads Docker identity plus kernel
+statistics; it performs no node RPC or profile and changes no tuning/service
+settings. The original long-run collector keeps using its pinned code and
+files. A separate host lock prevents duplicate cache samplers. The extra run
+normally writes several MiB/hour. Its own output threshold is 128 MiB, and it
+requires 1 GiB free space; checks once per minute may overshoot those stop
+thresholds. Completion, cancellation, budget stops and worker failures are
+distinguished in `status.json` and the output log. SIGTERM to its parent stops
+only this sampler.
+
+Use `python3 -B /data/scripts/capture-main-cache-io.py --report /data/main-cache-io-UNIQUE`
+to summarize saved samples during or after the run. The report computes hit
+percentages from summed interval hit/miss counts, retains each cache's covered
+seconds and unavailable intervals, and identifies peak miss-rate and lowest
+hit-rate intervals. Those timestamps approximate metrics reads, with database
+metric publication delay; correlate them with the slow watcher and existing
+resources rather than treating them as per-request timing. Cache misses are
+logical lookups, not physical IOPS. Device statistics include every user of
+that device and do not establish the cloud volume's configured limits. Run
+`python3 -B scripts/test_capture_main_cache_io.py` for offline checks.
+
 After capture, join the saved files without new node requests:
 
 ```bash
