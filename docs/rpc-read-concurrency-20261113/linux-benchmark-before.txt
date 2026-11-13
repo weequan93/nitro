@@ -1,0 +1,12 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ethereum/go-ethereum/core/rawdb
+cpu: VirtualApple @ 2.50GHz
+BenchmarkChainFreezerHotHeaderReads     	  338092	      3812 ns/op	    1600 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads     	  332683	      3562 ns/op	    1600 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads     	  332402	      3596 ns/op	    1600 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads-4   	  328926	      3364 ns/op	    1602 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads-4   	  379593	      3229 ns/op	    1602 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads-4   	  357633	      3080 ns/op	    1602 B/op	      16 allocs/op
+PASS
+ok  	github.com/ethereum/go-ethereum/core/rawdb	12.203s
