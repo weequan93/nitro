@@ -28,6 +28,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/l2pricing"
 	"github.com/offchainlabs/nitro/arbos/util"
 	"github.com/offchainlabs/nitro/util/arbmath"
+	"github.com/offchainlabs/nitro/util/blockdiag"
 )
 
 // set by the precompile module, to avoid a package dependence cycle
@@ -305,6 +306,9 @@ func ProduceBlockAdvanced(
 	exposeMultiGas bool,
 ) (*types.Block, *state.StateDB, types.Receipts, error) {
 
+	diag := blockdiag.FromState(statedb)
+	setup := diag.Begin(blockdiag.ArbosSetup)
+	defer setup.End()
 	arbState, err := arbosState.OpenSystemArbosState(statedb, nil, false)
 	if err != nil {
 		return nil, nil, nil, err
@@ -362,6 +366,7 @@ func ProduceBlockAdvanced(
 		redeems:              nil,
 		activeGroupCP:        nil,
 	}
+	setup.End()
 
 	for {
 		// repeatedly process the next tx, doing redeems created along the way in FIFO order
@@ -392,7 +397,9 @@ func ProduceBlockAdvanced(
 			}
 			buildState.clearGroupCheckpoint()
 			var conditionalOptions *arbitrum_types.ConditionalOptions
+			next := diag.Begin(blockdiag.NextTransaction)
 			tx, conditionalOptions, err = sequencingHooks.NextTxToSequence()
+			next.End()
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("error fetching next transaction to sequence, userTxsProcessed: %d, err: %w", buildState.userTxsProcessed, err)
 			}
@@ -416,6 +423,8 @@ func ProduceBlockAdvanced(
 		arbosVersion := buildState.arbState.ArbOSVersion()
 		signer := types.MakeSigner(chainConfig, header.Number, header.Time, arbosVersion)
 		receipt, result, err := (func() (*types.Receipt, *core.ExecutionResult, error) {
+			attempt := diag.Begin(blockdiag.TransactionAttempt)
+			defer attempt.End()
 			// If we've done too much work in this block, discard the tx as early as possible
 			if buildState.blockGasLeft < params.TxGas && isUserTx {
 				return nil, nil, core.ErrGasLimitReached
@@ -427,6 +436,8 @@ func ProduceBlockAdvanced(
 			}
 
 			// Writes to statedb object should be avoided to prevent invalid state from permeating as statedb snapshot is not taken
+			preFilter := diag.Begin(blockdiag.PreFilter)
+			defer preFilter.End()
 			if isUserTx {
 				if err = sequencingHooks.PreTxFilter(chainConfig, header, buildState.statedb, buildState.arbState, tx, options, sender, l1Info); err != nil {
 					return nil, nil, err
@@ -438,7 +449,10 @@ func ProduceBlockAdvanced(
 			if err = extraPreTxFilter(chainConfig, header, buildState.statedb, buildState.arbState, tx, options, sender, l1Info); err != nil {
 				return nil, nil, err
 			}
+			preFilter.End()
 
+			prepare := diag.Begin(blockdiag.TransactionPrepare)
+			defer prepare.End()
 			if basefee.Sign() > 0 {
 				dataGas = math.MaxUint64
 				brotliCompressionLevel, err := buildState.arbState.BrotliCompressionLevel()
@@ -486,6 +500,9 @@ func ProduceBlockAdvanced(
 			gasPool := gethGas
 			blockContext := core.NewEVMBlockContext(header, chainContext, &header.Coinbase)
 			evm := vm.NewEVM(blockContext, buildState.statedb, chainConfig, vm.Config{ExposeMultiGas: exposeMultiGas})
+			prepare.End()
+			apply := diag.Begin(blockdiag.ApplyTransaction)
+			defer apply.End()
 			receipt, result, err := core.ApplyTransactionWithResultFilter(
 				evm,
 				&gasPool,
@@ -495,6 +512,8 @@ func ProduceBlockAdvanced(
 				&header.GasUsed,
 				runCtx,
 				func(result *core.ExecutionResult) error {
+					post := diag.Begin(blockdiag.PostFilter)
+					defer post.End()
 					if err := sequencingHooks.PostTxFilter(header, buildState.statedb, buildState.arbState, tx, sender, dataGas, result); err != nil {
 						return err
 					}
@@ -510,6 +529,7 @@ func ProduceBlockAdvanced(
 					return nil
 				},
 			)
+			apply.End()
 			if err != nil {
 				// Ignore this transaction if it's invalid under the state transition function
 				buildState.statedb.RevertToSnapshot(snap)
@@ -662,15 +682,24 @@ func ProduceBlockAdvanced(
 		return nil, nil, nil, state.ErrArbTxFilter
 	}
 
-	if err = sequencingHooks.BlockFilter(header, buildState.statedb, buildState.complete, buildState.receipts); err != nil {
+	blockFilter := diag.Begin(blockdiag.BlockFilter)
+	defer blockFilter.End()
+	err = sequencingHooks.BlockFilter(header, buildState.statedb, buildState.complete, buildState.receipts)
+	blockFilter.End()
+	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	binary.BigEndian.PutUint64(header.Nonce[:], delayedMessagesRead)
 
+	finalize := diag.Begin(blockdiag.FinalizeBlock)
+	defer finalize.End()
 	FinalizeBlock(header, buildState.complete, buildState.statedb, chainConfig)
+	finalize.End()
 
 	// Touch up the block hashes in receipts
+	assemble := diag.Begin(blockdiag.AssembleBlock)
+	defer assemble.End()
 	tmpBlock := types.NewBlock(header, &types.Body{Transactions: buildState.complete}, buildState.receipts, trie.NewStackTrie(nil))
 	blockHash := tmpBlock.Hash()
 
@@ -686,6 +715,7 @@ func ProduceBlockAdvanced(
 	if len(block.Transactions()) != len(buildState.receipts) {
 		return nil, nil, nil, fmt.Errorf("block has %d txes but %d receipts", len(block.Transactions()), len(buildState.receipts))
 	}
+	assemble.End()
 
 	balanceDelta := buildState.statedb.GetUnexpectedBalanceDelta()
 	if !arbmath.BigEquals(balanceDelta, buildState.expectedBalanceDelta) {

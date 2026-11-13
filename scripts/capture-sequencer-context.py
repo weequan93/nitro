@@ -240,7 +240,7 @@ def parse_metrics(text):
         if not match:
             continue
         name, labels, value = match.groups()
-        if not name.startswith(("arb_txpublish_", "arb_sequencer_", "rpc_diagnostics_", "l2chaindata_compact_",
+        if not name.startswith(("arb_txpublish_", "arb_sequencer_", "arb_blockdiag_", "rpc_diagnostics_", "l2chaindata_compact_",
                                 "state_snapshot_generation_")):
             continue
         if labels and labels not in ('quantile="0.5"', 'quantile="0.99"', 'quantile="0.999"'):

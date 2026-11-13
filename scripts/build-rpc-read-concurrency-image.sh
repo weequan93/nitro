@@ -4,11 +4,11 @@ set -euo pipefail
 umask 077
 
 if [[ "${1:-}" == --help ]]; then
-  echo "Usage: bash build-rpc-read-concurrency-image.sh /data/nitro /data/rpc-read-build.XXXXXX SOURCE_REV"
+  echo "Usage: bash build-rpc-read-concurrency-image.sh /data/nitro /data/rpc-read-build.XXXXXX SOURCE_REV [BASE_IMAGE_ID]"
   echo "Resume verification: bash build-rpc-read-concurrency-image.sh --verify-only /data/rpc-read-build.XXXXXX"
   exit 0
 fi
-[[ ( $# == 3 || ( $# == 2 && "${1:-}" == --verify-only ) ) && $(uname -s) == Linux && $EUID == 0 ]] || {
+[[ ( $# == 3 || $# == 4 || ( $# == 2 && "${1:-}" == --verify-only ) ) && $(uname -s) == Linux && $EUID == 0 ]] || {
   echo "Run as root on the Linux build host, with repository and fresh build-directory arguments." >&2
   exit 1
 }
@@ -42,7 +42,12 @@ EXPECTED_GETH_REV=9557fc573cdde179c42c17c6e1927f00b4b23133
 [[ "$GETH_REV" == "$EXPECTED_GETH_REV" ]] || {
   echo "Source tree does not reference the tested shared-read geth revision." >&2; exit 1;
 }
-EXPECTED_BASE=sha256:0ea40d56b156757fc121c864ba30775f7bdd8924a45dec5d59b8b6228cd50215
+if [[ $VERIFY_ONLY == 1 ]]; then
+  EXPECTED_BASE=$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["base_image"])' "$BUILD/status.json")
+else
+  EXPECTED_BASE=${4:-sha256:0ea40d56b156757fc121c864ba30775f7bdd8924a45dec5d59b8b6228cd50215}
+fi
+[[ "$EXPECTED_BASE" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Use a full pinned base image ID." >&2; exit 1; }
 SOURCE="$BUILD/source"
 SUFFIX=${BUILD##*.}
 WORKER="rpc-read-worker-$SUFFIX"
@@ -76,12 +81,13 @@ verify_image() {
   local candidate_id native_hash image_hash
   candidate_id=$(docker image inspect --format '{{.Id}}' "$IMAGE")
   grep -qxF 'RPC shared-read and diagnostics checks: PASS' "$BUILD/payload/checks.txt"
+  grep -qxF 'Sequencer block diagnostics checks: PASS' "$BUILD/payload/block-diagnostics-checks.txt"
   timeout 30s docker run --rm --network none --cpus 1 --memory 1g \
     --entrypoint /usr/local/bin/nitro "$candidate_id" --version > "$BUILD/version.txt" 2>&1
   grep -F "rpc-read-${SOURCE_REV:0:10}" "$BUILD/version.txt"
   timeout 30s docker run --rm --network none --cpus 1 --memory 1g \
     --entrypoint /usr/local/bin/nitro "$candidate_id" --help > "$BUILD/help.txt" 2>&1
-  for flag in persistent.pebble.compaction-output-bytes-per-second persistent.pebble.max-concurrent-compactions rpc.stage-diagnostics-threshold; do
+  for flag in persistent.pebble.compaction-output-bytes-per-second persistent.pebble.max-concurrent-compactions rpc.stage-diagnostics-threshold execution.block-diagnostics.enable; do
     grep -qF -- "--$flag" "$BUILD/help.txt"
   done
   python3 -B - "$BASE" "$candidate_id" <<'PY'
@@ -182,6 +188,13 @@ FROM node-builder-base AS rpc-read-checked
 COPY --from=prover-export / target/
 ENV GOMAXPROCS=2 GOFLAGS=-p=2
 RUN NITRO_BUILD_IGNORE_TIMESTAMPS=1 make target/bin/nitro
+RUN BLOCKDIAG_FIXTURE_DIR=/workspace/blockdiag-fixture GOMAXPROCS=2 go test -p 2 -parallel 2 -mod=readonly -race -count=1 ./util/blockdiag && \
+    GOMAXPROCS=2 go test -p 2 -parallel 2 -mod=readonly -race -count=1 ./execution/gethexec \
+      -run '^Test(Sequencer.*Mutex|BlockDiagnosticsExecutionEquivalence)' && \
+    BLOCKDIAG_TEST_TRACE="$(python3 -B -c 'from pathlib import Path; print(next(Path("/workspace/blockdiag-fixture").glob("test-*/sequencer-diagnostics-*/seq-*.trace")))')" \
+      python3 -B scripts/test_report_sequencer_block_trace.py && \
+    python3 -B scripts/test_capture_sequencer_context.py && \
+    printf '%s\n' 'Sequencer block diagnostics checks: PASS' > /workspace/block-diagnostics-checks.txt
 RUN cd /workspace/go-ethereum && \
     GOMAXPROCS=2 go test -p 2 -parallel 2 -mod=readonly -race -count=1 ./core/rawdb ./core/rawdb/eradb -timeout=300s && \
     GOMAXPROCS=2 go test -p 2 -parallel 2 -mod=readonly -race -count=1 ./eth/filters -run '^Test(GetLogsDiagnostics.*|FiltersUnindexed|RangeLogs)$' -timeout=300s && \
@@ -190,6 +203,7 @@ RUN cd /workspace/go-ethereum && \
 FROM scratch AS rpc-read-export
 COPY --from=rpc-read-checked /workspace/target/bin/nitro /nitro
 COPY --from=rpc-read-checked /workspace/rpc-read-checks.txt /checks.txt
+COPY --from=rpc-read-checked /workspace/block-diagnostics-checks.txt /block-diagnostics-checks.txt
 DOCKER
 mkdir "$BUILD/buildkit" "$BUILD/socket" "$BUILD/payload"
 printf '[worker.oci]\n  max-parallelism = 1\n' > "$BUILD/buildkitd.toml"

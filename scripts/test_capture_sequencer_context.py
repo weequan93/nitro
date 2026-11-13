@@ -82,7 +82,9 @@ class ResourceContextTests(unittest.TestCase):
             'rpc_diagnostics_eth_sendRawTransaction_success_completed 45354\n'
             'rpc_diagnostics_eth_sendRawTransaction_success_ge1s 37\n'
             'rpc_diagnostics_details_dropped 85\n'
+            'arb_blockdiag_reports_dropped 2\n'
             'secret_metric 99\n')
+        self.assertEqual(result["arb_blockdiag_reports_dropped"], 2)
         self.assertEqual(result['arb_txpublish_sequence{quantile="0.99"}'], 123000)
         self.assertEqual(result["arb_txpublish_sequence_count"], 45)
         self.assertEqual(result["state_snapshot_generation_storage_generated"], 120000)
@@ -93,7 +95,7 @@ class ResourceContextTests(unittest.TestCase):
         self.assertEqual(result["rpc_diagnostics_eth_sendRawTransaction_success_completed"], 45354)
         self.assertEqual(result["rpc_diagnostics_eth_sendRawTransaction_success_ge1s"], 37)
         self.assertEqual(result["rpc_diagnostics_details_dropped"], 85)
-        self.assertEqual(len(result), 8)
+        self.assertEqual(len(result), 9)
         self.assertNotIn("arb_txpublish_block_write_count", result)
 
     def test_rpc_allowlist_and_json_rpc_failure(self):
