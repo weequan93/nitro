@@ -82,3 +82,25 @@ canonical hash 查询及部分 header 读取会经过这里，包括在 ancient 
 
 启动入口的离线测试涵盖 head 不前进、syncing、publisher 错误、缺失 bucket、实例变化、
 指定旧 suite 交接、慢退出等待、旧文件保留、完整采集命令及预热边界。
+
+## 已采集慢请求的读取
+
+`review-rpc-tails.py --suite-dir CAPTURE --log-dir LOGS --until CUTOFF` 固定截止时间，
+读取该 suite 保存的计数器、资源、cache、发布阶段滚动分位，以及指定目录的 `nitro.log` / `nitro-*.log.gz`。
+它依赖同目录的 `review-rpc-tail-data.py` 和 `review-rpc-tail-archives.py`，
+不请求节点 RPC，也不改服务设置。日志副本、输入质量及完整 JSON 报告默认保存在采集目录同级的新 review 目录，避免占用实时采集的输出预算。
+报告记录本次分析的起止时间，供后续比较排除分析读取本身的负载。
+
+输出区分成功/失败的 >=500ms、500–<1000ms、>=1/3/5s 数量及各自有效覆盖；
+打印两接口的长尾尖峰和全部 >=1s 计数器区间，并对齐附近磁盘、CPU、compaction 与发布阶段快照。
+阶段 quantile 从微秒换算为毫秒，但仍是共享滚动统计，不能当作某条请求的阶段耗时相加或相减。
+`phase.json` 的启动排除边界用于附加的 post-warmup 汇总，原始全程统计及其长尾记录仍保留。
+
+归档时间优先使用绝对时间；无时区的终端时间用已保存 watcher 的 method/trace 校准，无法校准时明确保留未知。
+错误分组隐藏地址和 URL，并对齐日志中的失败与 >=1s 阶段记录数量，帮助辨别日志覆盖不足。
+1s 阶段阈值没有保存的 500–<1000ms 逐笔阶段不能恢复；这些请求只提供时间窗口与后台负载线索。
+日志时间可能滞后、详情可能丢弃，计数相同也只证明总数相符，不证明逐笔完整或磁盘竞争的因果。
+
+离线检查命令：`PYTHONPATH=scripts python3 -B -m unittest -v test_review_rpc_tail_data test_review_rpc_tail_archives test_review_rpc_tails`。
+28 项通过，涵盖固定截止、阈值关系、失败分组覆盖、UTC/本地时间校准、轮转重复、损坏 gzip、同容器重启、
+日志读取范围，以及计数器→资源→发布阶段→归档的端到端合成用例。
