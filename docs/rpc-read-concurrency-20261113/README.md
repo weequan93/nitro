@@ -1,6 +1,6 @@
 # getLogs / sendRaw 共用历史读取路径的并发修正
 
-当前现场基线：Nitro `b7df6d1a17d33f304bee1ac553e00e3e35a27b93`，geth `bf399f01dffc34785f6f1653a3ddaeed30d9d5fb`，
+本次优化前的现场基线：Nitro `b7df6d1a17d33f304bee1ac553e00e3e35a27b93`，geth `bf399f01dffc34785f6f1653a3ddaeed30d9d5fb`，
 镜像 `sha256:0ea40d56b156757fc121c864ba30775f7bdd8924a45dec5d59b8b6228cd50215`。
 现场证据及边界见 `../rpc-overnight-review-20261113/findings-20261113.md`。
 
@@ -66,3 +66,19 @@ canonical hash 查询及部分 header 读取会经过这里，包括在 ancient 
 构建证据变化、正常 apply/rollback、重复 apply，以及正常退出后证据变化和重建失败回滚。
 测试全部使用模拟 Docker；它们不代表服务器候选已经完成构建或部署。
 本地执行 `PYTHONPATH=scripts python3 -B -m unittest -v test_rpc_read_switch test_prepare_rpc_subsecond_switch test_switch_rpc_subsecond_image test_build_rpc_read_concurrency_image test_build_rpc_subsecond_image test_check_main_runtime`，43 项通过。
+
+## 切换后的采集阶段
+
+`start-rpc-read-capture.py` 接收新计划、预期镜像、旧采集目录和新输出目录。
+它核对 apply journal 中的新实例身份、部署输入、native PID1、compaction/pacing，
+要求 RPC head 实际前进、`eth_syncing=false`、publisher health 返回无错误和 `null`，
+并确认完整亚秒计数器与数据库 metrics 可读。源文件、vdb 与磁盘预算也在结束旧采集前检查。
+
+就绪后只向指定目录的旧 suite parent 发送 SIGTERM，等待退出；其它 suite 会导致拒绝接管。
+随后原地 exec 完整 suite，记录资源、cache/IO、慢事件和 RPC buckets，持续 24 小时、按小时分段。
+旧目录保留。新目录的 `phase.json` 记录新实例、健康结果和从节点启动算起的 30 分钟排除边界，
+已有 report 不会自动应用这个边界，
+比较性能时需要按 `comparison_not_before_utc` 排除启动区间，再匹配负载；此时间规则不是缓存已经预热完成的证明。
+
+启动入口的离线测试涵盖 head 不前进、syncing、publisher 错误、缺失 bucket、实例变化、
+指定旧 suite 交接、慢退出等待、旧文件保留、完整采集命令及预热边界。
