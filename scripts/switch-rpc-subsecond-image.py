@@ -123,6 +123,8 @@ def verify_inputs(path, prep, checker, allow_missing=False):
             or plan["baseline"]["image"] != prep.BASE
             or plan.get("shutdown") != {"signal": "SIGTERM", "force_kill": False, "required_exit_code": 0}):
         raise ValueError("Unsupported switch plan or shutdown policy")
+    if hasattr(prep, "verify_build"):
+        prep.verify_build(plan)
     override = Path(plan["override"])
     if (ops.digest(ops.read_bytes(override)) != plan["override_sha256"]
             or json.loads(ops.read_bytes(override)) != {"services": {"nitro": {"image": prep.TAG}}}):
@@ -247,7 +249,7 @@ def switch(path, rollback=False, prep=None, checker=None, lock_fd=None):
                       "pacing_bytes_per_second": 64 * 1024**2}, indent=2), flush=True)
 
 
-def main():
+def main(prep_loader=None):
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     choice = parser.add_mutually_exclusive_group(required=True)
@@ -260,7 +262,9 @@ def main():
           (config_path.parent / ".nitro-compaction-pacing.lock").open("a") as pacing_lock):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         fcntl.flock(pacing_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        switch(path, rollback=args.rollback is not None, lock_fd=(lock.fileno(), pacing_lock.fileno()))
+        prep = prep_loader(path) if prep_loader else None
+        switch(path, rollback=args.rollback is not None, prep=prep,
+               lock_fd=(lock.fileno(), pacing_lock.fileno()))
 
 
 if __name__ == "__main__":

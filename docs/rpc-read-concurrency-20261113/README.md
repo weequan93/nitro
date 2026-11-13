@@ -48,3 +48,21 @@ canonical hash 查询及部分 header 读取会经过这里，包括在 ancient 
 旧的 subsecond 切换计划绑定旧镜像，不能作为本次新候选的切换计划。
 切换后应将启动预热区间单独标记，按相近区块 gas、交易/查询数量和后台负载比较 ≥500 ms / ≥1 s 请求比例，
 同时观察 debt、写停顿及失败类别；合成读取基准不能替代这一步。
+
+## 本次候选的切换入口
+
+`prepare-rpc-read-switch.py --build /data/rpc-read-build.yadX8u` 在构建完成后准备新计划，不改变服务。
+它固定候选源码为 Nitro `a3955fae953a50ef54d8f1420be301ce869dcab6`、geth `9557fc573cdde179c42c17c6e1927f00b4b23133`，
+从构建目录读取候选镜像 ID，并核对最终验证状态、测试 PASS、native payload hash、镜像内 native hash、镜像平台、配置及基础层。
+计划保存构建证据哈希，仍核对运行时输入、现有 cache 默认值及 image-only Compose 差异。
+构建脚本的源码版本与之后安装的切换助手版本可以不同；候选 native 必须始终对应上述已测试版本。
+
+`switch-rpc-read-image.py --apply PLAN` 和 `--rollback PLAN` 复用现有正常退出状态机，
+共用旧切换助手和 compaction 操作锁。SIGTERM + 无限 Docker stop 等待、退出码、数据库关闭日志、
+停止实例身份和受哈希保护的恢复证据检查均保留。构建证据还会在停服前、正常退出后再次核对。
+它只在成功启动目标容器后报告 `started_health_pending`，后续仍需检查出块、syncing、publisher health 并启动新采集。
+
+离线测试 `test_rpc_read_switch.py` 覆盖计划绑定、未完成/错误版本构建拒绝、二进制及镜像漂移拒绝、
+构建证据变化、正常 apply/rollback、重复 apply，以及正常退出后证据变化和重建失败回滚。
+测试全部使用模拟 Docker；它们不代表服务器候选已经完成构建或部署。
+本地执行 `PYTHONPATH=scripts python3 -B -m unittest -v test_rpc_read_switch test_prepare_rpc_subsecond_switch test_switch_rpc_subsecond_image test_build_rpc_read_concurrency_image test_build_rpc_subsecond_image test_check_main_runtime`，43 项通过。
