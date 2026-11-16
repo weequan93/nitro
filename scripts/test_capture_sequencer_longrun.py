@@ -66,6 +66,13 @@ class LongrunTests(unittest.TestCase):
     def status(self):
         return json.loads((self.args.out_dir / "status.json").read_text())
 
+    def test_budget_uses_unreserved_available_space(self):
+        stat = type("Stat", (), {"f_bavail": 9, "f_frsize": 1024, "f_bsize": 1024})()
+        with patch.object(longrun.os, "statvfs", return_value=stat):
+            self.assertEqual(longrun.available_bytes(self.root), 9 * 1024)
+            self.assertEqual(longrun.budget_reason(self.root, 1 << 60, 10 * 1024),
+                             "free_space_limit")
+
     def test_rotation_keeps_the_original_collector_code(self):
         def change_installed_source():
             end = time.monotonic() + 3

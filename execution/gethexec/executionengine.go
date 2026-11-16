@@ -53,6 +53,7 @@ import (
 	"github.com/offchainlabs/nitro/execution"
 	"github.com/offchainlabs/nitro/execution/gethexec/eventfilter"
 	"github.com/offchainlabs/nitro/util/arbmath"
+	"github.com/offchainlabs/nitro/util/blockdiag"
 	"github.com/offchainlabs/nitro/util/containers"
 	"github.com/offchainlabs/nitro/util/sharedmetrics"
 	"github.com/offchainlabs/nitro/util/stopwaiter"
@@ -252,7 +253,8 @@ type ExecutionEngine struct {
 	transactionFiltererRPCClient   *TransactionFiltererRPCClient
 	filteringReportRPCClient       *FilteringReportRPCClient
 	disableDelayedSequencingFilter bool
-	txPublishDiagnostics            txPublishDiagnostics
+	txPublishDiagnostics           txPublishDiagnostics
+	blockDiagnostics               *blockdiag.Manager
 }
 
 func NewL1PriceData() *L1PriceData {
@@ -613,10 +615,17 @@ func (s *ExecutionEngine) resequenceReorgedMessages(messages []*arbostypes.Messa
 }
 
 func (s *ExecutionEngine) sequencerWrapper(sequencerFunc func() (*types.Block, error)) (*types.Block, error) {
+	return s.sequencerWrapperObserved(nil, sequencerFunc)
+}
+
+func (s *ExecutionEngine) sequencerWrapperObserved(diag *blockdiag.Trace, sequencerFunc func() (*types.Block, error)) (*types.Block, error) {
 	attempts := 0
 	for {
 		block, err := func() (*types.Block, error) {
+			wait := diag.Begin(blockdiag.EngineLockWait)
+			defer wait.End()
 			s.createBlocksMutex.Lock()
+			wait.End()
 			defer s.createBlocksMutex.Unlock()
 			return sequencerFunc()
 		}()
@@ -624,6 +633,8 @@ func (s *ExecutionEngine) sequencerWrapper(sequencerFunc func() (*types.Block, e
 			return block, err
 		}
 		// We got SequencerInsertLockTaken
+		retryWait := diag.Begin(blockdiag.InsertRetryWait)
+		defer retryWait.End()
 		// option 1: there was a race, we are no longer main sequencer
 		_, chosenErr := s.consensus.ExpectChosenSequencer().Await(s.GetContext())
 		if chosenErr != nil {
@@ -640,19 +651,56 @@ func (s *ExecutionEngine) sequencerWrapper(sequencerFunc func() (*types.Block, e
 			return nil, err
 		}
 		<-time.After(time.Millisecond * 100)
+		retryWait.End()
 	}
 }
 
-func (s *ExecutionEngine) SequenceTransactions(header *arbostypes.L1IncomingMessageHeader, hooks *FullSequencingHooks, timeboostedTxs map[common.Hash]struct{}) (*types.Block, error) {
-	return s.sequencerWrapper(func() (*types.Block, error) {
-		return s.sequenceTransactionsWithBlockMutex(header, hooks, timeboostedTxs)
+func (s *ExecutionEngine) SequenceTransactions(header *arbostypes.L1IncomingMessageHeader, hooks *FullSequencingHooks, timeboostedTxs map[common.Hash]struct{}) (block *types.Block, err error) {
+	diag := s.blockDiagnostics.Begin()
+	if diag == nil {
+		return s.sequencerWrapper(func() (*types.Block, error) {
+			return s.sequenceTransactionsWithBlockMutex(header, hooks, timeboostedTxs)
+		})
+	}
+	ctx, contextErr := s.GetContextSafe()
+	if contextErr != nil {
+		ctx = context.Background()
+	}
+	returned := false
+	defer func() {
+		outcome := "success"
+		if !returned {
+			outcome = "panic"
+		} else if err != nil {
+			outcome = "error"
+		} else if block == nil {
+			outcome = "empty"
+		}
+		var number, gas uint64
+		var transactions int
+		if block != nil {
+			number, gas, transactions = block.NumberU64(), block.GasUsed(), len(block.Transactions())
+		}
+		s.blockDiagnostics.Finish(diag, outcome, number, gas, transactions)
+	}()
+	diag.Run(ctx, func() {
+		block, err = s.sequencerWrapperObserved(diag, func() (*types.Block, error) {
+			return s.sequenceTransactionsObserved(header, hooks, timeboostedTxs, diag)
+		})
+		returned = true
 	})
+	return block, err
 }
 
 // SequenceTransactionsWithProfiling runs SequenceTransactions with tracing and
 // CPU profiling enabled. If the block creation takes longer than 2 seconds, it
 // keeps both and prints out filenames in an error log line.
 func (s *ExecutionEngine) SequenceTransactionsWithProfiling(header *arbostypes.L1IncomingMessageHeader, hooks *FullSequencingHooks, timeboostedTxs map[common.Hash]struct{}) (*types.Block, error) {
+	// The legacy profiler starts and stops process-global profilers per block.
+	// Never let it stop a bounded diagnostic capture, including after hot reload.
+	if s.blockDiagnostics != nil {
+		return s.SequenceTransactions(header, hooks, timeboostedTxs)
+	}
 	pprofBuf, traceBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
 	if err := pprof.StartCPUProfile(pprofBuf); err != nil {
 		log.Error("Starting CPU profiling", "error", err)
@@ -688,19 +736,35 @@ func writeAndLog(pprof, trace *bytes.Buffer) {
 }
 
 func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.L1IncomingMessageHeader, hooks *FullSequencingHooks, timeboostedTxs map[common.Hash]struct{}) (*types.Block, error) {
+	return s.sequenceTransactionsObserved(header, hooks, timeboostedTxs, nil)
+}
+
+func (s *ExecutionEngine) sequenceTransactionsObserved(header *arbostypes.L1IncomingMessageHeader, hooks *FullSequencingHooks, timeboostedTxs map[common.Hash]struct{}, diag *blockdiag.Trace) (*types.Block, error) {
 	lastBlockHeader, err := s.getCurrentHeader()
 	if err != nil {
 		return nil, err
 	}
+	diag.AttemptBlock(lastBlockHeader.Number.Uint64() + 1)
 
-	statedb, err := s.bc.StateAt(lastBlockHeader.Root)
+	stateOpen := diag.Begin(blockdiag.StateOpen)
+	defer stateOpen.End()
+	var statedb *state.StateDB
+	if diag == nil {
+		statedb, err = s.bc.StateAt(lastBlockHeader.Root)
+	} else {
+		statedb, err = diag.NewState(lastBlockHeader.Root, s.bc.StateCache())
+	}
+	stateOpen.End()
 	if err != nil {
 		return nil, err
 	}
 	if s.addressChecker != nil {
 		statedb.SetAddressChecker(s.addressChecker)
 	}
+	previousRead := diag.Begin(blockdiag.PreviousBlockRead)
+	defer previousRead.End()
 	lastBlock := s.bc.GetBlock(lastBlockHeader.Hash(), lastBlockHeader.Number.Uint64())
+	previousRead.End()
 	if lastBlock == nil {
 		return nil, errors.New("can't find block for current header")
 	}
@@ -721,6 +785,8 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 
 	startTime := time.Now()
 	blockExecutionStarted := s.txPublishDiagnostics.start()
+	produce := diag.Begin(blockdiag.ProduceBlock)
+	defer produce.End()
 	block, statedb, receipts, err := arbos.ProduceBlockAdvanced(
 		header,
 		delayedMessagesRead,
@@ -732,6 +798,7 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 		core.NewMessageSequencingContext(s.wasmTargets),
 		s.exposeMultiGas,
 	)
+	produce.End()
 	s.txPublishDiagnostics.observe(txPublishBlockExecutionHistogram, blockExecutionStarted)
 	if err != nil {
 		return nil, err
@@ -775,7 +842,10 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 
 	blockMetadata := s.blockMetadataFromBlock(block, timeboostedTxs)
 	consensusWriteStarted := s.txPublishDiagnostics.start()
+	consensusWrite := diag.Begin(blockdiag.ConsensusWrite)
+	defer consensusWrite.End()
 	_, err = s.consensus.WriteMessageFromSequencer(msgIdx, msgWithMeta, *msgResult, blockMetadata).Await(s.GetContext())
+	consensusWrite.End()
 	s.txPublishDiagnostics.observe(txPublishConsensusWriteHistogram, consensusWriteStarted)
 	if err != nil {
 		return nil, err
@@ -784,7 +854,10 @@ func (s *ExecutionEngine) sequenceTransactionsWithBlockMutex(header *arbostypes.
 	// Only write the block after we've written the messages, so if the node dies in the middle of this,
 	// it will naturally recover on startup by regenerating the missing block.
 	blockWriteStarted := s.txPublishDiagnostics.start()
+	blockWrite := diag.Begin(blockdiag.BlockWrite)
+	defer blockWrite.End()
 	err = s.appendBlock(block, statedb, receipts, blockCalcTime)
+	blockWrite.End()
 	s.txPublishDiagnostics.observe(txPublishBlockWriteHistogram, blockWriteStarted)
 	if err != nil {
 		return nil, err
@@ -1275,6 +1348,9 @@ func (s *ExecutionEngine) Start(ctxIn context.Context) error {
 	ctx, err := s.GetContextSafe()
 	if err != nil {
 		return err
+	}
+	if s.blockDiagnostics != nil {
+		s.LaunchThread(s.blockDiagnostics.Run)
 	}
 
 	if s.transactionFiltererRPCClient != nil {

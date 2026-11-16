@@ -46,6 +46,47 @@ def background_context(second, recovered, elapsed_ns, compact_MiB=0, generated=0
 
 
 class ReportTests(unittest.TestCase):
+    def test_capacity_swap_rates_and_missing_filesystems_in_report(self):
+        old, row = resource(10), resource(11)
+        old["vmstat"] = {"pswpin": 12, "pgmajfault": 99, "pgpgout": 40}
+        row.update({"vmstat": {"pswpin": 15, "pgmajfault": 3, "pgpgout": 44},
+                    "load": {"load1": 4}, "filesystems": {
+                        "/data": {"available": True, "free_bytes": 20 * 1024**3,
+                                  "available_bytes": 10 * 1024**3, "inodes_total": 100, "inodes_free": 25},
+                        "/": {"available": False},
+                        "/unbounded": {"available": True, "inodes_total": None, "inodes_free": None}}})
+        row["processes"][0]["threads"] = 30
+        values = reporter.flatten(row, old)
+        self.assertEqual(values["filesystem./data.available_GiB"], 10)
+        self.assertEqual(values["filesystem./data.free_GiB"], 20)
+        self.assertEqual(values["filesystem./data.inodes_used_percent"], 75)
+        self.assertEqual(values["process.nitro.pid123.start50.threads"], 30)
+        self.assertEqual(values["host.pswpin_pages_s"], 3)
+        self.assertEqual(values["host.pgpgout_KiB_s"], 4)
+        self.assertEqual(values["host.load1"], 4)
+        self.assertNotIn("host.pgmajfault_faults_s", values)
+        self.assertNotIn("filesystem./available_GiB", values)
+        self.assertNotIn("filesystem./unbounded.inodes_used_percent", values)
+        report = reporter.build_report([old, row, resource(12)], [], [])
+        self.assertEqual(report["coverage"]["filesystem_unavailable_samples"]["/data"], 2)
+
+    def test_runtime_nanoseconds_converted_to_ms_with_missing_and_errors_excluded(self):
+        contexts = [{"started_utc": timestamp(11), "metrics": {
+                        "system_cpu_goroutines": 200, "system_memory_used": 3 * 1024**3,
+                        "system_memory_objects": 2 * 1024**3,
+                        'system_memory_pauses{quantile="0.999"}': 2400000,
+                        'system_cpu_schedlatency{quantile="0.99"}': 5700000}},
+                    {"started_utc": timestamp(12), "metrics_error": "OSError",
+                     "metrics": {"system_cpu_goroutines": 9999}}]
+        snapshots = reporter.build_report([resource(s) for s in range(10, 14)], contexts, [])["runtime_snapshots"]
+        self.assertEqual(snapshots["goroutines"]["mean"], 200)
+        self.assertEqual(snapshots["memory_used_GiB"]["mean"], 3)
+        self.assertEqual(snapshots["heap_objects_GiB"]["mean"], 2)
+        self.assertEqual(snapshots["gc_pause_p999_ms"]["mean"], 2.4)
+        self.assertEqual(snapshots["scheduler_p99_ms"]["mean"], 5.7)
+        self.assertEqual(snapshots["threads"]["n"], 0)
+        self.assertIsNone(snapshots["threads"]["mean"])
+
     def background(self, contexts, resources=None, events=None):
         return reporter.build_report(resources or [resource(s) for s in range(10, 41)],
                                      contexts, events or [slow_event(23)])["background_activity"]

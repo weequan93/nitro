@@ -2,6 +2,7 @@
 
 import argparse
 from datetime import datetime
+import errno
 import importlib.util
 import io
 import json
@@ -9,6 +10,7 @@ import os
 from pathlib import Path
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -20,6 +22,38 @@ spec.loader.exec_module(context)
 
 
 class ResourceContextTests(unittest.TestCase):
+    def test_filesystem_reserved_blocks_inodes_and_unavailable_are_distinct(self):
+        fs = SimpleNamespace(f_frsize=4096, f_bsize=4096, f_blocks=1000, f_bfree=100,
+                             f_bavail=80, f_files=500, f_ffree=200, f_favail=190)
+        with mock.patch.object(context.os, "stat", return_value=SimpleNamespace(st_dev=42)), \
+             mock.patch.object(context.os, "statvfs", side_effect=[fs, OSError(errno.EIO, "error")]):
+            result = context.filesystem_snapshot(("/data", "/unavailable"))
+        self.assertEqual(result["/data"]["free_bytes"], 409600)
+        self.assertEqual(result["/data"]["available_bytes"], 327680)
+        self.assertEqual(result["/data"]["inodes_available"], 190)
+        self.assertEqual(result["/unavailable"], {"available": False, "error_errno": errno.EIO})
+        fs.f_files = fs.f_ffree = fs.f_favail = 0
+        with mock.patch.object(context.os, "stat", return_value=SimpleNamespace(st_dev=42)), \
+             mock.patch.object(context.os, "statvfs", return_value=fs):
+            unknown = context.filesystem_snapshot(("/data",))["/data"]
+        self.assertIsNone(unknown["inodes_total"])
+        self.assertIsNone(unknown["inodes_free"])
+
+    def test_process_thread_index_and_loadavg(self):
+        fields = ["0"] * 22
+        fields[0], fields[17], fields[19] = "S", "13", "500"
+        with mock.patch.object(context, "read_text", side_effect=lambda path:
+                               "123 (name with ) spaces) " + " ".join(fields)
+                               if Path(path).name == "stat" else None):
+            proc = context.process_snapshot(123)
+        self.assertEqual(proc["threads"], 13)
+        self.assertEqual(proc["start_ticks"], 500)
+        with mock.patch.object(context, "read_text", return_value="2.0 3.0 4.0 7/1200 123\n"):
+            self.assertEqual(context.load_snapshot(), {"load1": 2, "load5": 3, "load15": 4,
+                                                       "runnable_tasks": 7, "total_tasks": 1200})
+        with mock.patch.object(context, "read_text", return_value=None):
+            self.assertIsNone(context.load_snapshot())
+
     def test_independent_disks_and_missing_or_reset_counters(self):
         previous = {"vdb": {"reads": 10, "read_sectors": 100, "read_ms": 20,
                              "writes": 0, "write_sectors": 20, "write_ms": 0,
@@ -82,7 +116,14 @@ class ResourceContextTests(unittest.TestCase):
             'rpc_diagnostics_eth_sendRawTransaction_success_completed 45354\n'
             'rpc_diagnostics_eth_sendRawTransaction_success_ge1s 37\n'
             'rpc_diagnostics_details_dropped 85\n'
+            'arb_blockdiag_reports_dropped 2\n'
+            'system_cpu_goroutines 55\n'
+            'system_cpu_schedlatency {quantile="0.99"} 2200000\n'
+            'system_memory_pauses {quantile="0.999"} 3300000\n'
+            'system_memory_used 99999\n'
+            'system_disk_readbytes 88888\n'
             'secret_metric 99\n')
+        self.assertEqual(result["arb_blockdiag_reports_dropped"], 2)
         self.assertEqual(result['arb_txpublish_sequence{quantile="0.99"}'], 123000)
         self.assertEqual(result["arb_txpublish_sequence_count"], 45)
         self.assertEqual(result["state_snapshot_generation_storage_generated"], 120000)
@@ -93,7 +134,12 @@ class ResourceContextTests(unittest.TestCase):
         self.assertEqual(result["rpc_diagnostics_eth_sendRawTransaction_success_completed"], 45354)
         self.assertEqual(result["rpc_diagnostics_eth_sendRawTransaction_success_ge1s"], 37)
         self.assertEqual(result["rpc_diagnostics_details_dropped"], 85)
-        self.assertEqual(len(result), 8)
+        self.assertEqual(result['system_cpu_schedlatency{quantile="0.99"}'], 2200000)
+        self.assertEqual(result['system_memory_pauses{quantile="0.999"}'], 3300000)
+        self.assertEqual(result["system_cpu_goroutines"], 55)
+        self.assertEqual(result["system_memory_used"], 99999)
+        self.assertEqual(result["system_disk_readbytes"], 88888)
+        self.assertEqual(len(result), 14)
         self.assertNotIn("arb_txpublish_block_write_count", result)
 
     def test_rpc_allowlist_and_json_rpc_failure(self):

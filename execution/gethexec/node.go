@@ -43,6 +43,7 @@ import (
 	"github.com/offchainlabs/nitro/timeboost"
 	"github.com/offchainlabs/nitro/util"
 	"github.com/offchainlabs/nitro/util/arbmath"
+	"github.com/offchainlabs/nitro/util/blockdiag"
 	"github.com/offchainlabs/nitro/util/containers"
 	"github.com/offchainlabs/nitro/util/headerreader"
 	"github.com/offchainlabs/nitro/util/rpcclient"
@@ -205,6 +206,7 @@ type Config struct {
 	BlockMetadataApiCacheSize   uint64                     `koanf:"block-metadata-api-cache-size"`
 	BlockMetadataApiBlocksLimit uint64                     `koanf:"block-metadata-api-blocks-limit"`
 	VmTrace                     LiveTracingConfig          `koanf:"vmtrace"`
+	BlockDiagnostics            blockdiag.Config           `koanf:"block-diagnostics"`
 	ExposeMultiGas              bool                       `koanf:"expose-multi-gas"`
 	RPCServer                   rpcserver.Config           `koanf:"rpc-server"`
 	ConsensusRPCClient          rpcclient.ClientConfig     `koanf:"consensus-rpc-client" reload:"hot"`
@@ -214,6 +216,12 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
+	if err := c.BlockDiagnostics.Validate(); err != nil {
+		return err
+	}
+	if c.BlockDiagnostics.Enable && c.Sequencer.EnableProfiling {
+		return errors.New("block diagnostics and sequencer.enable-profiling cannot both be enabled")
+	}
 	if err := c.Caching.Validate(); err != nil {
 		return err
 	}
@@ -266,6 +274,7 @@ func ConfigAddOptions(prefix string, f *pflag.FlagSet) {
 	f.Bool(prefix+".expose-multi-gas", false, "experimental: expose multi-dimensional gas in transaction receipts")
 	f.Bool(prefix+".disable-arbowner-ethcall", ConfigDefault.DisableArbOwnerEthCall, "disable ArbOwner precompile calls outside on-chain execution (ethcall, gas estimation)")
 	LiveTracingConfigAddOptions(prefix+".vmtrace", f)
+	blockdiag.ConfigAddOptions(prefix+".block-diagnostics", f)
 	rpcserver.ConfigAddOptions(prefix+".rpc-server", "execution", f)
 	rpcclient.RPCClientAddOptions(prefix+".consensus-rpc-client", f, &ConfigDefault.ConsensusRPCClient)
 }
@@ -304,6 +313,7 @@ var ConfigDefault = Config{
 	BlockMetadataApiCacheSize:   100 * 1024 * 1024,
 	BlockMetadataApiBlocksLimit: 100,
 	VmTrace:                     DefaultLiveTracingConfig,
+	BlockDiagnostics:            blockdiag.DefaultConfig,
 	ExposeMultiGas:              false,
 	DisableArbOwnerEthCall:      false,
 
@@ -384,6 +394,10 @@ func CreateExecutionNode(
 
 	execEngine := NewExecutionEngine(l2BlockChain, syncTillBlock, config.ExposeMultiGas, config.TransactionFiltering.DisableDelayedSequencingFilter, addressChecker, filteringReportRPCClient)
 	execEngine.txPublishDiagnostics = newTxPublishDiagnostics(diagnosticsThreshold)
+	execEngine.blockDiagnostics, err = blockdiag.New(config.BlockDiagnostics, nil)
+	if err != nil {
+		return nil, err
+	}
 	if config.EnablePrefetchBlock {
 		execEngine.EnablePrefetchBlock()
 	}

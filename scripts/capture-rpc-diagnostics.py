@@ -17,7 +17,6 @@ import math
 import os
 from pathlib import Path
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -55,6 +54,14 @@ def save(path, obj):
     temporary = path.with_name("." + path.name + ".tmp")
     temporary.write_text(json.dumps(obj, indent=2) + "\n")
     temporary.replace(path)
+
+
+def available_bytes(path):
+    try:
+        stat = os.statvfs(path)
+        return stat.f_bavail * (stat.f_frsize or stat.f_bsize)
+    except OSError:
+        return None
 
 
 def parse(text):
@@ -150,7 +157,8 @@ def run(args):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise ValueError("An RPC counter collector is already running") from None
-        if shutil.disk_usage(out).free < args.min_free_gib * 1024**3:
+        available = available_bytes(out)
+        if available is None or available < args.min_free_gib * 1024**3:
             raise ValueError("Insufficient free space for RPC counters")
         source = Path(__file__).read_bytes()
         (out / "collector.py").write_bytes(source)
@@ -203,7 +211,8 @@ def run(args):
                             next_status = tick + 60
                     if tick >= next_budget:
                         size = sum(p.stat().st_size for p in out.iterdir() if p.is_file())
-                        if size >= 64 * 1024**2 or shutil.disk_usage(out).free < args.min_free_gib * 1024**3:
+                        available = available_bytes(out)
+                        if size >= 64 * 1024**2 or available is None or available < args.min_free_gib * 1024**3:
                             reason, code = "disk_budget", 1
                             break
                         next_budget = tick + 60

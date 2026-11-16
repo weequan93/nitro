@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 
 
 BASE = "sha256:e27ef7fd4d2df39cd402c56d68d5a5d1010f2bd3954e994ece396bddf8d676af"
@@ -47,27 +48,28 @@ def image_help(image):
     return completed.stdout
 
 
-def image_only_model(before, after):
+def image_only_model(before, after, tag=None):
     expected = deepcopy(before)
-    expected["services"]["nitro"]["image"] = TAG
+    expected["services"]["nitro"]["image"] = TAG if tag is None else tag
     if after != expected:
         raise ValueError("Rendered Compose changes more than the main image")
 
 
-def prepare(root, checker=None):
+def prepare(root, checker=None, profile=None):
+    profile = profile or SimpleNamespace(BASE=BASE, CANDIDATE=CANDIDATE, TAG=TAG, BUILD=BUILD)
     checker = checker or load_checker()
     ops = checker.ops
-    status = json.loads(ops.read_bytes(BUILD / "status.json"))
+    status = json.loads(ops.read_bytes(profile.BUILD / "status.json"))
     if (status.get("state") != "assembled_and_verified_not_deployed"
-            or status.get("base_image") != BASE or status.get("image") != TAG
-            or (BUILD / "image-id.txt").read_text().strip() != "IMAGE_ID=" + CANDIDATE):
+            or status.get("base_image") != profile.BASE or status.get("image") != profile.TAG
+            or (profile.BUILD / "image-id.txt").read_text().strip() != "IMAGE_ID=" + profile.CANDIDATE):
         raise ValueError("Saved image verification is incomplete or differs")
     before = checker.observe()
-    recorded = json.loads(ops.read_bytes(BUILD / "runtime-before.json"))
+    recorded = json.loads(ops.read_bytes(profile.BUILD / "runtime-before.json"))
     failures = checker.compare(before, recorded, compactions=1)
-    if before["image"] != BASE or failures:
+    if before["image"] != profile.BASE or failures:
         raise ValueError("Runtime changed since image build: " + "; ".join(failures))
-    if ops.inspect("image", TAG)["Id"] != CANDIDATE:
+    if ops.inspect("image", profile.TAG)["Id"] != profile.CANDIDATE:
         raise ValueError("Candidate image tag changed")
     info = ops.inspect("container", ops.CONTAINER)
     argv = ops.native_argv()
@@ -83,8 +85,8 @@ def prepare(root, checker=None):
             (isinstance(stage, str) and re.fullmatch(r"(?:[0-9]+(?:\.[0-9]+)?(?:ns|us|µs|μs|ms|s|m|h))+", stage)
              and any(c in "123456789" for c in stage))):
         raise ValueError("Require an existing positive RPC stage diagnostics threshold")
-    defaults = {"before": cache_defaults(image_help(BASE)),
-                "candidate": cache_defaults(image_help(CANDIDATE))}
+    defaults = {"before": cache_defaults(image_help(profile.BASE)),
+                "candidate": cache_defaults(image_help(profile.CANDIDATE))}
     for key in CACHE_KEYS:
         if before["settings"][key]["value"] is None and defaults["before"][key] != defaults["candidate"][key]:
             raise ValueError("An undeclared cache default would change: " + key)
@@ -95,13 +97,13 @@ def prepare(root, checker=None):
         prefix += ["-f", name]
     model = json.loads(ops.run(prefix + ["config", "--format", "json"]))
     root.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="main-rpc-subsecond-", dir=root))
+    work = Path(tempfile.mkdtemp(prefix=getattr(profile, "WORK_PREFIX", "main-rpc-subsecond-"), dir=root))
     work.chmod(0o700)
     override = work / "image.compose.json"
-    ops.save(override, {"services": {"nitro": {"image": TAG}}})
+    ops.save(override, {"services": {"nitro": {"image": profile.TAG}}})
     candidate_prefix = prefix + ["-f", str(override)]
     rendered = json.loads(ops.run(candidate_prefix + ["config", "--format", "json"]))
-    image_only_model(model, rendered)
+    image_only_model(model, rendered, tag=profile.TAG)
     (work / "nodeconfig.before.json").write_bytes(config_bytes)
     inputs = {}
     for i, name in enumerate(files):
@@ -114,7 +116,7 @@ def prepare(root, checker=None):
             {k: v for k, v in before.items() if k != "observed_utc"}):
         raise ValueError("Main runtime changed during preparation")
     plan = {"schema": 1, "state": "prepared_no_service_change", "prepared_utc": ops.now(),
-            "build_dir": str(BUILD), "candidate_image": CANDIDATE, "candidate_ref": TAG,
+            "build_dir": str(profile.BUILD), "candidate_image": profile.CANDIDATE, "candidate_ref": profile.TAG,
             "baseline": before, "cache_defaults": defaults, "diagnostics_threshold": stage,
             "compose": prefix, "candidate_compose": candidate_prefix, "compose_inputs": inputs,
             "compose_model_sha256": ops.digest(json.dumps(model, sort_keys=True).encode()),
@@ -123,10 +125,13 @@ def prepare(root, checker=None):
             "nodeconfig_path": str(config_path), "nodeconfig_sha256": ops.digest(config_bytes),
             "shutdown": {"signal": "SIGTERM", "force_kill": False, "required_exit_code": 0},
             "activated": False}
+    if hasattr(profile, "verify_build"):
+        plan["build_evidence"] = deepcopy(profile.evidence)
+        profile.verify_build(plan)
     path = work / "plan.json"
     ops.save(path, plan)
     print(json.dumps({"state": plan["state"], "plan": str(path), "base_image": before["image"],
-                      "candidate_image": CANDIDATE, "compactions": 1, "pacing_bytes_per_second": 64 * 1024**2,
+                      "candidate_image": profile.CANDIDATE, "compactions": 1, "pacing_bytes_per_second": 64 * 1024**2,
                       "cache_defaults": defaults, "diagnostics_threshold": stage,
                       "compose_files": files, "candidate_override": str(override)}, indent=2))
     return path

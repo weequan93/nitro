@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/ethereum/go-ethereum/core/rawdb
+cpu: Apple M4 Pro
+BenchmarkChainFreezerHotHeaderReads     	  505213	      2396 ns/op	    1600 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads     	  475424	      2302 ns/op	    1600 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads     	  479606	      2763 ns/op	    1600 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads-8   	 1695357	       713.0 ns/op	    1603 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads-8   	 1629411	       750.9 ns/op	    1603 B/op	      16 allocs/op
+BenchmarkChainFreezerHotHeaderReads-8   	 1421887	       783.2 ns/op	    1603 B/op	      16 allocs/op
+PASS
+ok  	github.com/ethereum/go-ethereum/core/rawdb	12.503s

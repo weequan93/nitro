@@ -103,6 +103,28 @@ def flatten(row, previous):
     mem = row.get("meminfo_bytes") or {}
     for key in ("MemAvailable", "SwapFree"):
         put("host." + key + "_GiB", mem.get(key), 1024**3)
+    for key, value in (row.get("load") or {}).items():
+        put("host." + key, value)
+    seconds = row.get("interval_s")
+    if number(seconds) and seconds > 0:
+        vm, old_vm = row.get("vmstat") or {}, (previous or {}).get("vmstat") or {}
+        for key, unit in (("pgfault", "faults_s"), ("pgmajfault", "faults_s"),
+                          ("pswpin", "pages_s"), ("pswpout", "pages_s"),
+                          ("pgpgin", "KiB_s"), ("pgpgout", "KiB_s")):
+            now, before = vm.get(key), old_vm.get(key)
+            if number(now) and number(before) and now >= before:
+                put("host." + key + "_" + unit, (now - before) / seconds)
+    for path, fs in (row.get("filesystems") or {}).items():
+        if not fs.get("available"):
+            continue
+        key = "filesystem." + path + "."
+        for field in ("total", "free", "available"):
+            put(key + field + "_GiB", fs.get(field + "_bytes"), 1024**3)
+        for field in ("inodes_total", "inodes_free", "inodes_available"):
+            put(key + field, fs.get(field))
+        total, free = fs.get("inodes_total"), fs.get("inodes_free")
+        if number(total) and total > 0 and number(free):
+            put(key + "inodes_used_percent", (total - free) / total * 100)
     for resource in ("cpu", "memory", "io"):
         for kind in ("some", "full"):
             value = (((row.get("pressure") or {}).get(resource) or {}).get(kind) or {}).get("avg10")
@@ -118,6 +140,7 @@ def flatten(row, previous):
         rates = proc.get("rates") or {}
         put(key + "cpu_cores", rates.get("cpu_cores"))
         put(key + "rss_GiB", proc.get("rss_bytes"), 1024**3)
+        put(key + "threads", proc.get("threads"))
         put(key + "state_D", 1 if proc.get("state") == "D" else 0)
         put(key + "major_faults_s", rates.get("major_faults_s"))
         for operation in ("read", "write"):
@@ -134,6 +157,23 @@ def flatten(row, previous):
         for operation in ("read", "write"):
             put("device." + device + "." + operation + "_MiB_s", counters.get(operation + "_bytes_s"), 1024**2)
     return values
+
+
+def runtime_snapshots(contexts):
+    specs = {
+        "goroutines": ("system_cpu_goroutines", 1),
+        "threads": ("system_cpu_threads", 1),
+        "memory_used_GiB": ("system_memory_used", 1024**3),
+        "memory_held_GiB": ("system_memory_held", 1024**3),
+        # This geth gauge comes from /memory/classes/heap/objects:bytes.
+        "heap_objects_GiB": ("system_memory_objects", 1024**3),
+    }
+    for name, source in (("scheduler", "system_cpu_schedlatency"), ("gc_pause", "system_memory_pauses")):
+        for label, quantile in (("p50", "0.5"), ("p99", "0.99"), ("p999", "0.999")):
+            specs[name + "_" + label + "_ms"] = (source + '{quantile="' + quantile + '"}', 1e6)
+    return {name: stats([(r.get("metrics") or {})[key] / divisor for r in contexts
+                        if not r.get("metrics_error") and number((r.get("metrics") or {}).get(key))])
+            for name, (key, divisor) in specs.items()}
 
 
 def summarize(samples):
@@ -371,12 +411,17 @@ def build_report(resource_rows, context_rows, event_rows, guard=15, top=3):
             "metrics_errors": sum(bool(r.get("metrics_error")) for r in contexts),
             "block_lookup_errors": sum(bool(r.get("block_error")) for r in contexts),
             "docker_top_errors": sum(bool(r.get("docker_top_error")) for r in resources),
+            "filesystem_unavailable_samples": {
+                path: sum(not (r.get("filesystems") or {}).get(path, {}).get("available", False)
+                          for r in resources)
+                for path in sorted({p for r in resources for p in (r.get("filesystems") or {})})},
             "logged_slow_blocks": len(events), "slow_rpc_log_records": len(rpc_events),
             "slow_rpc_failures": sum(e.get("outcome") == "failure" for e in rpc_events),
             "group_sample_counts": {key: len(rows) for key, rows in groups.items()}, "guard_s": guard,
         },
         "resource_comparison": {key: {group: summary.get(key, stats([])) for group, summary in summaries.items()} for key in keys},
         "metric_snapshots": snapshots,
+        "runtime_snapshots": runtime_snapshots(contexts),
         "background_activity": background_activity(contexts, resources, events, rpc_events, flat),
         "workload_controls": {"sampled_blocks_unclassified": len(controls),
                               "also_in_logged_slow_blocks": len(set(controls) & slow_keys),
@@ -390,6 +435,7 @@ def build_report(resource_rows, context_rows, event_rows, guard=15, top=3):
             "PSI avg10 and metric p999 snapshots have overlapping windows; do not add/subtract independent quantiles.",
             "Devices and per-PID cgroups remain separate; neither shared disks nor summed throttle budgets are inferred.",
             "Periodic latest blocks are unclassified controls with unknown individual execution times.",
+            "Runtime latency summaries are sampled shared histograms in ms; they do not measure a request's CPU, I/O or lock wait.",
         ],
     }
 
@@ -415,6 +461,7 @@ def main():
     print("COVERAGE", json.dumps(report["coverage"], separators=(",", ":")))
     print("INPUTS", json.dumps(report["input_snapshots"], separators=(",", ":")))
     print("METRIC_SNAPSHOTS", json.dumps(report["metric_snapshots"], separators=(",", ":")))
+    print("RUNTIME_SNAPSHOTS", json.dumps(report["runtime_snapshots"], separators=(",", ":")))
     print("WORKLOAD_CONTROLS", json.dumps(report["workload_controls"], separators=(",", ":")))
     background = report["background_activity"]
     print("BACKGROUND", json.dumps({k: v for k, v in background.items()

@@ -13,6 +13,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -44,6 +45,37 @@ def utc_now() -> str:
 def parse_log_time(line: str) -> str | None:
     match = LOG_TIME_RE.match(line)
     return match.group("time") if match else None
+
+
+def parse_block_diagnostics(line: str) -> dict | None:
+    """Read both geth text and JSON logs without querying blocks or receipts."""
+    if "Sequencer block diagnostics" not in line:
+        return None
+    try:
+        payload = line[LOG_TIME_RE.match(line).end():] if LOG_TIME_RE.match(line) else line
+        if payload.startswith("{"):
+            entry = json.loads(payload)
+            if entry.get("msg") != "Sequencer block diagnostics":
+                return None
+            value = entry.get("timings")
+        else:
+            match = re.search(r"\btimings=", line)
+            if not match:
+                return None
+            value, _ = json.JSONDecoder().raw_decode(line[match.end():])
+        if isinstance(value, str):
+            value = json.loads(value)
+        if (isinstance(value, dict) and value.get("schema") == 1
+                and type(value.get("seq_id")) is int and value["seq_id"] > 0
+                and type(value.get("total_ms")) in (int, float)
+                and math.isfinite(value["total_ms"]) and value["total_ms"] >= 0
+                and isinstance(value.get("started_utc"), str)
+                and isinstance(value.get("stages"), dict)
+                and isinstance(value.get("state_readers"), dict)):
+            return value
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return None
 
 
 def hex_int(value: object) -> int | None:
@@ -184,6 +216,7 @@ class Watcher:
         self.stop = False
         self.seen_blocks: set[int] = set()
         self.seen_traces: set[str] = set()
+        self.seen_diagnostics: set[tuple[int, str]] = set()
         self.out_dir = Path(args.out_dir)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.events = (self.out_dir / "events.jsonl").open("a", encoding="utf-8")
@@ -223,6 +256,14 @@ class Watcher:
 
     def handle_line(self, line: str) -> None:
         log_time = parse_log_time(line) or utc_now()
+        diagnostic = parse_block_diagnostics(line)
+        if diagnostic is not None:
+            identity = (diagnostic["seq_id"], diagnostic["started_utc"])
+            if identity not in self.seen_diagnostics:
+                self.seen_diagnostics.add(identity)
+                self.emit({"kind": "block_diagnostics", "log_time_utc": log_time,
+                           "diagnostic": diagnostic})
+            return
         rpc_match = RPC_SLOW_RE.search(line)
         if rpc_match and float(rpc_match.group("total")) >= self.args.rpc_threshold_ms:
             trace = rpc_match.group("trace")

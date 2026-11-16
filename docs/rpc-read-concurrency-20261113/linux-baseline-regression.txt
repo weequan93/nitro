@@ -1,0 +1,5 @@
+--- FAIL: TestChainFreezerReadAncientsConcurrentReaders (2.12s)
+    chain_freezer_concurrency_test.go:68: a read-only ancient callback blocked another reader
+FAIL
+FAIL	github.com/ethereum/go-ethereum/core/rawdb	2.198s
+FAIL

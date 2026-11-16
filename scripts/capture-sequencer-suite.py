@@ -326,6 +326,7 @@ def run(args):
             "hours": args.hours, "compactions": args.compactions,
             "pacing_bytes_per_second": args.pacing_bytes_per_second, "device": args.device,
             "device_number": device_number,
+            "max_output_gib": args.max_output_gib, "min_free_gib": args.min_free_gib,
             "source_sha256": hashes, "health": health,
             "note": "Samples include background work after startup. Cache misses are not device IOPS."})
         stop = threading.Event()

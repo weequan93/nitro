@@ -68,6 +68,38 @@ def pressure(path):
     return result
 
 
+def filesystem_snapshot(paths=("/", "/data")):
+    result = {}
+    for path in paths:
+        try:
+            device = os.stat(path).st_dev
+            fs = os.statvfs(path)
+            block_size = fs.f_frsize or fs.f_bsize
+            result[path] = {
+                "available": True, "device": device,
+                "total_bytes": fs.f_blocks * block_size,
+                "free_bytes": fs.f_bfree * block_size,
+                "available_bytes": fs.f_bavail * block_size,
+                # Some filesystems do not report a finite inode pool.
+                "inodes_total": fs.f_files if fs.f_files > 0 else None,
+                "inodes_free": fs.f_ffree if fs.f_files > 0 else None,
+                "inodes_available": fs.f_favail if fs.f_files > 0 else None,
+            }
+        except OSError as error:
+            result[path] = {"available": False, "error_errno": error.errno}
+    return result
+
+
+def load_snapshot():
+    fields = (read_text("/proc/loadavg") or "").split()
+    try:
+        running, tasks = fields[3].split("/")
+        return {"load1": float(fields[0]), "load5": float(fields[1]), "load15": float(fields[2]),
+                "runnable_tasks": int(running), "total_tasks": int(tasks)}
+    except (ValueError, IndexError):
+        return None
+
+
 def process_snapshot(pid):
     root = Path("/proc") / str(pid)
     text = read_text(root / "stat")
@@ -78,6 +110,7 @@ def process_snapshot(pid):
         "pid": pid, "available": True, "state": fields[0],
         "start_ticks": int(fields[19]), "cpu_ticks": int(fields[11]) + int(fields[12]),
         "major_faults": int(fields[9]), "rss_bytes": int(fields[21]) * os.sysconf("SC_PAGE_SIZE"),
+        "threads": int(fields[17]),
         "io": named_numbers(read_text(root / "io")),
     }
     paths = read_text(root / "cgroup") or ""
@@ -240,8 +273,8 @@ def parse_metrics(text):
         if not match:
             continue
         name, labels, value = match.groups()
-        if not name.startswith(("arb_txpublish_", "arb_sequencer_", "rpc_diagnostics_", "l2chaindata_compact_",
-                                "state_snapshot_generation_")):
+        if not name.startswith(("arb_txpublish_", "arb_sequencer_", "arb_blockdiag_", "rpc_diagnostics_", "l2chaindata_compact_",
+                                "state_snapshot_generation_", "system_cpu_", "system_memory_", "system_disk_")):
             continue
         if labels and labels not in ('quantile="0.5"', 'quantile="0.99"', 'quantile="0.999"'):
             continue
@@ -316,6 +349,9 @@ def run(args):
                     "docker_top_error": docker_error,
                     "cpu_ticks": [int(v) for v in cpu] if cpu else None,
                     "meminfo_bytes": named_numbers(read_text("/proc/meminfo"), 1024),
+                    "load": load_snapshot(),
+                    "vmstat": named_numbers(read_text("/proc/vmstat")),
+                    "filesystems": filesystem_snapshot(),
                     "pressure": {k: pressure("/proc/pressure/" + k) for k in ("cpu", "memory", "io")},
                     "devices": disk_delta(disks, previous_disks, seconds),
                     "processes": [{"role": pids[pid], **process_delta(p, previous_processes.get(pid, {}), seconds)}

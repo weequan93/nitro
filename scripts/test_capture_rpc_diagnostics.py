@@ -51,6 +51,11 @@ def latency_row(values, when="2026-11-12T06:00:15Z", seconds=15):
 
 
 class CounterTests(unittest.TestCase):
+    def test_budget_uses_unreserved_available_space(self):
+        stat = type("Stat", (), {"f_bavail": 9, "f_frsize": 1024, "f_bsize": 1024})()
+        with patch.object(capture.os, "statvfs", return_value=stat):
+            self.assertEqual(capture.available_bytes(Path("/tmp")), 9 * 1024)
+
     def test_parse_keeps_exact_counters_and_missing_is_not_zero(self):
         text = "\n".join("%s %s" % item for item in counters(1).items())
         self.assertEqual(capture.parse(text), counters(1))

@@ -13,7 +13,6 @@ import json
 import math
 import os
 from pathlib import Path
-import shutil
 import signal
 import subprocess
 import sys
@@ -49,10 +48,19 @@ def output_bytes(root):
     return sum(p.lstat().st_size for p in root.rglob("*") if p.is_file() and not p.is_symlink())
 
 
+def available_bytes(path):
+    try:
+        stat = os.statvfs(path)
+        return stat.f_bavail * (stat.f_frsize or stat.f_bsize)
+    except OSError:
+        return None
+
+
 def budget_reason(root, maximum, minimum_free):
     if output_bytes(root) >= maximum:
         return "output_size_limit"
-    if shutil.disk_usage(root).free < minimum_free:
+    available = available_bytes(root)
+    if available is None or available < minimum_free:
         return "free_space_limit"
     return None
 

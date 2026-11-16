@@ -1,0 +1,199 @@
+{
+  "source_baseline": "bf399f01dffc34785f6f1653a3ddaeed30d9d5fb",
+  "candidate_files_sha256": {
+    "core/rawdb/chain_freezer.go": "333edca6ba72c189c955629da52fe26c8ff65b1494b4f4550847517ec80b5187",
+    "core/rawdb/chain_freezer_concurrency_test.go": "6c9b8fe66e5c395780e008c6594b06e665f946e36d4431e8ceddb2c5f4de60b7"
+  },
+  "regression": "The original exclusive-read implementation fails the concurrent-reader test; the candidate passes.",
+  "darwin_rawdb_era_race": "ok  \tgithub.com/ethereum/go-ethereum/core/rawdb\t29.513s\nok  \tgithub.com/ethereum/go-ethereum/core/rawdb/eradb\t1.373s",
+  "linux": {
+    "source_baseline": "bf399f01dffc34785f6f1653a3ddaeed30d9d5fb",
+    "image": "golang@sha256:3b4a11519ad929d1e1d261a12cff056f0c85b735253d7d861346b9c6f8b36437",
+    "network": "none",
+    "cpus": 4,
+    "memory_gib": 4,
+    "result": "passed",
+    "exit_code": 0,
+    "oom_killed": false,
+    "attempt": 2,
+    "container_removed": true
+  },
+  "linux_results": {
+    "linux-rawdb-race.txt": "ok  \tgithub.com/ethereum/go-ethereum/core/rawdb\t33.361s\nok  \tgithub.com/ethereum/go-ethereum/core/rawdb/eradb\t1.119s",
+    "linux-filtermaps-race.txt": "ok  \tgithub.com/ethereum/go-ethereum/core/filtermaps\t30.054s",
+    "linux-filters-race.txt": "ok  \tgithub.com/ethereum/go-ethereum/eth/filters\t12.376s",
+    "linux-rpc-race.txt": "ok  \tgithub.com/ethereum/go-ethereum/rpc\t1.145s"
+  },
+  "image_verification_tests": {
+    "tests": 6,
+    "result": "passed"
+  },
+  "benchmarks": {
+    "darwin_arm64": {
+      "1": {
+        "before": [
+          {
+            "ns_op": 2380.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 2357.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 2334.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          }
+        ],
+        "after": [
+          {
+            "ns_op": 2396.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 2302.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 2763.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          }
+        ],
+        "median_before_ns_op": 2357.0,
+        "median_after_ns_op": 2396.0,
+        "median_throughput_ratio": 0.984
+      },
+      "8": {
+        "before": [
+          {
+            "ns_op": 1590.0,
+            "bytes_op": 1604,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 1442.0,
+            "bytes_op": 1604,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 1656.0,
+            "bytes_op": 1604,
+            "allocs_op": 16
+          }
+        ],
+        "after": [
+          {
+            "ns_op": 713.0,
+            "bytes_op": 1603,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 750.9,
+            "bytes_op": 1603,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 783.2,
+            "bytes_op": 1603,
+            "allocs_op": 16
+          }
+        ],
+        "median_before_ns_op": 1590.0,
+        "median_after_ns_op": 750.9,
+        "median_throughput_ratio": 2.117
+      }
+    },
+    "linux_amd64": {
+      "1": {
+        "before": [
+          {
+            "ns_op": 3812.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 3562.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 3596.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          }
+        ],
+        "after": [
+          {
+            "ns_op": 2937.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 2990.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 3290.0,
+            "bytes_op": 1600,
+            "allocs_op": 16
+          }
+        ],
+        "median_before_ns_op": 3596.0,
+        "median_after_ns_op": 2990.0,
+        "median_throughput_ratio": 1.203
+      },
+      "4": {
+        "before": [
+          {
+            "ns_op": 3364.0,
+            "bytes_op": 1602,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 3229.0,
+            "bytes_op": 1602,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 3080.0,
+            "bytes_op": 1602,
+            "allocs_op": 16
+          }
+        ],
+        "after": [
+          {
+            "ns_op": 1744.0,
+            "bytes_op": 1602,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 1567.0,
+            "bytes_op": 1602,
+            "allocs_op": 16
+          },
+          {
+            "ns_op": 1471.0,
+            "bytes_op": 1602,
+            "allocs_op": 16
+          }
+        ],
+        "median_before_ns_op": 3229.0,
+        "median_after_ns_op": 1567.0,
+        "median_throughput_ratio": 2.061
+      }
+    }
+  },
+  "limits": [
+    "Synthetic hot canonical-hash/header lookup benchmark, not RPC latency or physical disk throughput.",
+    "Linux amd64 runs in a local container on Apple hardware; production node timings must be measured separately.",
+    "Only parallel read serialization is fixed; freezer writer holds, execution work, and stale client nonces can still cause other symptoms."
+  ],
+  "candidate_geth_revision": "9557fc573cdde179c42c17c6e1927f00b4b23133"
+}

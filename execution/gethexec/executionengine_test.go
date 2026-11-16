@@ -4,10 +4,14 @@
 package gethexec
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/offchainlabs/nitro/util/blockdiag"
 )
 
 // TestSequencerWrapperMutexReleasedOnPanic verifies that createBlocksMutex is
@@ -36,6 +40,61 @@ func TestSequencerWrapperMutexReleasedOnPanic(t *testing.T) {
 		t.Fatal("createBlocksMutex is still locked after panic recovery; would deadlock on next call")
 	}
 	engine.createBlocksMutex.Unlock()
+}
+
+func TestSequencerObservedMutexContentionAndPanicRelease(t *testing.T) {
+	for _, panics := range []bool{false, true} {
+		t.Run(map[bool]string{false: "error", true: "panic"}[panics], func(t *testing.T) {
+			cfg := blockdiag.DefaultConfig
+			cfg.Enable, cfg.Threshold = true, time.Nanosecond
+			reports := make(chan blockdiag.Record, 1)
+			manager, err := blockdiag.New(cfg, func(r blockdiag.Record) { reports <- r })
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan struct{})
+			go func() { manager.Run(ctx); close(done) }()
+			defer func() { cancel(); <-done }()
+			engine := &ExecutionEngine{cachedL1PriceData: NewL1PriceData()}
+			engine.createBlocksMutex.Lock()
+			go func() { time.Sleep(20 * time.Millisecond); engine.createBlocksMutex.Unlock() }()
+			diag := manager.Begin()
+			sentinel := errors.New("sequencing sentinel")
+			func() {
+				defer func() {
+					got := recover()
+					if (panics && got != sentinel) || (!panics && got != nil) {
+						t.Errorf("panic changed: %v", got)
+					}
+				}()
+				diag.Run(ctx, func() {
+					_, err = engine.sequencerWrapperObserved(diag, func() (*types.Block, error) {
+						if panics {
+							panic(sentinel)
+						}
+						return nil, sentinel
+					})
+				})
+			}()
+			if !panics && err != sentinel {
+				t.Fatalf("error changed: %v", err)
+			}
+			if !engine.createBlocksMutex.TryLock() {
+				t.Fatal("observed wrapper leaked mutex")
+			}
+			engine.createBlocksMutex.Unlock()
+			manager.Finish(diag, "test", 0, 0, 0)
+			select {
+			case r := <-reports:
+				if r.Stages["engine_lock_wait"].MS < 10 {
+					t.Fatalf("lock contention not observed: %+v", r)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("diagnostic report not emitted")
+			}
+		})
+	}
 }
 
 // TestSequencerWrapperMutexReleasedOnSuccess verifies that normal (non-panic)
