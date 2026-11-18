@@ -25,7 +25,9 @@ STAGES = ("params", "callback", "encode", "handler_other", "resolve", "backend_s
           "indexed_search", "result_filter", "unindexed_search", "sync_post", "consistency", "backend_close",
           "index_lock_wait", "index_lock_hold", "filter_rows_read", "block_pointer_access", "log_lookup",
           "receipts_access", "receipt_scan", "header_access", "block_logs_access", "body_access",
-          "sync_register_wait", "sync_enqueue_wait", "sync_response_wait")
+          "sync_register_wait", "sync_enqueue_wait", "sync_response_wait", "tx_publish_state_at",
+          "tx_publish_precheck", "tx_publish_filter", "tx_publish_publisher", "tx_publish_forwarder",
+          "tx_publish_forwarder_target", "tx_publish_queue_enqueue", "tx_publish_queue_wait")
 SHAPES = ("by_hash", "address_count", "topic_positions", "topic_alternatives", "resolved_blocks_max",
           "indexed_block_range_total", "unindexed_blocks_scanned", "candidate_count", "result_count",
           "receipt_reads", "receipt_cursor_hits", "log_cache_hits", "log_cache_misses", "body_cache_hits",

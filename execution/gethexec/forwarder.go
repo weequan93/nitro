@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	publicrpcdiag "github.com/ethereum/go-ethereum/rpcdiag"
 
 	"github.com/offchainlabs/nitro/timeboost"
 	"github.com/offchainlabs/nitro/util/redisutil"
@@ -139,6 +140,7 @@ func (f *TxForwarder) PublishTransaction(inctx context.Context, tx *types.Transa
 	defer cancelFunc()
 	for pos, rpcClient := range f.rpcClients {
 		started := f.diagnostics.start()
+		targetStageDone := publicrpcdiag.StartNamed(inctx, "tx_publish_forwarder_target")
 		var err error
 		if options == nil {
 			if f.priorityNode == true {
@@ -149,6 +151,7 @@ func (f *TxForwarder) PublishTransaction(inctx context.Context, tx *types.Transa
 		} else {
 			err = arbitrum.SendConditionalTransactionRPC(ctx, rpcClient, tx, options)
 		}
+		targetStageDone()
 		f.diagnostics.observe(txPublishForwarderTargetHistogram, started)
 		if err != nil {
 			log.Warn("error forwarding transaction to a backup target", "target", f.targets[pos], "err", err)

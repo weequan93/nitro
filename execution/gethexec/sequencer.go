@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	publicrpcdiag "github.com/ethereum/go-ethereum/rpcdiag"
 
 	"github.com/offchainlabs/nitro/arbnode/parent"
 	"github.com/offchainlabs/nitro/arbos"
@@ -544,7 +545,9 @@ func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Tran
 	_, forwarder := s.GetPauseAndForwarder()
 	if forwarder != nil {
 		forwarderStarted := s.diagnostics.start()
+		forwarderStageDone := publicrpcdiag.StartNamed(parentCtx, "tx_publish_forwarder")
 		err := forwarder.PublishTransaction(parentCtx, tx, options)
+		forwarderStageDone()
 		s.diagnostics.observe(txPublishForwarderTotalHistogram, forwarderStarted)
 		if !errors.Is(err, ErrNoSequencer) {
 			return err
@@ -558,7 +561,9 @@ func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Tran
 
 	resultChan := make(chan error, 1)
 	enqueueStarted := s.diagnostics.start()
+	enqueueStageDone := publicrpcdiag.StartNamed(queueCtx, "tx_publish_queue_enqueue")
 	err := s.publishTransactionToQueue(queueCtx, tx, options, resultChan, false /* delay tx if express lane is active */)
+	enqueueStageDone()
 	s.diagnostics.observe(txPublishQueueEnqueueHistogram, enqueueStarted)
 	if err != nil {
 		return err
@@ -566,15 +571,18 @@ func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Tran
 
 	now := time.Now()
 	queueWaitStarted := s.diagnostics.start()
+	queueWaitStageDone := publicrpcdiag.StartNamed(parentCtx, "tx_publish_queue_wait")
 	// Just to be safe, make sure we don't run over twice the queue timeout
 	abortCtx, cancel := ctxhelper.WithTimeoutOrCancel(parentCtx, queueTimeout*2)
 	defer cancel()
 
 	select {
 	case res := <-resultChan:
+		queueWaitStageDone()
 		s.diagnostics.observe(txPublishQueueWaitHistogram, queueWaitStarted)
 		return res
 	case <-abortCtx.Done():
+		queueWaitStageDone()
 		s.diagnostics.observe(txPublishQueueWaitHistogram, queueWaitStarted)
 		// We use abortCtx here and not queueCtx, because the QueueTimeout only applies to the background queue.
 		// We want to give the background queue as much time as possible to make a response.
