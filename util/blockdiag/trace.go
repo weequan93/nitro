@@ -96,6 +96,14 @@ type Trace struct {
 	attempted atomic.Uint64
 }
 
+// ID identifies this sequencing operation within the process.
+func (t *Trace) ID() uint64 {
+	if t == nil {
+		return 0
+	}
+	return t.id
+}
+
 func (t *Trace) AttemptBlock(number uint64) {
 	if t != nil {
 		t.attempted.Store(number)

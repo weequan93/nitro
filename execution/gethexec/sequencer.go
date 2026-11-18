@@ -244,6 +244,7 @@ type txQueueItem struct {
 	returnedResult  *atomic.Bool
 	ctx             context.Context
 	firstAppearance time.Time
+	rpcTiming       *txQueueTiming
 	isTimeboosted   bool
 	blockStamp      uint64 // block number at which timeboosted tx was added to the txQueue
 }
@@ -255,6 +256,7 @@ func (i *txQueueItem) returnResultMaybeLog(err error, outputLog bool) {
 		}
 		return
 	}
+	i.rpcTiming.endNonceWait()
 	i.resultChan <- err
 	close(i.resultChan)
 }
@@ -379,6 +381,7 @@ func (c nonceFailureCache) Add(err NonceError, queueItem txQueueItem) {
 		failedAt:  time.Now(),
 		revived:   false,
 	}
+	queueItem.rpcTiming.startNonceWait()
 	evicted := c.LruCache.Add(key, val)
 	if evicted {
 		nonceFailureCacheOverflowCounter.Inc(1)
@@ -518,6 +521,7 @@ func (s *Sequencer) onNonceFailureEvict(_ addressAndNonce, failure *nonceFailure
 		return
 	}
 	queueItem := failure.queueItem
+	queueItem.rpcTiming.endNonceWait()
 	err := queueItem.ctx.Err()
 	if err != nil {
 		queueItem.returnResult(err)
@@ -560,9 +564,14 @@ func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Tran
 	defer cancelFunc()
 
 	resultChan := make(chan error, 1)
+	recorder, _ := publicrpcdiag.FromContext(parentCtx).(publicrpcdiag.TxQueueRecorder)
+	var rpcTiming *txQueueTiming
+	if recorder != nil {
+		rpcTiming = new(txQueueTiming)
+	}
 	enqueueStarted := s.diagnostics.start()
 	enqueueStageDone := publicrpcdiag.StartNamed(queueCtx, "tx_publish_queue_enqueue")
-	err := s.publishTransactionToQueue(queueCtx, tx, options, resultChan, false /* delay tx if express lane is active */)
+	err := s.publishTransactionToQueue(queueCtx, tx, options, resultChan, false /* delay tx if express lane is active */, rpcTiming)
 	enqueueStageDone()
 	s.diagnostics.observe(txPublishQueueEnqueueHistogram, enqueueStarted)
 	if err != nil {
@@ -579,10 +588,16 @@ func (s *Sequencer) PublishTransaction(parentCtx context.Context, tx *types.Tran
 	select {
 	case res := <-resultChan:
 		queueWaitStageDone()
+		if rpcTiming != nil {
+			recorder.RecordTxQueue(rpcTiming.snapshot())
+		}
 		s.diagnostics.observe(txPublishQueueWaitHistogram, queueWaitStarted)
 		return res
 	case <-abortCtx.Done():
 		queueWaitStageDone()
+		if rpcTiming != nil {
+			recorder.RecordTxQueue(rpcTiming.snapshot())
+		}
 		s.diagnostics.observe(txPublishQueueWaitHistogram, queueWaitStarted)
 		// We use abortCtx here and not queueCtx, because the QueueTimeout only applies to the background queue.
 		// We want to give the background queue as much time as possible to make a response.
@@ -726,10 +741,10 @@ func (s *Sequencer) signerForHeader(header *types.Header) types.Signer {
 
 func (s *Sequencer) PublishTimeboostedTransaction(queueCtx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions) error {
 	resultChan := make(chan error, 1)
-	return s.publishTransactionToQueue(queueCtx, tx, options, resultChan, true)
+	return s.publishTransactionToQueue(queueCtx, tx, options, resultChan, true, nil)
 }
 
-func (s *Sequencer) publishTransactionToQueue(queueCtx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions, resultChan chan error, isExpressLaneController bool) error {
+func (s *Sequencer) publishTransactionToQueue(queueCtx context.Context, tx *types.Transaction, options *arbitrum_types.ConditionalOptions, resultChan chan error, isExpressLaneController bool, rpcTiming *txQueueTiming) error {
 	config := s.config()
 	// Only try to acquire Rlock and check for hard threshold if l1reader is not nil
 	// And hard threshold was enabled, this prevents spamming of read locks when not needed
@@ -780,8 +795,12 @@ func (s *Sequencer) publishTransactionToQueue(queueCtx context.Context, tx *type
 		returnedResult:  &atomic.Bool{},
 		ctx:             queueCtx,
 		firstAppearance: time.Now(),
+		rpcTiming:       rpcTiming,
 		isTimeboosted:   isExpressLaneController,
 		blockStamp:      blockStamp,
+	}
+	if rpcTiming != nil {
+		rpcTiming.first = queueItem.firstAppearance
 	}
 	select {
 	case s.txQueue <- queueItem:
@@ -901,6 +920,7 @@ func (s *Sequencer) postTxFilter(header *types.Header, statedb *state.StateDB, _
 	if haveNonceFailure {
 		nonceFailure.revived = true // prevent the expiry hook from taking effect
 		s.nonceFailures.Remove(newAddrAndNonce)
+		nonceFailure.queueItem.rpcTiming.endNonceWait()
 		// Immediately check if the transaction submission has been canceled
 		err := nonceFailure.queueItem.ctx.Err()
 		if err != nil {
@@ -1059,6 +1079,7 @@ var sequencerInternalError = errors.New("sequencer internal error")
 
 type FullSequencingHooks struct {
 	queueItems               []txQueueItem
+	observeRPCQueue          bool
 	sequencedQueueItemsCount int
 	sequencedTxsSizeSoFar    int
 	maxSequencedTxsSize      int
@@ -1307,6 +1328,7 @@ func (s *Sequencer) precheckNonces(queueItems []txQueueItem) []txQueueItem {
 				// Re-enqueue the tx whose nonce should now be correct, unless it expired
 				revivingFailure.revived = true
 				s.nonceFailures.Remove(nextKey)
+				revivingFailure.queueItem.rpcTiming.endNonceWait()
 				if !revivingFailure.failedAt.IsZero() {
 					s.diagnostics.observe(txPublishNonceRetryHistogram, revivingFailure.failedAt)
 				}
@@ -1474,6 +1496,7 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 				break
 			}
 		}
+		queueItem.rpcTiming.dequeue()
 		if !queueItem.firstAppearance.IsZero() {
 			s.diagnostics.observe(txPublishQueuePopHistogram, queueItem.firstAppearance)
 		}
@@ -1530,6 +1553,7 @@ func (s *Sequencer) createBlock(ctx context.Context) (returnValue bool) {
 	)
 
 	for _, queueItem := range queueItems {
+		hooks.observeRPCQueue = hooks.observeRPCQueue || queueItem.rpcTiming != nil
 		if queueItem.isTimeboosted {
 			timeboostedTxs[queueItem.tx.Hash()] = struct{}{}
 		}

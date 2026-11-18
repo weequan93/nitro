@@ -657,6 +657,16 @@ func (s *ExecutionEngine) sequencerWrapperObserved(diag *blockdiag.Trace, sequen
 
 func (s *ExecutionEngine) SequenceTransactions(header *arbostypes.L1IncomingMessageHeader, hooks *FullSequencingHooks, timeboostedTxs map[common.Hash]struct{}) (block *types.Block, err error) {
 	diag := s.blockDiagnostics.Begin()
+	if hooks.observeRPCQueue {
+		for _, item := range hooks.queueItems {
+			item.rpcTiming.beginSequence(diag.ID())
+		}
+		defer func() {
+			for _, item := range hooks.queueItems {
+				item.rpcTiming.endSequence()
+			}
+		}()
+	}
 	if diag == nil {
 		return s.sequencerWrapper(func() (*types.Block, error) {
 			return s.sequenceTransactionsWithBlockMutex(header, hooks, timeboostedTxs)
