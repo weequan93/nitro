@@ -224,6 +224,7 @@ RUN ./download-machine.sh consensus-v60-deriw7 0x3af92d1be0de846860687211d41aaae
 RUN ./download-machine.sh consensus-v60-deriw8 0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x3691fa25daae0d0c32e86493e36d392ca544b0039575d134a84584c11d1f7a8d
 RUN ./download-machine.sh consensus-v60-deriw9 0xdd527b6d664d5a2adc21b90795a42600f3960b634146488c65da7bde75329c17 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xdd527b6d664d5a2adc21b90795a42600f3960b634146488c65da7bde75329c17
 RUN ./download-machine.sh consensus-v60-deriw10 0x7a73983d66ad7b6a50a501fe37f658765ade165d3bb06284c1487062f0ebeb84 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0x7a73983d66ad7b6a50a501fe37f658765ade165d3bb06284c1487062f0ebeb84
+RUN ./download-machine.sh consensus-v60-deriw11 0xb61b1ae9705ff601a3a37b46e780bd2f9df0dfab1c130c2b908745a5e0c91447 https://arbitrum-nitro.s3.ap-southeast-1.amazonaws.com/0xb61b1ae9705ff601a3a37b46e780bd2f9df0dfab1c130c2b908745a5e0c91447
 
 
 
@@ -393,6 +394,7 @@ RUN set -eu; \
     test "$root" = "$(cat /tmp/deriw-candidate-machine/module-root.txt)"; \
     test -f /home/user/target/machines/0x121d685e2fdb0e3291592d6b90bd70d503951335d19d96455448eb7a14d17421/machine.v2.wavm.br; \
     test -f /home/user/target/machines/0x7a73983d66ad7b6a50a501fe37f658765ade165d3bb06284c1487062f0ebeb84/machine.v2.wavm.br; \
+    test -f /home/user/target/machines/0xb61b1ae9705ff601a3a37b46e780bd2f9df0dfab1c130c2b908745a5e0c91447/machine.v2.wavm.br; \
     if [ -e "/home/user/target/machines/$root" ]; then \
         for file in module-root.txt replay.wasm machine.v2.wavm.br until-host-io-state.bin; do \
             cmp "/tmp/deriw-candidate-machine/$file" "/home/user/target/machines/$root/$file"; \
