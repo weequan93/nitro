@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/offchainlabs/nitro/arbutil"
 
@@ -348,7 +349,7 @@ func ProduceBlockAdvanced(
 	startTx := InternalTxStartBlock(chainConfig.ChainID, l1Header.L1BaseFee, l1BlockNum, header, lastBlockHeader)
 
 	basefee := header.BaseFee
-	time := header.Time
+	timestamp := header.Time
 
 	// We'll check that the block can fit each message, so this pool is set to not run out
 	gethGas := core.GasPool(l2pricing.GethBlockGasLimit)
@@ -385,7 +386,7 @@ func ProduceBlockAdvanced(
 			if !ok {
 				return nil, nil, nil, errors.New("retryable tx is somehow not a retryable")
 			}
-			retryable, _ := buildState.arbState.RetryableState().OpenRetryable(retry.TicketId, time)
+			retryable, _ := buildState.arbState.RetryableState().OpenRetryable(retry.TicketId, timestamp)
 			if retryable == nil {
 				// retryable was already deleted
 				continue
@@ -694,8 +695,21 @@ func ProduceBlockAdvanced(
 
 	finalize := diag.Begin(blockdiag.FinalizeBlock)
 	defer finalize.End()
+	var storageUpdates, accountUpdates, accountHashes time.Duration
+	if diag != nil {
+		// StateDB accumulates these times across IntermediateRoot calls.
+		// Take a baseline after transaction execution to isolate finalization.
+		storageUpdates = buildState.statedb.StorageUpdates
+		accountUpdates = buildState.statedb.AccountUpdates
+		accountHashes = buildState.statedb.AccountHashes
+	}
 	FinalizeBlock(header, buildState.complete, buildState.statedb, chainConfig)
 	finalize.End()
+	if diag != nil {
+		diag.RecordDuration(blockdiag.FinalizeStorageTrieUpdate, buildState.statedb.StorageUpdates-storageUpdates)
+		diag.RecordDuration(blockdiag.FinalizeAccountTrieUpdate, buildState.statedb.AccountUpdates-accountUpdates)
+		diag.RecordDuration(blockdiag.FinalizeAccountTrieHash, buildState.statedb.AccountHashes-accountHashes)
+	}
 
 	// Touch up the block hashes in receipts
 	assemble := diag.Begin(blockdiag.AssembleBlock)

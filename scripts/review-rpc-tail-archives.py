@@ -25,11 +25,20 @@ STAGES = ("params", "callback", "encode", "handler_other", "resolve", "backend_s
           "indexed_search", "result_filter", "unindexed_search", "sync_post", "consistency", "backend_close",
           "index_lock_wait", "index_lock_hold", "filter_rows_read", "block_pointer_access", "log_lookup",
           "receipts_access", "receipt_scan", "header_access", "block_logs_access", "body_access",
-          "sync_register_wait", "sync_enqueue_wait", "sync_response_wait")
+          "sync_register_wait", "sync_enqueue_wait", "sync_response_wait", "tx_publish_state_at",
+          "tx_publish_precheck", "tx_publish_filter", "tx_publish_publisher", "tx_publish_forwarder",
+          "tx_publish_forwarder_target", "tx_publish_queue_enqueue", "tx_publish_queue_wait",
+          "sync_temp_range_wait", "tx_publish_first_dequeue", "tx_publish_nonce_wait",
+          "tx_publish_sequence_wait")
 SHAPES = ("by_hash", "address_count", "topic_positions", "topic_alternatives", "resolved_blocks_max",
           "indexed_block_range_total", "unindexed_blocks_scanned", "candidate_count", "result_count",
           "receipt_reads", "receipt_cursor_hits", "log_cache_hits", "log_cache_misses", "body_cache_hits",
           "body_cache_misses", "failure_kind")
+INDEX_WRITE_FIELDS = ("timing_schema", "write_seq", "write_started_unix_ns", "write_finished_unix_ns",
+                      "first_map", "after_last_map", "uncached_maps", "completed", "wall_ms",
+                      "active_ms", "lock_wait_ms", "row_work_ms", "base_prepare_read_decode_ms",
+                      "encode_enqueue_ms", "batch_commit_ms", "pause_callback_ms", "batch_calls",
+                      "rows_visited", "map_rows_selected", "rate_limited_total", "queue_full_total")
 
 
 def stamp(v):
@@ -90,6 +99,8 @@ def parse_line(raw):
             token, body = token or ("terminal", term[1]), term[2]
         if token is None:
             return None
+        if body.startswith("Log index write timings"):
+            return token, "Log index write timings", fields(body)
         relevant = "RPC stage timings" in body or any("Served " + m in body for m in METHODS)
         if not relevant:
             return token, None, {}
@@ -300,6 +311,9 @@ def analyze(records, offset, since, until):
                     value = numeric(f.get(name))
                     if value is not None:
                         item[name] = value
+                seq_id = integer(f.get("tx_publish_last_seq_id"))
+                if seq_id is not None:
+                    item["tx_publish_last_seq_id"] = seq_id
                 stages.append(item)
             elif message[7:] in METHODS and "err" in f:
                 error = str(f["err"])

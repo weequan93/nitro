@@ -32,6 +32,9 @@ const (
 	AssembleBlock
 	ConsensusWrite
 	BlockWrite
+	FinalizeStorageTrieUpdate
+	FinalizeAccountTrieUpdate
+	FinalizeAccountTrieHash
 	stageCount
 )
 
@@ -39,6 +42,7 @@ var stageNames = [...]string{
 	"engine_lock_wait", "insert_retry_wait", "state_open", "previous_block_read", "produce_block",
 	"arbos_setup", "next_transaction", "transaction_attempt", "pre_filter", "transaction_prepare",
 	"apply_transaction", "post_filter", "block_filter", "finalize_block", "assemble_block", "consensus_write", "block_write",
+	"finalize_storage_trie_update", "finalize_account_trie_update", "finalize_account_trie_hash",
 }
 
 type timing struct {
@@ -96,6 +100,14 @@ type Trace struct {
 	attempted atomic.Uint64
 }
 
+// ID identifies this sequencing operation within the process.
+func (t *Trace) ID() uint64 {
+	if t == nil {
+		return 0
+	}
+	return t.id
+}
+
 func (t *Trace) AttemptBlock(number uint64) {
 	if t != nil {
 		t.attempted.Store(number)
@@ -151,6 +163,13 @@ func (s *Span) End() {
 	}
 	s.t.stages[s.stage].add(duration)
 	s.t = nil
+}
+
+// RecordDuration records a wall time measured by the caller.
+func (t *Trace) RecordDuration(stage Stage, duration time.Duration) {
+	if t != nil {
+		t.stages[stage].add(duration)
+	}
 }
 
 func (t *Trace) record(outcome string, block, gas uint64, txs int) Record {

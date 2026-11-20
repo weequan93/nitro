@@ -124,6 +124,7 @@ type PebbleConfig struct {
 	SyncMode                       bool                     `koanf:"sync-mode"`
 	MaxConcurrentCompactions       int                      `koanf:"max-concurrent-compactions"`
 	CompactionOutputBytesPerSecond int64                    `koanf:"compaction-output-bytes-per-second"`
+	WriteOriginMetrics             bool                     `koanf:"write-origin-metrics"`
 	Experimental                   PebbleExperimentalConfig `koanf:"experimental"`
 }
 
@@ -144,6 +145,7 @@ func PebbleConfigAddOptions(prefix string, f *pflag.FlagSet, defaultConfig *Pebb
 	f.Bool(prefix+".sync-mode", defaultConfig.SyncMode, "if true sync mode is used (data needs to be written to WAL before the write is marked as completed)")
 	f.Int(prefix+".max-concurrent-compactions", defaultConfig.MaxConcurrentCompactions, "maximum number of concurrent compactions")
 	f.Int64(prefix+".compaction-output-bytes-per-second", defaultConfig.CompactionOutputBytesPerSecond, "pace L2 chain database compaction SST output writes in bytes per second (0 disables); excludes WASM/consensus databases, WAL and flushes; bypassed during write stalls; not a total disk I/O limit")
+	f.Bool(prefix+".write-origin-metrics", defaultConfig.WriteOriginMetrics, "count Pebble file writes by operation for the L2 chain database")
 	PebbleExperimentalConfigAddOptions(prefix+".experimental", f, &defaultConfig.Experimental)
 }
 
@@ -311,6 +313,7 @@ func (c *PebbleConfig) ExtraOptions(namespace string) *pebble.ExtraOptions {
 		MemTableStopWritesThreshold:    c.Experimental.MemTableStopWritesThreshold,
 		MaxConcurrentCompactions:       maxConcurrentCompactions,
 		CompactionOutputBytesPerSecond: compactionOutputBytesPerSecond,
+		WriteOriginMetrics:             c.WriteOriginMetrics && namespace == "l2chaindata",
 		DisableAutomaticCompactions:    c.Experimental.DisableAutomaticCompactions,
 		WALBytesPerSync:                c.Experimental.WALBytesPerSync,
 		WALDir:                         walDir,

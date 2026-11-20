@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	publicrpcdiag "github.com/ethereum/go-ethereum/rpcdiag"
 
 	"github.com/offchainlabs/nitro/arbos/arbosState"
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
@@ -241,33 +242,42 @@ func (c *TxPreChecker) PublishTransaction(ctx context.Context, tx *types.Transac
 
 	block := c.bc.CurrentBlock()
 	stateStarted := diagnostics.start()
+	stateStageDone := publicrpcdiag.StartNamed(ctx, "tx_publish_state_at")
 	statedb, err := c.bc.StateAt(block.Root)
+	stateStageDone()
 	diagnostics.observe(txPublishStateAtHistogram, stateStarted)
 	if err != nil {
 		return err
 	}
 
 	precheckStarted := diagnostics.start()
+	precheckStageDone := publicrpcdiag.StartNamed(ctx, "tx_publish_precheck")
 	arbos, err := arbosState.OpenSystemArbosState(statedb, nil, true)
 	if err != nil {
+		precheckStageDone()
 		diagnostics.observe(txPublishPrecheckHistogram, precheckStarted)
 		return err
 	}
 	err = PreCheckTx(c.bc, c.bc.Config(), block, statedb, arbos, tx, options, c.config())
+	precheckStageDone()
 	diagnostics.observe(txPublishPrecheckHistogram, precheckStarted)
 	if err != nil {
 		return err
 	}
 
 	filterStarted := diagnostics.start()
+	filterStageDone := publicrpcdiag.StartNamed(ctx, "tx_publish_filter")
 	err = c.checkFilteredAddresses(ctx, tx, block)
+	filterStageDone()
 	diagnostics.observe(txPublishFilterHistogram, filterStarted)
 	if err != nil {
 		return err
 	}
 
 	publisherStarted := diagnostics.start()
+	publisherStageDone := publicrpcdiag.StartNamed(ctx, "tx_publish_publisher")
 	err = c.TransactionPublisher.PublishTransaction(ctx, tx, options)
+	publisherStageDone()
 	diagnostics.observe(txPublishPublisherHistogram, publisherStarted)
 	return err
 }

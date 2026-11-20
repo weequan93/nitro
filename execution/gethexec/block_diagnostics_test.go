@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/holiman/uint256"
 
@@ -118,10 +119,14 @@ func TestBlockDiagnosticsExecutionEquivalence(t *testing.T) {
 			var failed [2][]error
 			for i := range blocks {
 				var diag *blockdiag.Trace
+				var manager *blockdiag.Manager
+				records := make(chan blockdiag.Record, 1)
 				if i == 1 {
 					config := blockdiag.DefaultConfig
 					config.Enable = true
-					manager, err := blockdiag.New(config, nil)
+					config.Threshold = time.Nanosecond
+					var err error
+					manager, err = blockdiag.New(config, func(r blockdiag.Record) { records <- r })
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -143,6 +148,28 @@ func TestBlockDiagnosticsExecutionEquivalence(t *testing.T) {
 				failed[i] = hooks.errors
 				if reject == "" && (outcomes[i] != nil || len(receipts[i]) != 2 || receipts[i][1].Status != 1) {
 					t.Fatalf("fixture failed to execute contract: err=%v receipts=%+v", outcomes[i], receipts[i])
+				}
+				if manager != nil && reject == "" {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					manager.Finish(diag, "success", blocks[i].NumberU64(), blocks[i].GasUsed(), len(receipts[i]))
+					go manager.Run(ctx)
+					select {
+					case record := <-records:
+						var totalMS float64
+						for _, name := range []string{"finalize_storage_trie_update", "finalize_account_trie_update", "finalize_account_trie_hash"} {
+							stage := record.Stages[name]
+							if stage.Calls != 1 {
+								t.Fatalf("%s missing from finalization report: %+v", name, record.Stages)
+							}
+							totalMS += stage.MS
+						}
+						if totalMS > record.Stages["finalize_block"].MS {
+							t.Fatalf("trie timings exceed the parent stage: %+v", record.Stages)
+						}
+					case <-ctx.Done():
+						t.Fatal("did not receive the finalization report")
+					}
 				}
 				if (reject == "pre" || reject == "post") && (len(failed[i]) != 1 || failed[i][0] != diagnosticFilterError || sdb.GetState(contract, common.Hash{}) != (common.Hash{})) {
 					t.Fatal("fixture did not reject/rollback transaction", failed[i])

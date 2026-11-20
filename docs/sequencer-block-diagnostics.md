@@ -24,10 +24,14 @@ RPC trace ID. One operation can include multiple transactions or retries.
 | `apply_transaction` | EVM transaction application, result filtering and receipt creation |
 | `post_filter` | Post-execution filters inside transaction application |
 | `block_filter`, `finalize_block`, `assemble_block` | Block filters, final state/header work and assembly |
+| `finalize_storage_trie_update` | Wall time updating storage tries and their roots, including any wait for storage workers |
+| `finalize_account_trie_update`, `finalize_account_trie_hash` | Account trie updates and account trie root hashing |
 | `consensus_write`, `block_write` | Consensus publication and blockchain/state persistence |
 | `state_readers.account/storage/code/code_size` | Calls crossing the StateDB reader boundary, with count, total wall and maximum wall |
 
-These regions are nested and **must not be added together**. Reader work
+The three trie timings are measured within `finalize_block` using differences
+in the StateDB timers. They appear in the JSON record. Keep parent and child
+timings separate when reading the report. Reader work
 includes cache access, decoding, trie/database access, scheduling and locks.
 It is not physical disk time, and StateDB's own in-memory hits do not cross the
 reader boundary. Cache-backed reads can consume CPU. Background prefetch and
